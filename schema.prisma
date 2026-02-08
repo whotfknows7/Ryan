@@ -1,0 +1,104 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // URL is handled by prisma.config.js
+}
+
+model UserXp {
+  userId    String
+  guildId   String
+  xp        Int      @default(0) // Lifetime XP
+  
+  // Breakthrough 1: Live Counters
+  dailyXp   Int      @default(0)
+  weeklyXp  Int      @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId])
+  @@index([guildId, dailyXp(sort: Desc)])
+  @@index([guildId, weeklyXp(sort: Desc)])
+  @@index([guildId, xp(sort: Desc)])
+}
+
+model ClanXp {
+  userId  String
+  guildId String
+  clanId  Int
+  xp      Int @default(0)
+
+  @@id([guildId, clanId, userId])
+}
+
+model GuildConfig {
+  guildId        String   @id
+  reactionRoles  Json?    @default("{}")
+  roleRequests   Json?    @default("[]")
+  keywords       Json?    @default("{}")
+  config         Json?    @default("{}")
+  ids            Json?    @default("{}")
+  clans          Json?    @default("{}")
+  resetRoleData  Json?    @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model JailLog {
+  id               Int       @id @default(autoincrement())
+  guildId          String
+  userId           String
+  username         String
+  offences         Int       @default(0)
+  punishmentEnd    DateTime?
+  status           String    @default("jailed")
+  messageId        String?
+  votes            String[]  @default([])
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([guildId, userId])
+}
+
+model ResetCycle {
+  guildId       String   @id
+  cycleCount    Int      @default(0)
+  lastResetUtc  DateTime
+  resetHour     Int      @default(0)
+  resetMinute   Int      @default(0)
+}
+
+// --- GIF ENGINE MODELS ---
+
+model GifTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String
+  clanCount   Int      // 2, 3, or 4
+  folderPath  String   
+  createdAt   DateTime @default(now())
+}
+
+model ClanAsset {
+  guildId     String
+  roleId      String   @unique
+  messageLink String   
+  updatedAt   DateTime @updatedAt
+
+  @@id([guildId, roleId])
+}
+
+model LeaderboardState {
+  guildId        String   @id
+  lastMessageId  String?
+  lastRanks      Json?    
+  updatedAt      DateTime @updatedAt
+}
+
+model GifCache {
+  rankHash    String   @id 
+  messageLink String   
+  createdAt   DateTime @default(now())
+}
