@@ -14,6 +14,7 @@ const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateServic
 const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
+const { LeaderboardCleanupService } = require('./services/LeaderboardCleanupService');
 const { cleanExpiredResetRoles } = require('./commands/admin/ResetRoleCommands');
 const { setRoleSkip } = require('./lib/cooldowns');
 const logger = require('./lib/logger');
@@ -103,7 +104,8 @@ const schedulePerGuildTask = (name, taskFn, intervalMs, initialDelay = 0) => {
 };
 
 async function main() {
-  // 0. Force DB Sync
+  // 0. Force DB Sync (REMOVED FOR GCP - RUN MANUALLY)
+  /*
   try {
     logger.info('🔄 Force-Syncing Database Schema...');
     execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
@@ -111,6 +113,7 @@ async function main() {
   } catch (error) {
     logger.error('❌ Failed to sync database (Prisma error):', error);
   }
+  */
 
   // 1. START THE RENDERER
   startRenderer();
@@ -123,12 +126,12 @@ async function main() {
     process.exit(1);
   }
   logger.info('Database connection established.');
-  
+
   // 3. Load Commands
   logger.info('Loading commands...');
   await loadCommands(client);
   logger.info(`Loaded ${client.commands.size} commands.`);
-  
+
   // 4. Start Bot
   try {
     await client.start();
@@ -152,7 +155,7 @@ async function main() {
     // =================================================================
     // EVENTS & TASKS
     // =================================================================
-    
+
     client.on('messageCreate', async (message) => {
       if (message.author.bot) return;
       try {
@@ -162,7 +165,7 @@ async function main() {
         logger.error('XP/Keyword Error:', error);
       }
     });
-    
+
     client.on('guildMemberUpdate', async (oldMember, newMember) => {
       try {
         await XpService.checkRoleAnnouncements(oldMember, newMember);
@@ -170,7 +173,7 @@ async function main() {
         logger.error('Role Announcement Error:', error);
       }
     });
-    
+
     client.on('messageReactionAdd', async (reaction, user) => {
       if (user.bot) return;
       try {
@@ -179,7 +182,7 @@ async function main() {
         logger.error('Reaction Add Error:', error);
       }
     });
-    
+
     client.on('messageReactionRemove', async (reaction, user) => {
       if (user.bot) return;
       try {
@@ -188,7 +191,7 @@ async function main() {
         logger.error('Reaction Remove Error:', error);
       }
     });
-    
+
     client.on('guildMemberAdd', async (member) => {
       try {
         const wasJailed = await PunishmentService.handleMemberJoin(member);
@@ -200,7 +203,7 @@ async function main() {
         logger.error('Member Join Error:', error);
       }
     });
-    
+
     client.on('guildMemberRemove', async (member) => {
       try {
         await PunishmentService.handleMemberLeave(member);
@@ -210,31 +213,35 @@ async function main() {
         logger.error('Member Remove Error:', error);
       }
     });
-    
+
     // Background Tasks
     scheduleTask('DB Heartbeat', async () => {
-      try { await DatabaseService.checkDatabaseIntegrity(); } 
+      try { await DatabaseService.checkDatabaseIntegrity(); }
       catch (e) { logger.error('❤️ DB Heartbeat failed:', e); }
-    }, 290 * 1000); 
-    
+    }, 290 * 1000);
+
     scheduleTask('Punishment Checker', async () => {
       await PunishmentService.checkExpiredPunishments(client);
     }, 60 * 1000, 5 * 1000);
-    
+
     schedulePerGuildTask('Reset Cycle Checker', async (guildId) => {
       await ResetService.checkResetCycle(client, guildId);
     }, 60 * 1000, 10 * 1000);
-    
+
     schedulePerGuildTask('Reset Role Expiry', async (guildId) => {
       await cleanExpiredResetRoles(guildId);
     }, 60 * 1000, 15 * 1000);
-    
+
     scheduleTask('Leaderboard Updater', async () => {
       await LeaderboardUpdateService.updateLiveLeaderboard(client);
     }, 20 * 1000, 20 * 1000);
-    
+
+    scheduleTask('Leaderboard Cleanup', async () => {
+      await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
+    }, 60 * 1000, 30 * 1000); // Check every minute
+
     logger.info('✅ All background services started.');
-    
+
   } catch (error) {
     logger.error('Failed to start bot:', error);
     process.exit(1);

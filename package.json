@@ -5,18 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "postinstall": "prisma generate",
-    "setup": "npm install && cd renderer && cargo build --release",
-    "cleanup": "node cleanup.js",
-    "start": "npx prisma db push --accept-data-loss && (cd Renderer && cargo build --release) && concurrently \"npm run start:renderer\" \"npm run start:bot\"",
-    "start:bot": "node src/index.js",
-    "start:renderer": "cd renderer && cargo run --release",
-    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:bot\"",
-    "dev:bot": "node --watch --no-warnings src/index.js",
-    "dev:renderer": "cd renderer && cargo run",
-    "bot-only": "npx prisma db push --accept-data-loss && node src/index.js",
+    "build": "cd Renderer && cargo build --release",
+    "start": "node src/index.js",
+    "dev": "node --watch --no-warnings src/index.js",
     "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:setup": "prisma db push && prisma generate",
     "db:studio": "prisma studio"
   },
   "keywords": [
