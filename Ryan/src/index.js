@@ -1,9 +1,7 @@
 // src/index.js
 require('dotenv').config();
 
-const { execSync, spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+const { execSync } = require('child_process');
 const { MessageFlags } = require('discord.js');
 const { CustomClient } = require('./structures/CustomClient');
 const { DatabaseService } = require('./services/DatabaseService');
@@ -20,54 +18,6 @@ const { setRoleSkip } = require('./lib/cooldowns');
 const logger = require('./lib/logger');
 
 const client = new CustomClient();
-
-// =================================================================
-// RUST RENDERER MANAGER
-// =================================================================
-function startRenderer() {
-  const rootDir = path.resolve(__dirname, '../../'); // Go up to Ryan v7 root
-  const rendererDir = path.join(rootDir, 'Renderer');
-  const binaryPath = path.join(rendererDir, 'target/release/renderer');
-
-  logger.info('🦀 Checking Rust Renderer status...');
-
-  // 1. Check if binary exists
-  if (!fs.existsSync(binaryPath)) {
-    logger.warn('⚠️ Renderer binary not found. Attempting to build... (This may take minutes)');
-    try {
-      // Attempt to build using cargo
-      execSync('cargo build --release', { cwd: rendererDir, stdio: 'inherit' });
-      logger.info('✅ Rust Renderer built successfully.');
-    } catch (e) {
-      logger.error('❌ FAILED TO BUILD RENDERER. Do you have Rust/Cargo installed?');
-      logger.error('If you are on a shared host, you may need to compile "Ryan v7/Renderer" on your PC and upload the "target" folder.');
-      return; // Stop here if build fails
-    }
-  }
-
-  // 2. Spawn the process
-  logger.info('🚀 Launching Renderer Service...');
-  const rendererProcess = spawn(binaryPath, [], {
-    cwd: rendererDir,
-    detached: false,
-    stdio: 'inherit' // Pipe logs to console so you can see "Listening on..."
-  });
-
-  rendererProcess.on('error', (err) => {
-    logger.error('❌ Renderer failed to start:', err);
-  });
-
-  rendererProcess.on('exit', (code, signal) => {
-    if (code !== 0 && code !== null) {
-      logger.warn(`⚠️ Renderer exited with code ${code}. Restarting in 5s...`);
-      setTimeout(startRenderer, 5000); // Auto-restart if it crashes
-    }
-  });
-
-  // Ensure renderer dies when bot dies
-  process.on('exit', () => rendererProcess.kill());
-}
-// =================================================================
 
 /**
  * Recursive task scheduler
@@ -113,10 +63,7 @@ async function main() {
     logger.error('❌ Failed to sync database (Prisma error):', error);
   }
 
-  // 1. START THE RENDERER
-  startRenderer();
-
-  // 2. Database Health Check
+  // 1. Database Health Check
   logger.info('Checking database connection...');
   const dbHealth = await DatabaseService.checkDatabaseIntegrity();
   if (!dbHealth) {
@@ -125,17 +72,17 @@ async function main() {
   }
   logger.info('Database connection established.');
 
-  // 3. Load Commands
+  // 2. Load Commands
   logger.info('Loading commands...');
   await loadCommands(client);
   logger.info(`Loaded ${client.commands.size} commands.`);
 
-  // 4. Start Bot
+  // 3. Start Bot
   try {
     await client.start();
     logger.info('Bot started successfully.');
 
-    // 5. Interaction Handler
+    // 4. Interaction Handler
     client.on('interactionCreate', async (interaction) => {
       try {
         await handleInteraction(interaction);

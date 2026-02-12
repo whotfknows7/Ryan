@@ -2,7 +2,6 @@
 
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { request } = require('undici');
-const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 const opentype = require('opentype.js');
@@ -29,61 +28,7 @@ if (!fs.existsSync(ROLE_TEMPLATE_PATH)) {
 class ImageService {
   
   constructor() {
-    // Rust renderer URL for rank cards
-    // [FIX] Ensure this matches your Docker/Localhost setup
-    this.rendererUrl = process.env.RENDERER_URL || 'http://127.0.0.1:3000/render';
-    this.useRustRenderer = process.env.USE_RUST_RENDERER === 'true';
-  }
-
-  // =================================================================
-  // RUST MICROSERVICE INTEGRATION (Rank Cards)
-  // =================================================================
-
-  async urlToBase64(url) {
-    try {
-      const response = await axios.get(url, { responseType: 'arraybuffer' });
-      return Buffer.from(response.data, 'binary').toString('base64');
-    } catch (error) {
-      console.error(`Failed to convert image to base64: ${url}`, error.message);
-      return ""; 
-    }
-  }
-
-  async generateRankCard(data) {
-    try {
-      // 1. Convert external resources to Base64
-      const avatarBase64 = await this.urlToBase64(data.avatarUrl);
-      
-      // 2. Construct Payload
-      const payload = {
-        username: data.username,
-        avatar_base64: avatarBase64,
-        current_xp: data.currentXp,
-        required_xp: data.requiredXp,
-        rank: data.rank,
-        level: data.level,
-        hex_color: data.hexColor,
-        badge_urls: data.badgeUrls || []
-      };
-
-      // 3. Call Rust Renderer
-      // [FIX] Added timeout and better error logging
-      const response = await axios.post(this.rendererUrl, payload, {
-        responseType: 'arraybuffer',
-        timeout: 5000 // 5 second timeout
-      });
-
-      return Buffer.from(response.data);
-
-    } catch (error) {
-      // [FIX] Improved error logging to see WHY it failed
-      if (error.code === 'ECONNREFUSED') {
-        console.error('❌ Rust Renderer is unreachable! Is it running on port 3000?');
-      } else {
-        console.error('Rank Card Generation Failed:', error.message);
-      }
-      throw new Error('Failed to generate rank card via Rust service.');
-    }
+    // Canvas-based image generation only
   }
 
   // =================================================================
@@ -199,9 +144,6 @@ class ImageService {
     return canvas.toBuffer('image/png');
   }
 
-  // ... (Keep existing methods: generateBaseReward, generateFinalReward, helper methods) ...
-  // [OMITTED FOR BREVITY - KEEP YOUR EXISTING CODE BELOW THIS LINE]
-
   async generateBaseReward(roleName, roleColorHex, iconUrl) {
     if (!cachedRoleTemplate) {
       cachedRoleTemplate = await loadImage(ROLE_TEMPLATE_PATH);
@@ -306,6 +248,10 @@ class ImageService {
 
     return canvas.toBuffer('image/png');
   }
+
+  // =================================================================
+  // HELPER METHODS
+  // =================================================================
 
   renderOpenTypeText(ctx, font, text, x, y, fontSize) {
     const scale = fontSize / font.unitsPerEm;
