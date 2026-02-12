@@ -104,8 +104,7 @@ const schedulePerGuildTask = (name, taskFn, intervalMs, initialDelay = 0) => {
 };
 
 async function main() {
-  // 0. Force DB Sync (REMOVED FOR GCP - RUN MANUALLY)
-  /*
+  // 0. Force DB Sync
   try {
     logger.info('🔄 Force-Syncing Database Schema...');
     execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
@@ -113,7 +112,6 @@ async function main() {
   } catch (error) {
     logger.error('❌ Failed to sync database (Prisma error):', error);
   }
-  */
 
   // 1. START THE RENDERER
   startRenderer();
