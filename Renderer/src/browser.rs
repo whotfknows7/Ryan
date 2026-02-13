@@ -67,7 +67,7 @@ impl BrowserManager {
     }
 
     async fn spawn_browser(&self) -> anyhow::Result<()> {
-        let config = BrowserConfig::builder()
+        let mut builder = BrowserConfig::builder()
             .arg("--no-sandbox")
             .arg("--disable-gpu")
             .arg("--disable-dev-shm-usage")
@@ -82,8 +82,13 @@ impl BrowserManager {
             .arg("--max_old_space_size=512")
             .arg("--disable-extensions")
             .arg("--disable-plugins")
-            .window_size(1000, 300)
-            .build().map_err(|e| anyhow::anyhow!(e))?;
+            .window_size(1000, 300);
+
+        if let Ok(path) = std::env::var("CHROME_BIN") {
+            builder = builder.chrome_executable(path);
+        }
+
+        let config = builder.build().map_err(|e| anyhow::anyhow!(e))?;
 
         let (browser, mut handler) = Browser::launch(config).await?;
         
