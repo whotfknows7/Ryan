@@ -91,12 +91,12 @@ function checkCooldown(userId, command) {
  * @param {string} userId - The user's ID
  * @param {string} commandName - The command name
  */
-function clearCooldown(userId, commandName) {s.has(commandName)) {
+function clearCooldown(userId, commandName) {
+  if (cooldowns.has(commandName)) {
     const timestamps = cooldowns.get(commandName);
     timestamps.delete(userId);
   }
 }
-
 /**
  * Clear all cooldowns for a user (for admin override)
  * @param {string} userId - The user's ID
