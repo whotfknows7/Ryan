@@ -1,5 +1,5 @@
 // Ryan v6/Renderer/src/models.rs
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct RenderRequest {

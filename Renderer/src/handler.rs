@@ -37,3 +37,7 @@ pub async fn render_rank_card(
         }
     }
 }
+
+pub async fn health_handler() -> impl IntoResponse {
+    (StatusCode::OK, "Ryan Renderer is Running")
+}

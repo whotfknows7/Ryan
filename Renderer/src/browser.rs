@@ -1,7 +1,7 @@
 
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
-use chromiumoxide::page::Page;
+use chromiumoxide::page::{Page, ScreenshotParams};
 use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 use tokio::time::{interval, Duration};
@@ -9,6 +9,7 @@ use tracing::{error, info, warn};
 use futures::StreamExt;
 
 use crate::models::BrowserStats;
+
 
 const MAX_RENDERS_BEFORE_RESTART: usize = 500;
 const BROWSER_SEMAPHORE_PERMITS: usize = 2;
@@ -82,7 +83,7 @@ impl BrowserManager {
             .arg("--disable-extensions")
             .arg("--disable-plugins")
             .window_size(1000, 300)
-            .build()?;
+            .build().map_err(|e| anyhow::anyhow!(e))?;
 
         let (browser, mut handler) = Browser::launch(config).await?;
         
@@ -130,7 +131,7 @@ impl BrowserManager {
             .arg("--single-process")
             .arg("--no-zygote")
             .window_size(1000, 300)
-            .build()?;
+            .build().map_err(|e| anyhow::anyhow!(e))?;
 
         let (new_browser, mut handler) = Browser::launch(config).await?;
         
@@ -166,7 +167,7 @@ impl BrowserManager {
             .ok_or_else(|| anyhow::anyhow!("Browser not initialized"))?;
         
         // Create new page
-        let page = browser.new_page("about:blank").await?;
+        let page: Page = browser.new_page("about:blank").await?;
         
         // Set content and wait for load
         page.set_content(html).await?;
@@ -175,17 +176,19 @@ impl BrowserManager {
         tokio::time::sleep(Duration::from_millis(ANIMATION_WAIT_MS)).await;
         
         // Wait for ready signal from JS (optional, won't fail if not present)
-        page.wait_for_function("window.cardReady === true")
-            .await
-            .ok();
+        // page.wait_for_function("window.cardReady === true").await;
         
         // Capture screenshot
         let screenshot = page
-            .save_screenshot(CaptureScreenshotFormat::Png, true)
+            .screenshot(
+                ScreenshotParams::builder()
+                    .format(CaptureScreenshotFormat::Png)
+                    .build(),
+            )
             .await?;
         
         // Close page immediately
-        page.close().await.ok();
+        let _ = page.close().await;
         
         // Update stats
         {

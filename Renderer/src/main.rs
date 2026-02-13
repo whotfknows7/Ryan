@@ -1,4 +1,4 @@
-```rust
+
 mod browser;
 mod handler;
 mod models;
@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::signal;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 
 // Use jemalloc to prevent memory fragmentation in long-running service
 #[global_allocator]
@@ -89,4 +90,3 @@ async fn shutdown_signal() {
 
     tracing::info!("Shutting down gracefully...");
 }
-```
