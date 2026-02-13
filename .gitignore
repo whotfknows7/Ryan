@@ -5,3 +5,4 @@ package-lock.json
 assets
 target
 Cargo.lock
+error.log
