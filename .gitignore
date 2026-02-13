@@ -1,8 +1,9 @@
 .env
 INSTALL.md
-node_modules
+node_modules/
 package-lock.json
-assets
-target
+assets/
+target/
 Cargo.lock
 error.log
+chrome/
