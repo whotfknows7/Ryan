@@ -9,33 +9,33 @@ const logger = require('../lib/logger');
 // =================================================================
 // CRITICAL: This variable must be defined HERE (Top Level Scope)
 // =================================================================
-const previousTopUsersJSON = new Map(); 
+const previousTopUsersJSON = new Map();
 
 class LeaderboardUpdateService {
-  
+
   static async updateLiveLeaderboard(client) {
     for (const [guildId, guild] of client.guilds.cache) {
       try {
         const ids = await getIds(guildId);
         const channelId = ids.leaderboardChannelId;
-        
+
         if (!channelId) continue;
-        
+
         const channel = guild.channels.cache.get(channelId);
         if (!channel?.isTextBased()) continue;
-        
+
         // 1. Fetch Top 10 for display (Fast)
         const topUsers = await DatabaseService.fetchTopUsers(guildId, 10, 'daily');
-        
+
         // Optimization: Skip if the data hasn't changed
         const currentJSON = JSON.stringify(topUsers);
-        
+
         // This is where your error was occurring:
         if (currentJSON === previousTopUsersJSON.get(guildId)) continue;
-        
+
         // 2. Generate Payload (Enable Switchers = true for Main LB)
         const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true);
-        
+
         // 3. Delete Old Message & Send New
         if (ids.dailyLeaderboardMessageId) {
           try {
@@ -45,14 +45,14 @@ class LeaderboardUpdateService {
             // Ignore if old message is missing
           }
         }
-        
+
         const newMessage = await channel.send(payload);
-        
+
         // Update State
         previousTopUsersJSON.set(guildId, currentJSON);
         await DatabaseService.updateGuildIds(guildId, { dailyLeaderboardMessageId: newMessage.id });
         clearCache(guildId);
-        
+
       } catch (e) {
         logger.error(`Failed to update leaderboard for guild ${guildId}:`, e);
       }
@@ -75,11 +75,22 @@ class LeaderboardUpdateService {
     const topUsers = await DatabaseService.fetchTopUsers(guild.id, limit, type, skip);
     const totalCount = await DatabaseService.getUserCount(guild.id, type);
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
-    
+
     // 2. Map Data for Image
-    const usersForImage = await Promise.all(topUsers.map(async (u, index) => {
-      const member = await guild.members.fetch(u.userId).catch(() => null);
-      
+    // 2. Map Data for Image
+    let members = new Map();
+    try {
+      const userIds = topUsers.map(u => u.userId);
+      if (userIds.length > 0) {
+        members = await guild.members.fetch({ user: userIds });
+      }
+    } catch (e) {
+      logger.error(`Failed to bulk fetch members for leaderboard:`, e);
+    }
+
+    const usersForImage = topUsers.map((u, index) => {
+      const member = members.get(u.userId);
+
       // Determine which XP value to display
       let xpVal = 0;
       if (type === 'weekly') xpVal = u.weeklyXp;
@@ -93,12 +104,12 @@ class LeaderboardUpdateService {
         avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
         xp: xpVal
       };
-    }));
-    
+    });
+
     // 3. Generate Image (with highlight support)
     const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
     const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
-    
+
     // 4. Build Embed
     const titles = {
       daily: "Yappers of the day!",
@@ -121,7 +132,7 @@ class LeaderboardUpdateService {
         `📅 **Weekly** | 🌎 **All-time**`
       );
     }
-    
+
     // 5. Build Buttons
     const row = new ActionRowBuilder();
 
@@ -156,7 +167,7 @@ class LeaderboardUpdateService {
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page >= totalPages)
     );
-    
+
     return { embeds: [embed], files: [attachment], components: [row], fetchReply: true };
   }
 }
