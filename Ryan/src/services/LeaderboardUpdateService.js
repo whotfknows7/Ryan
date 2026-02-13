@@ -137,7 +137,7 @@ class LeaderboardUpdateService {
 
     // 3. Generate Image (with highlight support)
     const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
-    logger.info(`[${guild.id}] Generated leaderboard image size: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
+    // logger.info(`[${guild.id}] Generated leaderboard image size: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
     const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
 
     // 4. Build Embed
