@@ -22,6 +22,87 @@ const logger = require('./lib/logger');
 const client = new CustomClient();
 
 // =================================================================
+// STARTUP CLEANUP — Kill zombies from previous sessions
+// =================================================================
+function cleanupStaleProcesses() {
+  logger.info('🧹 Running startup cleanup...');
+
+  // 1. Kill any stale renderer processes
+  try { execSync("pkill -f 'target/release/renderer' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+
+  // 2. Kill any stale chrome/chromium processes
+  try { execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+
+  // 3. Free port 3000
+  try { execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' }); } catch (_) { }
+
+  // 4. Remove Chrome lock files
+  const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
+  if (fs.existsSync(lockFile)) {
+    fs.unlinkSync(lockFile);
+    logger.info('🧹 Cleared stale Chrome SingletonLock.');
+  }
+
+  // 5. Clean ChromiumOxide temp directory
+  const chromiumDir = '/tmp/chromiumoxide-runner';
+  if (fs.existsSync(chromiumDir)) {
+    try { fs.rmSync(chromiumDir, { recursive: true, force: true }); } catch (_) { }
+    logger.info('🧹 Cleared Chrome temp directory.');
+  }
+
+  logger.info('✅ Startup cleanup complete.');
+}
+
+// =================================================================
+// GRACEFUL SHUTDOWN — Clean exit on Ctrl+C / kill signal
+// =================================================================
+let isShuttingDown = false;
+
+function gracefulShutdown(signal) {
+  if (isShuttingDown) return; // Prevent double-shutdown
+  isShuttingDown = true;
+  logger.info(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+
+  // 1. Kill renderer process tree
+  if (startRenderer._currentProcess && !startRenderer._currentProcess.killed) {
+    try {
+      // Kill the entire process group (renderer + chrome children)
+      process.kill(-startRenderer._currentProcess.pid, 'SIGTERM');
+    } catch (_) {
+      try { startRenderer._currentProcess.kill('SIGKILL'); } catch (_) { }
+    }
+    logger.info('🦀 Renderer process terminated.');
+  }
+
+  // 2. Kill any remaining chrome processes
+  try { execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+
+  // 3. Free port 3000
+  try { execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' }); } catch (_) { }
+
+  // 4. Clean lock files
+  const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
+  if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+  const chromiumDir = '/tmp/chromiumoxide-runner';
+  if (fs.existsSync(chromiumDir)) {
+    try { fs.rmSync(chromiumDir, { recursive: true, force: true }); } catch (_) { }
+  }
+
+  // 5. Destroy Discord client
+  try {
+    client.destroy();
+    logger.info('🤖 Discord client destroyed.');
+  } catch (_) { }
+
+  logger.info('👋 Goodbye!');
+  process.exit(0);
+}
+
+// Register signal handlers
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // kill command
+
+// =================================================================
 // RUST RENDERER MANAGER
 // =================================================================
 function startRenderer() {
@@ -45,27 +126,45 @@ function startRenderer() {
     }
   }
 
-  // 2. Spawn the process
+  // 2. Clean up stale Chrome lock files and port 3000 before spawning
+  const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
+  if (fs.existsSync(lockFile)) {
+    fs.unlinkSync(lockFile);
+    logger.info('🧹 Cleared stale Chrome SingletonLock.');
+  }
+  try { execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' }); } catch (_) { }
+
+  // 3. Spawn the process (detached so we can kill the process group)
   logger.info('🚀 Launching Renderer Service...');
+  startRenderer._currentProcess?.kill(); // Kill previous if still alive
   const rendererProcess = spawn(binaryPath, [], {
     cwd: rendererDir,
-    detached: false,
+    detached: true,
     stdio: 'inherit' // Pipe logs to console so you can see "Listening on..."
   });
+  startRenderer._currentProcess = rendererProcess;
 
   rendererProcess.on('error', (err) => {
     logger.error('❌ Renderer failed to start:', err);
   });
 
-  rendererProcess.on('exit', (code, signal) => {
-    if (code !== 0 && code !== null) {
-      logger.warn(`⚠️ Renderer exited with code ${code}. Restarting in 5s...`);
-      setTimeout(startRenderer, 5000); // Auto-restart if it crashes
-    }
-  });
+  // Track consecutive failures to prevent infinite restart loops
+  startRenderer._failures = (startRenderer._failures || 0) + 1;
+  const MAX_RESTARTS = 10;
 
-  // Ensure renderer dies when bot dies
-  process.on('exit', () => rendererProcess.kill());
+  rendererProcess.on('exit', (code, signal) => {
+    if (isShuttingDown) return; // Don't restart during shutdown
+    if (code === 0 || code === null) {
+      startRenderer._failures = 0; // Reset on clean exit
+      return;
+    }
+    if (startRenderer._failures >= MAX_RESTARTS) {
+      logger.error(`❌ Renderer failed ${MAX_RESTARTS} times in a row. Giving up. Use /reconnect or restart the bot.`);
+      return;
+    }
+    logger.warn(`⚠️ Renderer exited with code ${code}. Restarting in 5s... (${startRenderer._failures}/${MAX_RESTARTS})`);
+    setTimeout(startRenderer, 5000);
+  });
 }
 // =================================================================
 
@@ -104,7 +203,10 @@ const schedulePerGuildTask = (name, taskFn, intervalMs, initialDelay = 0) => {
 };
 
 async function main() {
-  // 0. Force DB Sync
+  // 0. Cleanup stale processes from previous sessions
+  cleanupStaleProcesses();
+
+  // 1. Force DB Sync
   try {
     logger.info('🔄 Force-Syncing Database Schema...');
     execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
@@ -113,10 +215,10 @@ async function main() {
     logger.error('❌ Failed to sync database (Prisma error):', error);
   }
 
-  // 1. START THE RENDERER
+  // 2. START THE RENDERER
   startRenderer();
 
-  // 2. Database Health Check
+  // 3. Database Health Check
   logger.info('Checking database connection...');
   const dbHealth = await DatabaseService.checkDatabaseIntegrity();
   if (!dbHealth) {
@@ -125,17 +227,17 @@ async function main() {
   }
   logger.info('Database connection established.');
 
-  // 3. Load Commands
+  // 4. Load Commands
   logger.info('Loading commands...');
   await loadCommands(client);
   logger.info(`Loaded ${client.commands.size} commands.`);
 
-  // 4. Start Bot
+  // 5. Start Bot
   try {
     await client.start();
     logger.info('Bot started successfully.');
 
-    // 5. Interaction Handler
+    // 6. Interaction Handler
     client.on('interactionCreate', async (interaction) => {
       try {
         await handleInteraction(interaction);
@@ -252,7 +354,8 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
-  process.exit(1);
+  gracefulShutdown('uncaughtException');
 });
 
 main();
+

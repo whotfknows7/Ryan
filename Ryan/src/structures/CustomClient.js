@@ -19,6 +19,9 @@ class CustomClient extends Client {
         Partials.Channel, 
         Partials.Reaction // Required for fetching reactions on old messages
       ],
+      rest: {
+        timeout: 30000
+      }
     });
 
     this.commands = new Collection();

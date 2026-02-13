@@ -30,23 +30,49 @@ class LeaderboardUpdateService {
         // Optimization: Skip if the data hasn't changed
         const currentJSON = JSON.stringify(topUsers);
 
-        // This is where your error was occurring:
-        if (currentJSON === previousTopUsersJSON.get(guildId)) continue;
+        // Check map existence safely
+        if (previousTopUsersJSON.has(guildId) && currentJSON === previousTopUsersJSON.get(guildId)) {
+          continue;
+        }
 
-        // 2. Generate Payload (Enable Switchers = true for Main LB)
+        // logger.info(`Updating leaderboard for guild ${guildId}...`);
+
+        // 2. Generate Payload
+        // logger.info(`[${guildId}] Generating payload...`);
         const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true);
+        // logger.info(`[${guildId}] Payload generated.`);
 
         // 3. Delete Old Message & Send New
         if (ids.dailyLeaderboardMessageId) {
           try {
+            logger.debug(`[${guildId}] Fetching old message ${ids.dailyLeaderboardMessageId}...`);
             const oldMsg = await channel.messages.fetch(ids.dailyLeaderboardMessageId).catch(() => null);
-            if (oldMsg) await oldMsg.delete();
+            if (oldMsg) {
+              logger.debug(`[${guildId}] Deleting old message...`);
+              await oldMsg.delete();
+            }
           } catch (e) {
-            // Ignore if old message is missing
+            logger.warn(`[${guildId}] Failed to delete old message: ${e.message}`);
           }
         }
 
-        const newMessage = await channel.send(payload);
+        // logger.info(`[${guildId}] Sending new leaderboard message...`);
+
+        // Retry logic for unstable connections
+        let newMessage;
+        const maxRetries = 3;
+        for (let i = 0; i < maxRetries; i++) {
+          try {
+            newMessage = await channel.send(payload);
+            break; // Success!
+          } catch (sendError) {
+            if (i === maxRetries - 1) throw sendError; // Rethrow if last attempt
+            logger.warn(`[${guildId}] Failed to send message (Attempt ${i + 1}/${maxRetries}): ${sendError.message}. Retrying...`);
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+          }
+        }
+
+        // logger.info(`[${guildId}] Leaderboard updated. Message ID: ${newMessage.id}`);
 
         // Update State
         previousTopUsersJSON.set(guildId, currentJSON);
@@ -54,7 +80,10 @@ class LeaderboardUpdateService {
         clearCache(guildId);
 
       } catch (e) {
-        logger.error(`Failed to update leaderboard for guild ${guildId}:`, e);
+        logger.error(`Failed to update leaderboard for guild ${guildId}: ${e.message}`, e);
+        if (e.name === 'AbortError' || e.code === 'UND_ERR_SOCKET') {
+          logger.error(`[${guildId}] Network/Socket Error detected. Request failed.`);
+        }
       }
     }
   }
@@ -108,6 +137,7 @@ class LeaderboardUpdateService {
 
     // 3. Generate Image (with highlight support)
     const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
+    logger.info(`[${guild.id}] Generated leaderboard image size: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
     const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
 
     // 4. Build Embed

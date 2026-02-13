@@ -3,7 +3,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { request } = require('undici');
+const axios = require('axios');
 const sharp = require('sharp'); // Replaces gif-frames
 const { DatabaseService } = require('../../services/DatabaseService');
 const logger = require('../../lib/logger');
@@ -14,11 +14,11 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-gif')
     .setDescription('Upload and process a new Clan GIF template (Owner Only)')
-    .addStringOption(option => 
+    .addStringOption(option =>
       option.setName('name')
         .setDescription('Unique name for this template')
         .setRequired(true))
-    .addIntegerOption(option => 
+    .addIntegerOption(option =>
       option.setName('clan_count')
         .setDescription('How many clans are in this GIF?')
         .setRequired(true)
@@ -36,8 +36,8 @@ module.exports = {
     const name = interaction.options.getString('name');
     const clanCount = interaction.options.getInteger('clan_count');
 
-    await interaction.reply({ 
-      content: `Please upload the GIF file for **"${name}"** (${clanCount} Clans) now. I am listening...` 
+    await interaction.reply({
+      content: `Please upload the GIF file for **"${name}"** (${clanCount} Clans) now. I am listening...`
     });
 
     const filter = m => m.author.id === interaction.user.id && m.attachments.size > 0;
@@ -53,13 +53,13 @@ module.exports = {
 
       try {
         // 1. Download GIF
-        const { body } = await request(attachment.url);
-        const buffer = Buffer.from(await body.arrayBuffer());
-        
+        const response = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+        const buffer = Buffer.from(response.data);
+
         // 2. Setup Directories
         const targetDir = path.join(TEMPLATE_DIR, clanCount.toString(), name);
         const framesDir = path.join(targetDir, 'frames');
-        
+
         if (fs.existsSync(targetDir)) {
           fs.rmSync(targetDir, { recursive: true, force: true });
         }
@@ -68,12 +68,12 @@ module.exports = {
         // 3. Extract Frames using Sharp
         const metadata = await sharp(buffer, { animated: true }).metadata();
         const pages = metadata.pages || 1;
-        
+
         const coords = [];
 
         for (let i = 0; i < pages; i++) {
           const fileName = `${String(i).padStart(3, '0')}.png`;
-          
+
           await sharp(buffer, { page: i })
             .png()
             .toFile(path.join(framesDir, fileName));

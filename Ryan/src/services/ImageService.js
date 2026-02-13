@@ -1,7 +1,6 @@
 // src/services/ImageService.js
 
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const { request } = require('undici');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -27,7 +26,7 @@ if (!fs.existsSync(ROLE_TEMPLATE_PATH)) {
 }
 
 class ImageService {
-  
+
   constructor() {
     // Rust renderer URL for rank cards
     // [FIX] Ensure this matches your Docker/Localhost setup
@@ -45,7 +44,7 @@ class ImageService {
       return Buffer.from(response.data, 'binary').toString('base64');
     } catch (error) {
       console.error(`Failed to convert image to base64: ${url}`, error.message);
-      return ""; 
+      return "";
     }
   }
 
@@ -53,7 +52,7 @@ class ImageService {
     try {
       // 1. Convert external resources to Base64
       const avatarBase64 = await this.urlToBase64(data.avatarUrl);
-      
+
       // 2. Construct Payload
       const payload = {
         username: data.username,
@@ -89,10 +88,10 @@ class ImageService {
   // =================================================================
   // CANVAS-BASED IMAGE GENERATION (Leaderboards & Role Rewards)
   // =================================================================
-  
+
   async loadFont() {
     if (cachedFont) return cachedFont;
-    
+
     const fontDirs = [
       path.join(ASSETS_DIR, 'font'),
       path.join(ASSETS_DIR, 'fonts')
@@ -118,47 +117,57 @@ class ImageService {
 
   async generateLeaderboard(users, highlightUserId = null) {
     const font = await this.loadFont();
-    
+
     const width = 800;
     const height = (users.length * 60) + 20;
-    
+
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
-    
+
     ctx.clearRect(0, 0, width, height);
-    
+
     if (users.length === 0) {
       canvas.height = 100;
       this.renderOpenTypeText(ctx, font, "No-one is yapping right now...", 10, 60, 30);
       return canvas.toBuffer('image/png');
     }
-    
+
     let yPosition = 10;
     const padding = 10;
-    
+
     const rankColors = {
       1: '#FFD700', // Gold
       2: '#E6E8FA', // Silver
       3: '#CD7F32', // Bronze
     };
-    
-    for (const user of users) {
+
+    // Pre-fetch all avatars in parallel (Optimization)
+    const avatarPromises = users.map(user => {
+      const url = user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
+      return this.fetchImage(url).catch(() => null);
+    });
+
+    // Wait for all avatar fetches (up to 10 users = 10 avatars)
+    const avatars = await Promise.all(avatarPromises);
+
+    for (let i = 0; i < users.length; i++) {
+      const user = users[i];
+      const avatarImage = avatars[i]; // Pre-fetched image or null
+
       let bgColor = '#36393e';
-      
+
       if (highlightUserId && user.userId === highlightUserId) {
         bgColor = '#823EF0';
       } else if (rankColors[user.rank]) {
         bgColor = rankColors[user.rank];
       }
-      
+
       ctx.fillStyle = bgColor;
       ctx.beginPath();
       ctx.roundRect(padding, yPosition, width - (padding * 2), 57, 10);
       ctx.fill();
-      
-      try {
-        const avatarUrl = user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
-        const avatarImage = await this.fetchImage(avatarUrl);
+
+      if (avatarImage) {
         ctx.save();
         ctx.beginPath();
         ctx.roundRect(padding, yPosition, 57, 58, 10);
@@ -166,7 +175,8 @@ class ImageService {
         ctx.clip();
         ctx.drawImage(avatarImage, padding, yPosition, 57, 58);
         ctx.restore();
-      } catch (e) {
+      } else {
+        // Fallback placeholder grey box if image failed
         ctx.fillStyle = '#808080';
         ctx.beginPath();
         ctx.roundRect(padding, yPosition, 57, 58, 10);
@@ -179,23 +189,23 @@ class ImageService {
       const rankText = `#${user.rank}`;
       const rankX = padding + 65;
       const rankEndX = this.renderOpenTypeText(ctx, font, rankText, rankX, textBaselineY, fontSize);
-      
+
       const separatorX = rankEndX + 12;
       const sep1EndX = this.renderOpenTypeText(ctx, font, "|", separatorX, textBaselineY, fontSize);
-      
+
       const nameStartX = sep1EndX + 12;
       const nameEndX = await this.renderNameWithEmojis(ctx, font, user.username, nameStartX, textBaselineY, fontSize, 440);
-      
+
       const sep2X = nameEndX + 8;
       const sep2EndX = this.renderOpenTypeText(ctx, font, "|", sep2X, textBaselineY, fontSize);
-      
+
       const xpText = `XP: ${this.formatPoints(user.xp)} pts`;
       const xpX = sep2EndX + 12;
       this.renderOpenTypeText(ctx, font, xpText, xpX, textBaselineY, fontSize);
-      
+
       yPosition += 60;
     }
-    
+
     return canvas.toBuffer('image/png');
   }
 
@@ -207,7 +217,7 @@ class ImageService {
       cachedRoleTemplate = await loadImage(ROLE_TEMPLATE_PATH);
     }
     const background = cachedRoleTemplate;
-    
+
     const canvas = createCanvas(background.width, background.height);
     const ctx = canvas.getContext('2d');
     const font = await this.loadFont();
@@ -219,7 +229,7 @@ class ImageService {
       if (iconImg) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(74 + 171/2, 67 + 172/2, 171/2, 0, Math.PI * 2);
+        ctx.arc(74 + 171 / 2, 67 + 172 / 2, 171 / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
         ctx.drawImage(iconImg, 74, 67, 171, 172);
@@ -231,10 +241,10 @@ class ImageService {
     const x = 298;
     const yBaseline = 111 + 48;
     const maxWidth = 641;
-    
+
     let displayText = roleName;
     const ellipsis = '...';
-    
+
     while (font.getAdvanceWidth(displayText, fontSize) > maxWidth && displayText.length > 0) {
       displayText = displayText.slice(0, -1);
     }
@@ -249,12 +259,12 @@ class ImageService {
     ctx.shadowOffsetY = 2;
 
     const path = font.getPath(displayText, x, yBaseline, fontSize);
-    
+
     path.fill = null;
     path.stroke = 'black';
     path.strokeWidth = 5;
     path.draw(ctx);
-    
+
     path.fill = roleColorHex || '#FFFFFF';
     path.stroke = null;
     path.draw(ctx);
@@ -273,12 +283,12 @@ class ImageService {
 
     const fontSize = 40;
     const x = 298;
-    const yBaseline = 206 + 35; 
+    const yBaseline = 206 + 35;
     const maxWidth = 637;
-    
+
     let displayText = username;
     const ellipsis = '...';
-    
+
     while (font.getAdvanceWidth(displayText, fontSize) > maxWidth && displayText.length > 0) {
       displayText = displayText.slice(0, -1);
     }
@@ -293,12 +303,12 @@ class ImageService {
     ctx.shadowOffsetY = 2;
 
     const path = font.getPath(displayText, x, yBaseline, fontSize);
-    
+
     path.fill = null;
     path.stroke = 'black';
     path.strokeWidth = 5;
     path.draw(ctx);
-    
+
     path.fill = 'white';
     path.stroke = null;
     path.draw(ctx);
@@ -314,13 +324,13 @@ class ImageService {
     for (const char of text) {
       const glyph = font.charToGlyph(char);
       const glyphPath = glyph.getPath(cursorX, y, fontSize);
-      
+
       ctx.save();
       ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
       ctx.shadowBlur = 6;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
-      
+
       glyphPath.fill = null;
       glyphPath.stroke = 'black';
       glyphPath.strokeWidth = 5;
@@ -332,12 +342,12 @@ class ImageService {
       glyphPath.stroke = null;
       glyphPath.draw(ctx);
       ctx.restore();
-      
+
       cursorX += glyph.advanceWidth * scale;
     }
     return cursorX;
   }
-  
+
   formatPoints(points) {
     if (points >= 1_000_000) {
       const num = points / 1_000_000;
@@ -348,16 +358,16 @@ class ImageService {
     }
     return points.toString();
   }
-  
+
   async renderNameWithEmojis(ctx, font, text, x, y, fontSize, maxWidth) {
     const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}]/gu;
-    
+
     const textPart = text.replace(emojiRegex, '').trim();
     const emojis = text.match(emojiRegex) || [];
-    
+
     let displayText = textPart;
     let textWidth = font.getAdvanceWidth(displayText, fontSize);
-    
+
     if (textWidth > maxWidth) {
       const ellipsis = '...';
       while (font.getAdvanceWidth(displayText + ellipsis, fontSize) > maxWidth && displayText.length > 0) {
@@ -365,15 +375,15 @@ class ImageService {
       }
       displayText += ellipsis;
     }
-    
+
     const textEndX = this.renderOpenTypeText(ctx, font, displayText, x, y, fontSize);
-    
+
     let currentX = textEndX + 8;
     const emojiSize = 30;
-    
+
     for (const emoji of emojis) {
       if (currentX + emojiSize > x + maxWidth) break;
-      
+
       const emojiImage = await this.fetchEmojiImage(emoji);
       if (emojiImage) {
         ctx.drawImage(emojiImage, currentX, y - 25, emojiSize, emojiSize);
@@ -382,37 +392,36 @@ class ImageService {
     }
     return currentX;
   }
-  
+
   async fetchImage(url) {
     try {
-      const { body } = await request(url);
-      const buffer = await body.arrayBuffer();
-      return await loadImage(Buffer.from(buffer));
-    } catch(e) {
+      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+      return await loadImage(Buffer.from(response.data));
+    } catch (e) {
       console.warn(`[ImageService] Failed to fetch image: ${url}`);
       throw new Error(`Failed to load image from ${url}`);
     }
   }
-  
+
   async fetchEmojiImage(char) {
     const hex = [...char].map(c => c.codePointAt(0).toString(16)).join('-');
     if (!hex) return null;
-    
+
     const filePath = path.join(EMOJI_DIR, `${hex}.png`);
-    
+
     try {
       if (fs.existsSync(filePath)) {
         return await loadImage(filePath);
       }
-      
+
       const url = `https://raw.githubusercontent.com/whotfknows7/bangbang/main/unicode/64/${hex}.png`;
-      const { statusCode, body } = await request(url);
-      
-      if (statusCode !== 200) return null;
-      
-      const buffer = Buffer.from(await body.arrayBuffer());
+      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000, validateStatus: () => true });
+
+      if (response.status !== 200) return null;
+
+      const buffer = Buffer.from(response.data);
       fs.writeFileSync(filePath, buffer);
-      
+
       return await loadImage(buffer);
     } catch (e) {
       console.warn(`[ImageService] Failed to fetch emoji: ${char} (${hex})`);
@@ -422,17 +431,17 @@ class ImageService {
 
   clearEmojiCache() {
     if (!fs.existsSync(EMOJI_DIR)) return 0;
-    
+
     const files = fs.readdirSync(EMOJI_DIR);
     let count = 0;
-    
+
     for (const file of files) {
       if (file.endsWith('.png')) {
         fs.unlinkSync(path.join(EMOJI_DIR, file));
         count++;
       }
     }
-    
+
     console.log(`[ImageService] Cleared ${count} cached emoji images`);
     return count;
   }
@@ -441,7 +450,7 @@ class ImageService {
     try {
       await this.loadFont();
       console.log('[ImageService] Font preloaded successfully');
-      
+
       if (fs.existsSync(ROLE_TEMPLATE_PATH)) {
         cachedRoleTemplate = await loadImage(ROLE_TEMPLATE_PATH);
         console.log('[ImageService] Role template preloaded successfully');
