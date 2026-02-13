@@ -86,6 +86,36 @@ impl BrowserManager {
 
         if let Ok(path) = std::env::var("CHROME_BIN") {
             builder = builder.chrome_executable(path);
+        } else {
+            #[cfg(target_os = "windows")]
+            {
+                let mut found_path = None;
+                let common_paths = vec![
+                    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                ];
+
+                for path in &common_paths {
+                    if std::path::Path::new(path).exists() {
+                        found_path = Some(path.to_string());
+                        break;
+                    }
+                }
+
+                if found_path.is_none() {
+                    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+                        let path = format!(r"{}\Google\Chrome\Application\chrome.exe", local_app_data);
+                        if std::path::Path::new(&path).exists() {
+                            found_path = Some(path);
+                        }
+                    }
+                }
+
+                if let Some(path) = found_path {
+                    info!("Auto-detected Chrome executable at: {}", path);
+                    builder = builder.chrome_executable(path);
+                }
+            }
         }
 
         let config = builder.build().map_err(|e| anyhow::anyhow!(e))?;
