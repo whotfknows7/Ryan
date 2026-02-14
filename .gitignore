@@ -1,5 +1,5 @@
 .env
-INSTALL.md
+GUIDE.md
 node_modules/
 package-lock.json
 assets/
