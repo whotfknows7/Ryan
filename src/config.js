@@ -1,33 +1,64 @@
 const dotenv = require('dotenv');
+const { z } = require('zod');
+
 dotenv.config();
+
+// ============================================================================
+// Environment Schema — Validates all env vars at startup
+// ============================================================================
+
+const envSchema = z.object({
+  DISCORD_BOT_TOKEN: z
+    .string({ required_error: 'Missing DISCORD_BOT_TOKEN' })
+    .min(1, 'DISCORD_BOT_TOKEN cannot be empty'),
+
+  CLIENT_ID: z
+    .string({ required_error: 'Missing CLIENT_ID' })
+    .min(1, 'CLIENT_ID cannot be empty'),
+
+  DATABASE_URL: z
+    .string({ required_error: 'Missing DATABASE_URL' })
+    .min(1, 'DATABASE_URL cannot be empty'),
+
+  REGISTER_COMMANDS_GLOBALLY: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((val) => val === 'true'),
+
+  DEV_GUILD_IDS: z
+    .string()
+    .optional()
+    .default('')
+    .transform((val) => val.split(',').filter(Boolean)),
+});
+
+// Parse & validate — throws a descriptive ZodError on failure
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  const formatted = parsed.error.issues
+    .map((issue) => `  ✗ ${issue.path.join('.')}: ${issue.message}`)
+    .join('\n');
+  console.error('❌ Invalid environment variables:\n' + formatted);
+  process.exit(1);
+}
 
 /**
  * Core configuration - Only contains essential bot setup values
  * All role IDs, channel IDs, and guild-specific settings are now managed
  * through the database and setup wizard (/setup command)
- * * MULTI-GUILD SUPPORT: This bot is designed to work across multiple guilds.
+ *
+ * MULTI-GUILD SUPPORT: This bot is designed to work across multiple guilds.
  * Each guild has its own configuration stored in the database.
  */
 const config = {
-  TOKEN: process.env.DISCORD_BOT_TOKEN,
-  CLIENT_ID: process.env.CLIENT_ID,
-  DATABASE_URL: process.env.DATABASE_URL,
-  
-  // Optional: Set to 'true' to register commands globally instead of per-guild
-  // Global commands can take up to 1 hour to propagate
-  // Guild commands update instantly but require manual registration per guild
-  REGISTER_COMMANDS_GLOBALLY: process.env.REGISTER_COMMANDS_GLOBALLY === 'true',
-  
-  // Optional: Comma-separated list of guild IDs for development/testing
-  // If specified, commands will only be registered to these guilds (faster updates)
-  // Leave empty for global registration or production deployment
-  DEV_GUILD_IDS: process.env.DEV_GUILD_IDS ? process.env.DEV_GUILD_IDS.split(',').filter(Boolean) : [],
+  TOKEN: parsed.data.DISCORD_BOT_TOKEN,
+  CLIENT_ID: parsed.data.CLIENT_ID,
+  DATABASE_URL: parsed.data.DATABASE_URL,
+  REGISTER_COMMANDS_GLOBALLY: parsed.data.REGISTER_COMMANDS_GLOBALLY,
+  DEV_GUILD_IDS: parsed.data.DEV_GUILD_IDS,
 };
-
-// Validate required environment variables
-if (!config.TOKEN) throw new Error("Missing DISCORD_BOT_TOKEN");
-if (!config.DATABASE_URL) throw new Error("Missing DATABASE_URL");
-if (!config.CLIENT_ID) throw new Error("Missing CLIENT_ID");
 
 /**
  * NOTE: All role and channel IDs should now be configured via:

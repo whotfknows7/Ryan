@@ -15,7 +15,7 @@ const handleInteraction = async (interaction) => {
     const command = interaction.client.commands.get(interaction.commandName);
     if (!command) return;
 
-    const cooldown = checkCooldown(interaction.user.id, command);
+    const cooldown = await checkCooldown(interaction.user.id, command);
     if (cooldown.onCooldown) {
       return interaction.reply({
         content: `Please wait ${cooldown.timeLeft.toFixed(1)} more second(s) before reusing the \`${command.data.name}\` command.`,

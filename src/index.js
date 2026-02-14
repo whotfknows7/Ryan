@@ -1,5 +1,6 @@
 // src/index.js
 require('dotenv').config();
+const cron = require('node-cron');
 
 const { execSync, spawn } = require('child_process');
 const path = require('path');
@@ -171,28 +172,24 @@ function startRenderer() {
 // =================================================================
 
 /**
- * Recursive task scheduler
+ * Schedule a cron task with error handling
  */
-const scheduleTask = (name, task, intervalMs, initialDelay = 0) => {
-  const run = async () => {
+const scheduleCronTask = (name, expression, task) => {
+  cron.schedule(expression, async () => {
     try {
       await task();
     } catch (e) {
       logger.error(`Background task '${name}' error:`, e);
-    } finally {
-      setTimeout(run, intervalMs);
     }
-  };
-  const startDelay = initialDelay > 0 ? initialDelay : intervalMs;
-  setTimeout(run, startDelay);
-  logger.info(`Scheduled task '${name}' with ${intervalMs}ms interval (Start delay: ${startDelay}ms)`);
+  });
+  logger.info(`Scheduled cron task '${name}' with expression: ${expression}`);
 };
 
 /**
- * Per-guild task scheduler
+ * Schedule a per-guild cron task
  */
-const schedulePerGuildTask = (name, taskFn, intervalMs, initialDelay = 0) => {
-  scheduleTask(name, async () => {
+const schedulePerGuildCronTask = (name, expression, taskFn) => {
+  scheduleCronTask(name, expression, async () => {
     if (!client.guilds.cache.size) return;
     const guilds = Array.from(client.guilds.cache.keys());
     const results = await Promise.allSettled(guilds.map((guildId) => taskFn(guildId)));
@@ -201,7 +198,7 @@ const schedulePerGuildTask = (name, taskFn, intervalMs, initialDelay = 0) => {
         logger.error(`${name} failed for guild ${guilds[index]}:`, result.reason);
       }
     });
-  }, intervalMs, initialDelay);
+  });
 };
 
 async function main() {
@@ -317,35 +314,35 @@ async function main() {
       }
     });
 
-    // Background Tasks
-    scheduleTask('DB Heartbeat', async () => {
+    // Background Tasks (cron-scheduled)
+    scheduleCronTask('DB Heartbeat', '*/5 * * * *', async () => {
       try { await DatabaseService.checkDatabaseIntegrity(); }
       catch (e) { logger.error('❤️ DB Heartbeat failed:', e); }
-    }, 290 * 1000);
+    });
 
-    scheduleTask('Punishment Checker', async () => {
+    scheduleCronTask('Punishment Checker', '* * * * *', async () => {
       await PunishmentService.checkExpiredPunishments(client);
-    }, 60 * 1000, 5 * 1000);
+    });
 
-    schedulePerGuildTask('Reset Cycle Checker', async (guildId) => {
+    schedulePerGuildCronTask('Reset Cycle Checker', '* * * * *', async (guildId) => {
       await ResetService.checkResetCycle(client, guildId);
-    }, 60 * 1000, 10 * 1000);
+    });
 
-    schedulePerGuildTask('Reset Role Expiry', async (guildId) => {
+    schedulePerGuildCronTask('Reset Role Expiry', '* * * * *', async (guildId) => {
       await cleanExpiredResetRoles(guildId);
-    }, 60 * 1000, 15 * 1000);
+    });
 
-    scheduleTask('Leaderboard Updater', async () => {
+    scheduleCronTask('Leaderboard Updater', '*/20 * * * * *', async () => {
       await LeaderboardUpdateService.updateLiveLeaderboard(client);
-    }, 20 * 1000, 20 * 1000);
+    });
 
-    scheduleTask('Leaderboard Cleanup', async () => {
+    scheduleCronTask('Leaderboard Cleanup', '* * * * *', async () => {
       await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
-    }, 60 * 1000, 30 * 1000); // Check every minute
+    });
 
-    schedulePerGuildTask('Weekly Role Check', async (guildId) => {
+    schedulePerGuildCronTask('Weekly Role Check', '*/5 * * * *', async (guildId) => {
       await WeeklyRoleService.checkWeeklyRole(client, guildId);
-    }, 5 * 60 * 1000, 30 * 1000); // Check every 5 minutes, start after 30s
+    });
 
     logger.info('✅ All background services started.');
 

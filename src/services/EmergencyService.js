@@ -1,11 +1,21 @@
-const { EmbedBuilder, Collection, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { RateLimiterMemory } = require('rate-limiter-flexible');
 const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 
-const cooldowns = new Collection();
-const silentLogCooldowns = new Collection();
-const COOLDOWN_DURATION = 10 * 60 * 1000; // 10 minutes
-const SILENT_LOG_COOLDOWN_DURATION = 10 * 1000; // 10 seconds
+// 1 use per 10 minutes, keyed by guildId
+const emergencyLimiter = new RateLimiterMemory({
+    points: 1,
+    duration: 10 * 60, // 10 minutes in seconds
+    keyPrefix: 'emergency',
+});
+
+// 1 silent log per 10 seconds, keyed by guildId
+const silentLogLimiter = new RateLimiterMemory({
+    points: 1,
+    duration: 10, // 10 seconds
+    keyPrefix: 'emergency-silent-log',
+});
 
 class EmergencyService {
     /**
@@ -25,11 +35,11 @@ class EmergencyService {
         const modRoleId = ids.modRoleId; // Primary
 
         // 1. Check Cooldown
-        const now = Date.now();
-        const lastUsed = cooldowns.get(guild.id);
-
-        if (lastUsed && (now - lastUsed < COOLDOWN_DURATION)) {
-            const timeLeft = Math.ceil((COOLDOWN_DURATION - (now - lastUsed)) / 60000);
+        try {
+            await emergencyLimiter.consume(guild.id);
+        } catch (rateLimiterRes) {
+            // On cooldown — show user feedback
+            const timeLeft = Math.ceil(rateLimiterRes.msBeforeNext / 60000);
             const cooldownEmbed = new EmbedBuilder()
                 .setColor('#FFA500')
                 .setTitle('🚨 Emergency Services Busy')
@@ -38,25 +48,22 @@ class EmergencyService {
 
             await channel.send({ embeds: [cooldownEmbed] });
 
-            // Silent Logging if within 5 minutes of the last cooldown trigger
+            // Silent Logging (rate-limited to 1 per 10s)
             if (logsChannelId) {
                 const logChannel = guild.channels.cache.get(logsChannelId);
+                if (logChannel) {
+                    try {
+                        await silentLogLimiter.consume(guild.id);
+                        const silentLogEmbed = new EmbedBuilder()
+                            .setColor('#FFA500')
+                            .setTitle('⚠️ Emergency Cooldown Attempt')
+                            .setDescription(`**User:** ${member.toString()}\n**Channel:** ${channel.toString()}\n**Note:** User attempted to call 911 during cooldown.`)
+                            .setTimestamp();
 
-                // Check Silent Log Cooldown (10s)
-                const lastSilentLog = silentLogCooldowns.get(guild.id);
-
-                if (logChannel && (!lastSilentLog || (now - lastSilentLog >= SILENT_LOG_COOLDOWN_DURATION))) {
-                    const silentLogEmbed = new EmbedBuilder()
-                        .setColor('#FFA500')
-                        .setTitle('⚠️ Emergency Cooldown Attempt')
-                        .setDescription(`**User:** ${member.toString()}\n**Channel:** ${channel.toString()}\n**Note:** User attempted to call 911 during cooldown.`)
-                        .setTimestamp();
-
-                    // Send without pings
-                    logChannel.send({ embeds: [silentLogEmbed] }).catch(e => logger.error('Failed to send silent log:', e));
-
-                    // Update Silent Log Cooldown
-                    silentLogCooldowns.set(guild.id, now);
+                        logChannel.send({ embeds: [silentLogEmbed] }).catch(e => logger.error('Failed to send silent log:', e));
+                    } catch (_silentLimitErr) {
+                        // Silent log on cooldown, skip
+                    }
                 }
             }
             return;
@@ -176,8 +183,7 @@ class EmergencyService {
             }
         }, 1500);
 
-        // 6. Set Cooldown
-        cooldowns.set(guild.id, now);
+        // Cooldown is automatically set by emergencyLimiter.consume() above
     }
 }
 

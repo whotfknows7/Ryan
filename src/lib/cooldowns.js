@@ -1,16 +1,13 @@
 // src/lib/cooldowns.js
 
-const { Collection } = require('discord.js');
+const { RateLimiterMemory } = require('rate-limiter-flexible');
 
-// Role announcement skip tracking
+// =========================================
+// ROLE ANNOUNCEMENT SKIP TRACKING
+// (Simple timer — not rate limiting, kept as-is)
+// =========================================
+
 const roleAnnouncementSkips = new Map();
-
-// Command cooldown tracking
-const cooldowns = new Collection();
-
-// =========================================
-// ROLE ANNOUNCEMENT SKIP FUNCTIONS
-// =========================================
 
 function setRoleSkip(memberId) {
   const timestamp = Date.now();
@@ -20,15 +17,15 @@ function setRoleSkip(memberId) {
 
 function checkRoleSkip(memberId, windowMs = 20000) {
   const skipTime = roleAnnouncementSkips.get(memberId);
-  
+
   if (!skipTime) return null;
-  
+
   const elapsed = Date.now() - skipTime;
-  
+
   if (elapsed < windowMs) {
     return windowMs - elapsed; // Time remaining
   }
-  
+
   // Skip window expired, cleanup
   roleAnnouncementSkips.delete(memberId);
   return null;
@@ -43,47 +40,56 @@ function getActiveSkips() {
   return Array.from(roleAnnouncementSkips.entries()).map(([memberId, timestamp]) => ({
     memberId,
     timestamp,
-    age: now - timestamp
+    age: now - timestamp,
   }));
 }
 
 // =========================================
-// COMMAND COOLDOWN FUNCTIONS
+// COMMAND COOLDOWNS — rate-limiter-flexible
 // =========================================
+
+// Cache of RateLimiterMemory instances per command name
+const commandLimiters = new Map();
+
+/**
+ * Gets or creates a rate limiter for a specific command
+ * @param {string} commandName - The command name
+ * @param {number} cooldownSeconds - Cooldown duration in seconds
+ * @returns {RateLimiterMemory}
+ */
+function getLimiter(commandName, cooldownSeconds) {
+  if (!commandLimiters.has(commandName)) {
+    commandLimiters.set(
+      commandName,
+      new RateLimiterMemory({
+        points: 1, // 1 use allowed
+        duration: cooldownSeconds, // per this many seconds
+        keyPrefix: commandName,
+      })
+    );
+  }
+  return commandLimiters.get(commandName);
+}
 
 /**
  * Check if a user is on cooldown for a specific command
  * @param {string} userId - The user's ID
  * @param {object} command - The command object with data.name and optional cooldown property
- * @returns {object} - { onCooldown: boolean, timeLeft: number }
+ * @returns {Promise<object>} - { onCooldown: boolean, timeLeft: number }
  */
-function checkCooldown(userId, command) {
+async function checkCooldown(userId, command) {
   const defaultCooldown = 3; // Default cooldown in seconds
-  const cooldownAmount = (command.cooldown ?? defaultCooldown) * 1000;
-  
-  if (!cooldowns.has(command.data.name)) {
-    cooldowns.set(command.data.name, new Collection());
+  const cooldownSeconds = command.cooldown ?? defaultCooldown;
+  const limiter = getLimiter(command.data.name, cooldownSeconds);
+
+  try {
+    await limiter.consume(userId);
+    return { onCooldown: false, timeLeft: 0 };
+  } catch (rateLimiterRes) {
+    // rateLimiterRes is a RateLimiterRes object when rejected
+    const timeLeft = rateLimiterRes.msBeforeNext / 1000;
+    return { onCooldown: true, timeLeft };
   }
-  
-  const now = Date.now();
-  const timestamps = cooldowns.get(command.data.name);
-  
-  if (timestamps.has(userId)) {
-    const expirationTime = timestamps.get(userId) + cooldownAmount;
-    
-    if (now < expirationTime) {
-      const timeLeft = (expirationTime - now) / 1000;
-      return { onCooldown: true, timeLeft };
-    }
-  }
-  
-  // Set the cooldown timestamp
-  timestamps.set(userId, now);
-  
-  // Auto-cleanup after cooldown expires
-  setTimeout(() => timestamps.delete(userId), cooldownAmount);
-  
-  return { onCooldown: false, timeLeft: 0 };
 }
 
 /**
@@ -91,19 +97,20 @@ function checkCooldown(userId, command) {
  * @param {string} userId - The user's ID
  * @param {string} commandName - The command name
  */
-function clearCooldown(userId, commandName) {
-  if (cooldowns.has(commandName)) {
-    const timestamps = cooldowns.get(commandName);
-    timestamps.delete(userId);
+async function clearCooldown(userId, commandName) {
+  if (commandLimiters.has(commandName)) {
+    const limiter = commandLimiters.get(commandName);
+    await limiter.delete(userId);
   }
 }
+
 /**
  * Clear all cooldowns for a user (for admin override)
  * @param {string} userId - The user's ID
  */
-function clearAllCooldowns(userId) {
-  for (const timestamps of cooldowns.values()) {
-    timestamps.delete(userId);
+async function clearAllCooldowns(userId) {
+  for (const limiter of commandLimiters.values()) {
+    await limiter.delete(userId);
   }
 }
 
@@ -114,9 +121,9 @@ module.exports = {
   checkRoleSkip,
   clearRoleSkip,
   getActiveSkips,
-  
+
   // Command cooldown exports
   checkCooldown,
   clearCooldown,
-  clearAllCooldowns
+  clearAllCooldowns,
 };
