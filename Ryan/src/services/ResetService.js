@@ -3,8 +3,9 @@
 const { EmbedBuilder } = require('discord.js');
 const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
-const { GifService } = require('./GifService'); 
+const { GifService } = require('./GifService');
 const { getIds, clearCache } = require('../utils/GuildIdsHelper');
+const WebhookUtils = require('../utils/WebhookUtils');
 const { addDays, isAfter } = require('date-fns');
 const logger = require('../lib/logger');
 const CONSTANTS = require('../lib/constants');
@@ -13,11 +14,11 @@ const path = require('path');
 const { prisma } = require('../lib/prisma');
 
 class ResetService {
-  
+
   static DAYS_IN_CYCLE = 7;
   static WEEKLY_RESET_DAY = 0;
   static TOP_USERS_LIMIT = 10;
-  
+
   static async checkResetCycle(client, guildId) {
     try {
       const cycle = await this.getOrInitializeCycle(guildId);
@@ -134,7 +135,7 @@ class ResetService {
 
       this.wipeAssetCache();
       logger.info(`Daily reset completed for guild ${guildId}`);
-      
+
       return topDaily[0] || null;
     } catch (error) {
       logger.error(`Error in performDailyReset for guild ${guildId}:`, error);
@@ -162,7 +163,7 @@ class ResetService {
       // 2. Final Clan War Sync
       const clanUpdates = await this.calculateClanUpdates(client, guildId);
       await DatabaseService.syncUserXpToClanXp(guildId, clanUpdates);
-      
+
       this.wipeAssetCache();
       const finalTotals = await DatabaseService.getClanTotalXp(guildId);
 
@@ -172,9 +173,9 @@ class ResetService {
 
       // 4. Reset ClanXP (New war starts next week)
       await DatabaseService.clearClanXp(guildId);
-      
+
       logger.info(`Weekly reset completed for guild ${guildId}`);
-      
+
       return finalTotals;
     } catch (error) {
       logger.error(`Error in performWeeklyResetSilent for guild ${guildId}:`, error);
@@ -186,26 +187,26 @@ class ResetService {
     try {
       const emojiDir = path.join(process.cwd(), 'assets', 'emojis');
       if (fs.existsSync(emojiDir)) fs.readdirSync(emojiDir).forEach(f => fs.unlinkSync(path.join(emojiDir, f)));
-    } catch (e) {}
+    } catch (e) { }
   }
 
   static async calculateClanUpdates(client, guildId) {
     const allUsers = await DatabaseService.getAllUserXp(guildId);
     if (allUsers.length === 0) return [];
-    
+
     const ids = await getIds(guildId);
     const clanRoleMap = {};
     if (ids.clanRole1Id) clanRoleMap[1] = ids.clanRole1Id;
     if (ids.clanRole2Id) clanRoleMap[2] = ids.clanRole2Id;
     if (ids.clanRole3Id) clanRoleMap[3] = ids.clanRole3Id;
     if (ids.clanRole4Id) clanRoleMap[4] = ids.clanRole4Id;
-    
+
     const guild = client.guilds.cache.get(guildId);
     if (!guild) return [];
-    
+
     const updates = [];
     const chunkSize = 100;
-    
+
     for (let i = 0; i < allUsers.length; i += chunkSize) {
       const chunk = allUsers.slice(i, i + chunkSize);
       try {
@@ -228,7 +229,7 @@ class ResetService {
   // =================================================================
   // ANNOUNCEMENTS & GIF PIPELINE
   // =================================================================
-  
+
   static async sendResetAnnouncements(client, guildId, weeklyResetCount, clanData) {
     if (weeklyResetCount >= 1) {
       await this.sendWeeklyAnnouncement(client, guildId, weeklyResetCount === 1, clanData);
@@ -241,9 +242,11 @@ class ResetService {
       if (!channel) return;
 
       const clanTotals = dataSnapshot ?? await DatabaseService.getClanTotalXp(guildId);
-      const ids = await getIds(guildId);
+      const config = await DatabaseService.getGuildConfig(guildId);
+      const ids = config.ids || {};
+      const clansConfig = config.clans || {};
       const totalXp = this.calculateTotalXp(clanTotals);
-      
+
       const clanRoles = {
         1: ids.clanRole1Id, 2: ids.clanRole2Id, 3: ids.clanRole3Id, 4: ids.clanRole4Id
       };
@@ -255,7 +258,12 @@ class ResetService {
         }
       }
 
+
       activeClans.sort((a, b) => b.xp - a.xp);
+
+      const getClanEmoji = (id) => {
+        return clansConfig[id]?.emoji || `**[Clan ${id}]**`;
+      };
 
       const embed = new EmbedBuilder()
         .setTitle("⚔️ **CLAN WAR CONQUEST** ⚔️")
@@ -271,51 +279,51 @@ class ResetService {
       activeClans.forEach((clan, index) => {
         const percentage = totalXp > 0 ? (clan.xp / totalXp * 100) : 0;
         let rankEmoji = index === 0 ? CONSTANTS.EMOJIS.RANK_1 : (index === 1 ? CONSTANTS.EMOJIS.RANK_2 : `**#${index + 1}**`);
-        description += `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${clan.roleId ? `<@&${clan.roleId}>` : `Clan ${clan.id}`}\n` +
-                       `\`\`\`\n${clan.xp.toLocaleString()} XP • ${percentage.toFixed(1)}%\n\`\`\`\n`;
+        description += `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${clan.roleId ? `<@&${clan.roleId}>` : `Clan ${clan.id}`}\n` +
+          `\`\`\`\n${clan.xp.toLocaleString()} XP • ${percentage.toFixed(1)}%\n\`\`\`\n`;
       });
-      
+
       embed.setDescription(description);
 
       // =========================================================
       // GIF PIPELINE
       // =========================================================
-      
+
       let gifUrl = null;
 
       if (!isTie && activeClans.length >= 2) {
         const winnerRoleIds = activeClans.map(c => c.roleId || 'unknown');
-        const rankHash = `count:${activeClans.length}|` + 
-                         activeClans.map((c, i) => `${i+1}:${c.roleId}`).join('|');
+        const rankHash = `count:${activeClans.length}|` +
+          activeClans.map((c, i) => `${i + 1}:${c.roleId}`).join('|');
 
         const cachedEntry = await DatabaseService.getGifCache(rankHash);
-        
+
         if (cachedEntry) {
           logger.info(`[GifPipeline] Cache Hit for ${rankHash}`);
           const msg = await this.fetchMessageFromLink(client, cachedEntry.messageLink);
           if (msg && msg.attachments.first()) {
-             gifUrl = msg.attachments.first().url;
+            gifUrl = msg.attachments.first().url;
           }
-        } 
-        
+        }
+
         if (!gifUrl) {
           logger.info(`[GifPipeline] Cache Miss. Generating for ${rankHash}...`);
           try {
             const tempFilePath = await GifService.generateClanGif(client, winnerRoleIds, activeClans.length);
-            
+
             // Use Stream for AssetService
             const fileStream = fs.createReadStream(tempFilePath);
             const contextText = `Clan Win: ${activeClans[0].id} (Count: ${activeClans.length})`;
-            
+
             const persistentMsgLink = await AssetService.storeToDevChannel(client, fileStream, 'winner.gif', contextText);
-            
+
             if (persistentMsgLink) {
               await DatabaseService.setGifCache(rankHash, persistentMsgLink);
               const msg = await this.fetchMessageFromLink(client, persistentMsgLink);
               if (msg) gifUrl = msg.attachments.first().url;
             }
 
-            fs.unlinkSync(tempFilePath); 
+            fs.unlinkSync(tempFilePath);
             logger.info(`[GifPipeline] Generation complete & cleaned up.`);
 
           } catch (err) {
@@ -330,11 +338,11 @@ class ResetService {
         try {
           const oldMsg = await channel.messages.fetch(ids.clanLeaderboardMessageId).catch(() => null);
           if (oldMsg) await oldMsg.delete();
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const content = withPings ? await this.getClanMentions(guildId) : undefined;
-      const newMsg = await channel.send({ content, embeds: [embed] });
+      const newMsg = await WebhookUtils.sendLeaderboard(channel, embed, content);
 
       await DatabaseService.updateGuildIds(guildId, { clanLeaderboardMessageId: newMsg.id });
       clearCache(guildId);
@@ -343,7 +351,7 @@ class ResetService {
       logger.error('Error sending weekly announcement:', error);
     }
   }
-  
+
   static async fetchMessageFromLink(client, link) {
     try {
       const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
@@ -353,24 +361,24 @@ class ResetService {
       return await ch.messages.fetch(mId);
     } catch { return null; }
   }
-  
+
   static async getLeaderboardChannel(client, guildId) {
     const ids = await getIds(guildId);
     if (!ids.leaderboardChannelId) return null;
     const guild = client.guilds.cache.get(guildId);
     return guild?.channels.cache.get(ids.leaderboardChannelId) || null;
   }
-  
+
   static async getClanMentions(guildId) {
     const ids = await getIds(guildId);
     return [ids.clanRole1Id, ids.clanRole2Id, ids.clanRole3Id, ids.clanRole4Id]
       .filter(Boolean).map(id => `<@&${id}>`).join(' ');
   }
-  
+
   static calculateTotalXp(clanTotals) {
     return Object.values(clanTotals).reduce((sum, xp) => sum + xp, 0);
   }
-  
+
   static logResetSummary(guildId, daily, weekly) {
     if (daily > 0 || weekly > 0) {
       logger.info(`Catch-up: ${daily} daily, ${weekly} weekly resets for ${guildId}`);
