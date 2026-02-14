@@ -11,6 +11,7 @@ const { PunishmentService } = require('./services/PunishmentService');
 const { ResetService } = require('./services/ResetService');
 const { XpService } = require('./services/XpService');
 const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateService');
+const { WeeklyRoleService } = require('./services/WeeklyRoleService');
 const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
@@ -339,6 +340,10 @@ async function main() {
     scheduleTask('Leaderboard Cleanup', async () => {
       await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
     }, 60 * 1000, 30 * 1000); // Check every minute
+
+    schedulePerGuildTask('Weekly Role Check', async (guildId) => {
+      await WeeklyRoleService.checkWeeklyRole(client, guildId);
+    }, 5 * 60 * 1000, 30 * 1000); // Check every 5 minutes, start after 30s
 
     logger.info('✅ All background services started.');
 
