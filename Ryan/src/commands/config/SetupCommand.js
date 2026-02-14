@@ -21,6 +21,7 @@ module.exports = {
     .addChannelOption(opt => opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.'))
     .addChannelOption(opt => opt.setName('mod_log_channel').setDescription('Channel for Admin Requests (Custom Roles) and Logs.'))
     .addRoleOption(opt => opt.setName('admin_role').setDescription('Users with this role can use Bot Admin commands.'))
+    .addRoleOption(opt => opt.setName('mod_role').setDescription('Users with this role receive Emergency Pings.'))
     .addRoleOption(opt => opt.setName('jail_role').setDescription('The role assigned to Jailed users (should restrict channel access).'))
     .addRoleOption(opt => opt.setName('anchor_role_default').setDescription('HIERARCHY: Standard Custom Roles will be placed relative to this role.'))
     .addRoleOption(opt => opt.setName('anchor_role_color').setDescription('HIERARCHY: "Color Your Name" roles will be placed relative to this role.'))
@@ -38,6 +39,7 @@ module.exports = {
       const leaderboardChannel = interaction.options.getChannel('leaderboard_channel');
       const modLogChannel = interaction.options.getChannel('mod_log_channel');
       const adminRole = interaction.options.getRole('admin_role');
+      const modRole = interaction.options.getRole('mod_role');
       const jailRole = interaction.options.getRole('jail_role');
       const anchorDefault = interaction.options.getRole('anchor_role_default');
       const anchorColor = interaction.options.getRole('anchor_role_color');
@@ -63,6 +65,10 @@ module.exports = {
       if (adminRole) {
         idUpdates.adminRoleId = adminRole.id;
         summary.push(`**Admin Role:** ${adminRole}`);
+      }
+      if (modRole) {
+        idUpdates.modRoleId = modRole.id;
+        summary.push(`**Mod Role:** ${modRole} (Emergency Pings)`);
       }
       if (jailRole) {
         idUpdates.jailRoleId = jailRole.id;

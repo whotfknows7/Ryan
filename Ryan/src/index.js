@@ -18,6 +18,7 @@ const { handleInteraction } = require('./handlers/InteractionHandler');
 const { LeaderboardCleanupService } = require('./services/LeaderboardCleanupService');
 const { cleanExpiredResetRoles } = require('./commands/admin/ResetRoleCommands');
 const { setRoleSkip } = require('./lib/cooldowns');
+const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
 const logger = require('./lib/logger');
 
 const client = new CustomClient();
@@ -262,6 +263,7 @@ async function main() {
       try {
         await XpService.handleMessageXp(message);
         await XpService.handleKeywords(message);
+        await MessageIntentHandler.handleMessage(message);
       } catch (error) {
         logger.error('XP/Keyword Error:', error);
       }
