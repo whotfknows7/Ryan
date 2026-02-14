@@ -1,4 +1,4 @@
-const { EmbedBuilder, Collection, MessageFlags, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { EmbedBuilder, Collection, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 
@@ -9,14 +9,13 @@ const SILENT_LOG_COOLDOWN_DURATION = 10 * 1000; // 10 seconds
 
 class EmergencyService {
     /**
-     * Handles the emergency request from either a slash command or a message.
-     * @param {Object} context - The interaction or message object.
-     * @param {boolean} isInteraction - Whether the context is an interaction.
+     * Handles the emergency request triggered by a message.
+     * @param {Message} message - The message object.
      */
-    static async handleEmergency(context, isInteraction = false) {
-        const guild = context.guild;
-        const member = isInteraction ? context.member : context.member;
-        const channel = isInteraction ? context.channel : context.channel;
+    static async handleEmergency(message) {
+        const guild = message.guild;
+        const member = message.member;
+        const channel = message.channel;
 
         if (!guild || !member) return;
 
@@ -37,17 +36,13 @@ class EmergencyService {
                 .setDescription(`Mods have already been alerted recently.\nPlease wait **${timeLeft} minutes** before calling again.`)
                 .setFooter({ text: 'Stay safe and keep calm.', iconURL: guild.iconURL() });
 
-            if (isInteraction) {
-                await context.reply({ embeds: [cooldownEmbed], flags: MessageFlags.Ephemeral });
-            } else {
-                await channel.send({ embeds: [cooldownEmbed] });
-            }
+            await channel.send({ embeds: [cooldownEmbed] });
 
             // Silent Logging if within 5 minutes of the last cooldown trigger
             if (logsChannelId) {
                 const logChannel = guild.channels.cache.get(logsChannelId);
 
-                // [NEW] Check Silent Log Cooldown (10s)
+                // Check Silent Log Cooldown (10s)
                 const lastSilentLog = silentLogCooldowns.get(guild.id);
 
                 if (logChannel && (!lastSilentLog || (now - lastSilentLog >= SILENT_LOG_COOLDOWN_DURATION))) {
@@ -76,12 +71,7 @@ class EmergencyService {
             .setThumbnail('https://cdn.discordapp.com/emojis/1049286377778941973.webp?size=96&quality=lossless');
 
         try {
-            if (isInteraction) {
-                await context.reply({ embeds: [dialingEmbed], fetchReply: true });
-                replyMessage = await context.fetchReply();
-            } else {
-                replyMessage = await channel.send({ embeds: [dialingEmbed] });
-            }
+            replyMessage = await channel.send({ embeds: [dialingEmbed] });
         } catch (error) {
             logger.error('Failed to send dialing message:', error);
             return;
@@ -96,9 +86,7 @@ class EmergencyService {
                 .setTitle('❌ Connection Failed')
                 .setDescription('Emergency services are not fully configured for this server.\nPlease contact a server owner directly.');
 
-            if (isInteraction) {
-                await context.editReply({ embeds: [errorEmbed] });
-            } else if (replyMessage) {
+            if (replyMessage) {
                 await replyMessage.edit({ embeds: [errorEmbed] });
             }
             return;
@@ -113,9 +101,7 @@ class EmergencyService {
                 .setTitle('❌ Connection Error')
                 .setDescription('Could not reach the staff team (Role/Channel missing).');
 
-            if (isInteraction) {
-                await context.editReply({ embeds: [errorEmbed] });
-            } else if (replyMessage) {
+            if (replyMessage) {
                 await replyMessage.edit({ embeds: [errorEmbed] });
             }
             return;
@@ -123,16 +109,14 @@ class EmergencyService {
 
         // 4. Send Alert to Mod Channel
         try {
-            const jumpLink = isInteraction
-                ? `https://discord.com/channels/${guild.id}/${channel.id}/${replyMessage.id}`
-                : context.url;
+            const jumpLink = message.url;
 
             let description = `**Caller:** ${member.toString()}\n**Channel:** ${channel.toString()}\n**Location:** [Jump to Incident](${jumpLink})`;
 
             // Add Reply Context
-            if (!isInteraction && context.reference) {
+            if (message.reference) {
                 try {
-                    const referencedMsg = await channel.messages.fetch(context.reference.messageId);
+                    const referencedMsg = await channel.messages.fetch(message.reference.messageId);
                     if (referencedMsg) {
                         const refContent = referencedMsg.content.length > 100
                             ? referencedMsg.content.substring(0, 100) + '...'
@@ -173,9 +157,7 @@ class EmergencyService {
                 .setTitle('❌ Call Dropped')
                 .setDescription('Failed to connect to the emergency line.');
 
-            if (isInteraction) {
-                await context.editReply({ embeds: [errorEmbed] });
-            } else if (replyMessage) {
+            if (replyMessage) {
                 await replyMessage.edit({ embeds: [errorEmbed] });
             }
             return;
@@ -189,9 +171,7 @@ class EmergencyService {
             .setFooter({ text: 'Do not spam this command.' });
 
         setTimeout(async () => {
-            if (isInteraction) {
-                await context.editReply({ embeds: [successEmbed] });
-            } else if (replyMessage) {
+            if (replyMessage) {
                 await replyMessage.edit({ embeds: [successEmbed] });
             }
         }, 1500);

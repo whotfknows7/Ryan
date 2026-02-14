@@ -15,7 +15,7 @@ class MessageIntentHandler {
         if (content === 'ryan call 911') {
             logger.info(`Emergency intent triggered by ${message.author.tag} in ${message.guild.name}`);
             try {
-                await EmergencyService.handleEmergency(message, false);
+                await EmergencyService.handleEmergency(message);
             } catch (error) {
                 logger.error('Failed to handle emergency intent:', error);
             }
