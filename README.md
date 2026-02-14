@@ -21,9 +21,9 @@ graph TD
     NodeCore -- Webhooks --> Discord
     
     subgraph "Internal Infrastructure"
-    NodeCore -- Worker Threads --> GifWorker[Gif Gen Worker]
-    NodeCore -- RAM Disk --> Shm[/dev/shm]
-    GifWorker -- FFmpeg/Gifsicle --> Shm
+    NodeCore -- Worker Threads --> GifWorker["Gif Gen Worker"]
+    NodeCore -- RAM Disk --> Shm["/dev/shm"]
+    GifWorker -- "FFmpeg/Gifsicle" --> Shm
     end
 ```
 
