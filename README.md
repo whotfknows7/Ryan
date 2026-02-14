@@ -17,7 +17,7 @@ graph TD
     NodeCore -- Prisma ORM --> DB[(PostgreSQL)]
     NodeCore -- HTTP API --> RustRenderer[Rust Visual Engine]
     RustRenderer -- Headless Chrome --> Canvas[[High Fidelity Render]]
-    Canvas -- PNG/GIF --> NodeCore
+    Canvas -- "PNG/GIF" --> NodeCore
     NodeCore -- Webhooks --> Discord
     
     subgraph "Internal Infrastructure"
