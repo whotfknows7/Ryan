@@ -1,113 +1,166 @@
-# 🤖 Ryan Bot v7 (The Ultimate Edition)
+# 🤖 Ryan Bot v7: The Ultimate Handbook
 
-**Ryan** is a next-generation Discord bot designed for high-engagement communities. It fuses a robust **Node.js** event core with a high-performance **Rust** rendering engine to deliver real-time gamification, immersive moderation, and dynamic visual content.
+**Ryan** is a premium, high-performance Discord engagement ecosystem. Designed for massive communities, it leverages a hybrid architecture—combining a robust **Node.js** enterprise core with a high-fidelity **Rust** rendering engine. 
 
----
-
-## 🚀 Key Highlights
-
-*   **Hybrid Architecture:** Logic is handled by Node.js, while heavy image/video generation (Leaderboards, GIFs) is offloaded to a compiled **Rust** binary.
-*   **Performance First:** Uses RAM-disk caching, optimized caching strategies, and robust process management to ensure 24/7 uptime.
-*   **Immersive UX:** Every feature is designed with "flavor text," animations, and interactivity to keep users hooked.
+Ryan doesn't just manage a server; it creates a living, breathing world through gamified moderation, faction warfare, and optimized engagement tracking.
 
 ---
 
-## 🌟 Comprehensive Feature List
+## 🏛️ System Architecture
 
-### 1. 📈 The XP Engine
-A sophisticated leveling system designed to encourage meaningful conversation, not spam.
+Ryan is built for speed and reliability, separating logic from heavy visual processing.
 
-*   **Smart Scoring:**
-    *   **1 XP** per alphabetic character (resists spam).
-    *   **2 XP** per emoji (Custom or Unicode) to encourage expression.
-    *   *URLs are explicitly ignored.*
-*   **Interactive Role Rewards:**
-    *   **Setup Wizard (`/setup_role_rewards`):** An interactive GUI to configure roles.
-    *   **Hybrid Image Generation:** Automatically generates "Level Up" cards combining the Role Icon and User Avatar.
-    *   **3-Phase Verification:** Uses a nano-second RAM check followed by an API double-check to ensure rewards are granted instantly but safely.
-*   **Reset Cycles:**
-    *   **Daily:** Users compete for the "Daily Winner" spot.
-    *   **Weekly:** Persistent tracking with a weekly reset using the **Cycle Manager**.
-    *   **Lifetime:** Permanent XP tracking for all-time ranks.
+```mermaid
+graph TD
+    User([User Interactive]) -- Slash Commands/Reactions --> Discord[Discord API]
+    Discord -- Gateway Events --> NodeCore[Node.js Bot Core]
+    NodeCore -- Prisma ORM --> DB[(PostgreSQL)]
+    NodeCore -- HTTP API --> RustRenderer[Rust Visual Engine]
+    RustRenderer -- Headless Chrome --> Canvas[[High Fidelity Render]]
+    Canvas -- PNG/GIF --> NodeCore
+    NodeCore -- Webhooks --> Discord
+    
+    subgraph "Internal Infrastructure"
+    NodeCore -- Worker Threads --> GifWorker[Gif Gen Worker]
+    NodeCore -- RAM Disk --> Shm[/dev/shm]
+    GifWorker -- FFmpeg/Gifsicle --> Shm
+    end
+```
 
-### 2. 🏰 Clan Wars System
-An automated 4-Faction warfare system.
-
-*   **Live Visuals (`/clans`):**
-    *   Generates a **real-time GIF** showing the current state of the war.
-    *   Uses a **Rust -> FFmpeg** pipeline to composite clan icons onto animated backgrounds.
-    *   Visual "Health Bars" showing destruction inflicted by each clan.
-*   **Management:**
-    *   **Custom Icons:** Server owners can upload unique icons for each clan.
-    *   **Role Linking:** Each clan maps to a Discord role; XP earned by members contributes to the clan total.
-
-### 3. ⛓️ The Torture Chamber (Moderation)
-Replacing boring bans with a gamified "Jail" system.
-
-*   **Strike System (1-8):**
-    *   **Strikes 1-7:** Time-outs ranging from minutes to weeks.
-    *   **Strike 8:** Permanent Ban.
-*   **Immersive Punishment:**
-    *   **Mugshots:** Generates a "Caught" GIF with the user's avatar when punished.
-    *   **Torture Text:** Sends randomized, mocking messages to the jail channel.
-    *   **Vote to Release:** Allows the community to vote on releasing a prisoner (configurable).
-*   **Commands:**
-    *   `/jail punish`: Inflict a strike and mute the user.
-    *   `/jail forgive`: Pardon a user and clear their record.
-    *   `/jail lets_go_ez`: Reduce a punishment or release early.
-    *   `/crime_investigation`: View a user's full criminal history (Rap Sheet).
-
-### 4. 👑 Social & Economy
-*   **Rank Cards (`/rank`):** Generates a high-quality image displaying Weekly/Lifetime Rank and XP.
-*   **Live Leaderboard (`/live`):**
-    *   Instant snapshot of the top 10 "Yappers of the Day."
-    *   Interactive pagination buttons.
-*   **Weekly Best Chatter:**
-    *   **The Crown:** Automatically assigns a specific role to the #1 user of the week.
-    *   **Auto-Rotation:** Removes the role from the previous winner automatically.
-*   **Custom Roles (`/custom_role`):**
-    *   **Request System:** Users meeting criteria can request a custom role with a specific color.
-    *   **Anchor Positioning:** The bot automatically places new custom roles below a designated "Anchor Role" to maintain hierarchy.
-
-### 5. 🛠️ Server Management Tools
-*   **Setup Wizard (`/setup`):** A massive configuration command to link all channels and roles.
-*   **Keyword Reactions (`/keyword`):**
-    *   Map triggers to emojis (e.g., "Ryan" -> 👑).
-    *   Supports smart boundary matching (matches "Ryan's" but not "Bryan").
-*   **Reset Role System (`/resetrole_system`):**
-    *   **Mass Remove:** Temporarily strip a role from *all* members for testing or resets.
-    *   **Mass Restore:** Re-add the role to the same members with one click (valid for 15 mins).
-
-### 6. 🚨 Emergency 911
-A safety tool for urgent moderation.
-
-*   **Trigger:** Mentioning "911" or using the command.
-*   **Mod Alert:** Pings the staff team in a private channel with a direct link to the message.
-*   **Anti-Abuse:**
-    *   **Cooldown:** 10-minute server-wide lockout.
-    *   **Silent Logging:** Logs attempts made during cooldown without pinging staff.
-
-### 7. ⚙️ Technical & Diagnostics
-*   **System Diagnostics (`/hi`):**
-    *   Displays **Roundtrip Latency**, **Shard Ping**, **Database Health**, and **Uptime**.
-*   **Self-Healing:**
-    *   **Zombie Killer:** Cleans up stale Chrome/Renderer processes on startup.
-    *   **Graceful Shutdown:** Ensures no data corruption on restart.
-*   **Database:** Powered by **Prisma (PostgreSQL)** for type-safe, atomic transactions.
+### 🚅 Technical Achievements
+*   **Hybrid Engine**: Uses `axum` (Rust) to handle heavy headless browser rendering for rank cards, offloading CPU-intensive work from the Node.js event loop.
+*   **RAM Disk I/O**: Temporary files (GIF frames, icons) are processed in `/dev/shm` (Linux RAM Disk), offering nanosecond latency compared to standard SSD writes.
+*   **3-Phase Validation**: A high-speed caching layer ensures that even during chat floods, role rewards are verified in RAM before every hitting the Discord API.
+*   **Worker Thread Isolation**: GIF generation is handled by dedicated worker threads to prevent bot latency during heavy rendering jobs.
 
 ---
 
-## 🔧 Installation
+## 📈 The XP Engagement Core
 
-1.  **Prerequisites:** Node.js (v20+), Rust/Cargo, Postgres.
-2.  **Setup:**
-    ```bash
-    npm install
-    npx prisma generate
-    npm run setup  # Builds the Rust Renderer
-    ```
-3.  **Run:**
-    ```bash
-    npm start
-    ```
-    *This will launch the Bot, the Rust Renderer, and sync the Database.*
+Ryan's XP system is engineered to prioritize quality engagement and prevent bot-farming.
+
+### 🧠 Smart Scoring Logic
+| Content Type | XP Reward | Rationale |
+| :--- | :--- | :--- |
+| **Alpha Characters** | 1 XP Each | Rewards text depth, ignores numbers/punctuation spam. |
+| **Emojis (Any)** | 2 XP Each | Encourages expressive reactions and custom server emoji use. |
+| **URLs** | 0 XP | Negates link spam and automated bot activity. |
+
+### 🛠️ XP Management Systems
+*   **Reset Modules**: Configurable via `/setup`.
+    *   **Module 1 (Default)**: Daily XP resets every 24 hours. Ideal for highly active "Day Winner" competitions.
+    *   **Module 2 (Weekly)**: Daily XP is persistent, with a full wipe once a week (Syncing to Clan Wars).
+    *   **Module 3 (Lifetime)**: Total XP accumulation with no resets.
+*   **3-Phase Role Rewards**:
+    1.  **Phase 1 (RAM)**: Check incoming message user against a cached reward map.
+    2.  **Phase 2 (Verification)**: If a milestone is hit, fetch fresh member data to prevent duplicate awards.
+    3.  **Phase 3 (Execution)**: Grant role and send a rich announcement with a custom-generated level-up card.
+
+---
+
+## ⚔️ Clan Wars Conquest
+
+A fully automated, 4-faction competitive system.
+
+*   **Dynamic Visuals (`/clans`)**: Generates a real-time GIF combining server-customized clan icons with high-octane animated backgrounds.
+*   **Automated Sync**: Every day, user XP is "poured" into their clan's total pool.
+*   **Destruction Metrics**: Progress bars calculate "Destruction Inflicted" as a percentage of the total server engagement.
+*   **Persistent GIF Pipeline**: Uses a message-link hashing system. If a leaderboard state hasn't changed, Ryan fetches the pre-generated GIF from a secure asset channel rather than re-rendering, saving CPU cycles.
+
+---
+
+## ⛓️ The Torture Chamber (Moderation)
+
+A replacement for boring bans, creating an immersive "Prison" experience.
+
+### 🔨 The Strike Table
+| Strike | Duration | Effect |
+| :--- | :--- | :--- |
+| **1st Sin** | 30 Minutes | Silent Mute |
+| **2nd Sin** | 1 Hour | Added to Prisoners Role |
+| **3rd Sin** | 12 Hours | Prisoners Role + Jail Channel Access |
+| **4th Sin** | 36 Hours | Isolation |
+| **5th Sin** | 7 Days | Extended Isolation |
+| **6th Sin** | 2 Weeks | - |
+| **7th Sin** | 4 Weeks | Final Warning |
+| **8th Sin** | **Permanent** | Server Ban |
+
+### 🎭 Prisoner Immersion
+*   **Mugshot Generation**: Automatically creates "Caught" GIFs using the user's avatar.
+*   **Torture Chamber Channel**: A restricted channel where jailed users are taunted by the bot's "Flavor Text."
+*   **Community Redemption**: Mods can enable **Vote to Release**, allowing server members to contribute votes to shorten a prisoner's sentence.
+
+---
+
+## 📜 Full Command Reference
+
+### Admin & Owner (Config)
+| Command | Sub-Command | Description |
+| :--- | :--- | :--- |
+| `/setup` | - | Configure Channels (Mod Log, Leaderboard) and Roles (Admin, Mod, Jail, Clans). |
+| `/setup_role_rewards` | - | Interactive Wizard to map XP milestones to roles, messages, and icons. |
+| `/keyword` | `set` \| `remove` \| `list` | Map chat triggers to automatic emoji reactions. |
+| `/setup-clan-icon` | - | Upload custom emojis or images for Clan representation. |
+| `/resetrole_system` | `reset` \| `readd` \| `list` | Advanced role-stripper for server events/resets (w/ 15m restore window). |
+| `/skip_cycle` | - | Force the XP reset clock forward (Owner only). |
+
+### General & Social
+| Command | Description |
+| :--- | :--- |
+| `/rank` | Fetch your high-resolution PNG rank card showing daily/weekly/lifetime stats. |
+| `/live` | View the top 10 "Yappers" list now. Includes "Show My Rank" button highlight. |
+| `/clans` | Open the Clan Wars dashboard with the dynamic GIF state. |
+| `/custom_role` | `request`: Request a custom color and name (requires eligibility role). |
+| `/hi` | Advanced system heartbeat (Latency, DB Health, Shard Info, Uptime). |
+| `/help` | Detailed interactive help menu. |
+| `/reconnect` | Emergency force-restart of the Rust Visual Engine. |
+
+---
+
+## 🛠️ Developer Guide
+
+### Project Structure
+```text
+Ryan/
+├── src/
+│   ├── commands/     # Slash command logic (Admin/Config/Gen)
+│   ├── services/     # Business logic (XP, Jail, Reset, Image Gen)
+│   ├── handlers/     # Interaction, Reaction, and Message routing
+│   ├── structures/   # Custom Discord Client extensions
+│   ├── workers/      # Heavy processing (FFmpeg Gif Threads)
+│   └── index.js      # Main entry & Cron Scheduler
+├── Renderer/         # RUST: High-performance visual engine
+│   └── src/          # Axum + Playwright/Chromiumoxide logic
+├── assets/           # Templates, Fonts, and Local Icons
+└── schema.prisma     # Postgres Database Schema
+```
+
+### Self-Healing & Maintenance
+*   **Zombie Killer**: On startup, Ryan scans for and kills any orphaned Headless Chrome or Renderer instances from previous crashes.
+*   **Graceful Exit**: On `SIGTERM` or `SIGINT`, Ryan properly closes DB connections and terminates the Rust process group to prevent port locks.
+*   **DB Heartbeat**: Ryan performs an integrity check every 5 minutes and logs any latency spikes in PostgreSQL.
+
+---
+
+## 🚦 Getting Started
+
+### 1. Environment Config
+Rename `.env.example` to `.env` and fill:
+*   `TOKEN`: Discord Bot Token
+*   `CLIENT_ID`: Bot Application ID
+*   `DATABASE_URL`: PostgreSQL Connection String
+
+### 2. Deployment
+```bash
+# Install Node Deps
+npm install
+
+# Build the Rust Engine (Requires Rust/Cargo)
+npm run setup
+
+# Launch (Prisma syncs automatically)
+npm start
+```
+
+---
+*Created with ❤️ for the world's best communities. Powered by Node.js, Prisma, and the speed of Rust.*
