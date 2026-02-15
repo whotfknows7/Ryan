@@ -109,7 +109,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // kill command
 // RUST RENDERER MANAGER
 // =================================================================
 function startRenderer() {
-  const rootDir = path.resolve(__dirname, '../../'); // Go up to Ryan v7 root
+  const rootDir = path.resolve(__dirname, '../'); // Go up to Ryan root
   const rendererDir = path.join(rootDir, 'Renderer');
   const binaryPath = path.join(rendererDir, 'target/release/renderer');
 
@@ -124,7 +124,7 @@ function startRenderer() {
       logger.info('✅ Rust Renderer built successfully.');
     } catch (e) {
       logger.error('❌ FAILED TO BUILD RENDERER. Do you have Rust/Cargo installed?');
-      logger.error('If you are on a shared host, you may need to compile "Ryan v7/Renderer" on your PC and upload the "target" folder.');
+      logger.error('If you are on a shared host, you may need to compile "Renderer" on your PC and upload the "target" folder.');
       return; // Stop here if build fails
     }
   }
