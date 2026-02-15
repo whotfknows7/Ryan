@@ -14,18 +14,18 @@ const redisConfig = {
     enableReadyCheck: false,
 };
 
-// Create a singleton connection
-const redis = new Redis(redisConfig);
+// Use this connection for standard bot operations (cache, rate limits)
+const defaultRedis = new Redis(redisConfig);
 
-redis.on('connect', () => {
+defaultRedis.on('connect', () => {
     logger.info(`✅ Redis connected to ${REDIS_HOST}:${REDIS_PORT}`);
 });
 
-redis.on('error', (err) => {
+defaultRedis.on('error', (err) => {
     logger.error('❌ Redis Connection Error:', err);
 });
 
 module.exports = {
-    redis,
+    defaultRedis,
     redisConfig,
 };

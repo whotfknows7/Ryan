@@ -78,14 +78,19 @@ class QueueService {
     }
 
     async scheduleJobs() {
+        // Clear all existing repeatable jobs from Redis first to prevent duplicates
+        const repeatableJobs = await this.queues.cron.getRepeatableJobs();
+        for (const job of repeatableJobs) {
+            await this.queues.cron.removeRepeatableByKey(job.key);
+        }
+        logger.info('🧹 Cleared old repeatable jobs.');
+
         // Helper to add repeatable job
         const addJob = async (name, pattern, everyMs = null) => {
             const options = { repeat: {} };
             if (everyMs) options.repeat.every = everyMs;
             else options.repeat.pattern = pattern;
 
-            // Remove old repeatable jobs with same name to avoid duplicates on restart/change
-            // (This is a simplified approach; standard BullMQ pattern is to just add)
             await this.queues.cron.add(name, {}, options);
             logger.info(`📅 Scheduled job '${name}'`);
         };
