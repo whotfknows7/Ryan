@@ -218,7 +218,7 @@ const JailCommand = {
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setCustomId(`vote_release:${userId}`)
+            .setCustomId(`vote_release:${userId}:${caseId}`)
             .setLabel('Vote to Release')
             .setStyle(ButtonStyle.Danger)
         );

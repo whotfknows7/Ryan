@@ -122,18 +122,37 @@ const handleInteraction = async (interaction) => {
       }
       // --- JAIL VOTE RELEASE ---
       if (customId.startsWith('vote_release:')) {
-        const targetUserId = customId.split(':')[1];
+        const parts = customId.split(':');
+        const targetUserId = parts[1];
+        const buttonCaseId = parts[2]; // May be undefined for old buttons
         const voterId = user.id;
+
+        // 1. Fetch Current Log First
+        const log = await ConfigService.getJailLog(guildId, targetUserId);
+
+        if (!log) {
+          return interaction.reply({ content: '❌ Member is not currently in the system.', flags: MessageFlags.Ephemeral });
+        }
+
+        // 2. Validate Case ID (if button has one)
+        if (buttonCaseId && log.caseId !== buttonCaseId) {
+          return interaction.reply({ content: '❌ This vote is for a previous/different case.', flags: MessageFlags.Ephemeral });
+        }
+
+        // 3. Validate Status
+        if (log.status !== 'jailed') {
+          return interaction.reply({ content: '❌ Member is already released or not jailed.', flags: MessageFlags.Ephemeral });
+        }
+
+        // 4. Validate Ban (Offences >= 8)
+        if (log.offences >= 8) {
+          return interaction.reply({ content: '❌ Voting is disabled for banned members.', flags: MessageFlags.Ephemeral });
+        }
 
         const hasVoted = await ConfigService.hasVoted(guildId, targetUserId, voterId);
         if (hasVoted) {
           return interaction.reply({ content: '❌ You have already voted.', flags: MessageFlags.Ephemeral });
         }
-
-        // Defer update to stop button loading if we are just updating components, 
-        // OR reply ephemeral if we just want to notify.
-        // Since we are not changing the button state (it's a static "vote" button), 
-        // and we want to confirm to the user, a reply is best.
 
         await interaction.reply({ content: '✅ Vote registered!', flags: MessageFlags.Ephemeral });
 
