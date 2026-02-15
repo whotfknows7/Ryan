@@ -1,6 +1,6 @@
 // src/services/AssetService.js
 
-const axios = require('axios');
+
 const logger = require('../lib/logger');
 const CONSTANTS = require('../lib/constants');
 
@@ -56,8 +56,9 @@ class AssetService {
       const url = attachment.url;
 
       // Download with a stricter timeout (15s) to fail fast if stuck
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
-      return Buffer.from(response.data);
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
 
     } catch (error) {
       logger.error(`[AssetService] Failed to fetch asset: ${error.message}`);

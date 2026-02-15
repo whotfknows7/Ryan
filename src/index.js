@@ -1,6 +1,6 @@
 // src/index.js
 require('dotenv').config();
-const cron = require('node-cron');
+const QueueService = require('./services/QueueService');
 
 const { execSync, spawn } = require('child_process');
 const path = require('path');
@@ -61,7 +61,7 @@ function cleanupStaleProcesses() {
 // =================================================================
 let isShuttingDown = false;
 
-function gracefulShutdown(signal) {
+async function gracefulShutdown(signal) {
   if (isShuttingDown) return; // Prevent double-shutdown
   isShuttingDown = true;
   logger.info(`\n🛑 Received ${signal}. Shutting down gracefully...`);
@@ -92,10 +92,16 @@ function gracefulShutdown(signal) {
   }
 
   // 5. Destroy Discord client
+  // 5. Destroy Discord client
   try {
     client.destroy();
     logger.info('🤖 Discord client destroyed.');
   } catch (_) { }
+
+  // 6. Shutdown QueueService
+  try {
+    await QueueService.shutdown();
+  } catch (e) { logger.error('Error shutting down queues:', e); }
 
   logger.info('👋 Goodbye!');
   process.exit(0);
@@ -170,36 +176,6 @@ function startRenderer() {
   });
 }
 // =================================================================
-
-/**
- * Schedule a cron task with error handling
- */
-const scheduleCronTask = (name, expression, task) => {
-  cron.schedule(expression, async () => {
-    try {
-      await task();
-    } catch (e) {
-      logger.error(`Background task '${name}' error:`, e);
-    }
-  });
-  logger.info(`Scheduled cron task '${name}' with expression: ${expression}`);
-};
-
-/**
- * Schedule a per-guild cron task
- */
-const schedulePerGuildCronTask = (name, expression, taskFn) => {
-  scheduleCronTask(name, expression, async () => {
-    if (!client.guilds.cache.size) return;
-    const guilds = Array.from(client.guilds.cache.keys());
-    const results = await Promise.allSettled(guilds.map((guildId) => taskFn(guildId)));
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        logger.error(`${name} failed for guild ${guilds[index]}:`, result.reason);
-      }
-    });
-  });
-};
 
 async function main() {
   // 0. Cleanup stale processes from previous sessions
@@ -314,35 +290,8 @@ async function main() {
       }
     });
 
-    // Background Tasks (cron-scheduled)
-    scheduleCronTask('DB Heartbeat', '*/5 * * * *', async () => {
-      try { await DatabaseService.checkDatabaseIntegrity(); }
-      catch (e) { logger.error('❤️ DB Heartbeat failed:', e); }
-    });
-
-    scheduleCronTask('Punishment Checker', '* * * * *', async () => {
-      await PunishmentService.checkExpiredPunishments(client);
-    });
-
-    schedulePerGuildCronTask('Reset Cycle Checker', '* * * * *', async (guildId) => {
-      await ResetService.checkResetCycle(client, guildId);
-    });
-
-    schedulePerGuildCronTask('Reset Role Expiry', '* * * * *', async (guildId) => {
-      await cleanExpiredResetRoles(guildId);
-    });
-
-    scheduleCronTask('Leaderboard Updater', '*/20 * * * * *', async () => {
-      await LeaderboardUpdateService.updateLiveLeaderboard(client);
-    });
-
-    scheduleCronTask('Leaderboard Cleanup', '* * * * *', async () => {
-      await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
-    });
-
-    schedulePerGuildCronTask('Weekly Role Check', '*/5 * * * *', async (guildId) => {
-      await WeeklyRoleService.checkWeeklyRole(client, guildId);
-    });
+    // Background Tasks (BullMQ-scheduled)
+    QueueService.initialize(client);
 
     logger.info('✅ All background services started.');
 

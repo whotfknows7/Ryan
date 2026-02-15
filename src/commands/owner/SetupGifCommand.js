@@ -3,7 +3,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
+
 const sharp = require('sharp'); // Replaces gif-frames
 const { DatabaseService } = require('../../services/DatabaseService');
 const logger = require('../../lib/logger');
@@ -53,8 +53,9 @@ module.exports = {
 
       try {
         // 1. Download GIF
-        const response = await axios.get(attachment.url, { responseType: 'arraybuffer' });
-        const buffer = Buffer.from(response.data);
+        const response = await fetch(attachment.url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const buffer = Buffer.from(await response.arrayBuffer());
 
         // 2. Setup Directories
         const targetDir = path.join(TEMPLATE_DIR, clanCount.toString(), name);

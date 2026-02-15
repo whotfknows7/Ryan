@@ -1,7 +1,7 @@
 // src/services/ImageService.js
 
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const axios = require('axios');
+
 const path = require('path');
 const fs = require('fs');
 const opentype = require('opentype.js');
@@ -40,8 +40,10 @@ class ImageService {
 
   async urlToBase64(url) {
     try {
-      const response = await axios.get(url, { responseType: 'arraybuffer' });
-      return Buffer.from(response.data, 'binary').toString('base64');
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer).toString('base64');
     } catch (error) {
       console.error(`Failed to convert image to base64: ${url}`, error.message);
       return "";
@@ -67,12 +69,16 @@ class ImageService {
 
       // 3. Call Rust Renderer
       // [FIX] Added timeout and better error logging
-      const response = await axios.post(this.rendererUrl, payload, {
-        responseType: 'arraybuffer',
-        timeout: 5000 // 5 second timeout
+      const response = await fetch(this.rendererUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000)
       });
 
-      return Buffer.from(response.data);
+      if (!response.ok) throw new Error(`Renderer HTTP error! status: ${response.status}`);
+
+      return Buffer.from(await response.arrayBuffer());
 
     } catch (error) {
       // [FIX] Improved error logging to see WHY it failed
@@ -395,8 +401,9 @@ class ImageService {
 
   async fetchImage(url) {
     try {
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
-      return await loadImage(Buffer.from(response.data));
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await loadImage(Buffer.from(await response.arrayBuffer()));
     } catch (e) {
       console.warn(`[ImageService] Failed to fetch image: ${url}`);
       throw new Error(`Failed to load image from ${url}`);
@@ -415,11 +422,11 @@ class ImageService {
       }
 
       const url = `https://raw.githubusercontent.com/whotfknows7/bangbang/main/unicode/64/${hex}.png`;
-      const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000, validateStatus: () => true });
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
       if (response.status !== 200) return null;
 
-      const buffer = Buffer.from(response.data);
+      const buffer = Buffer.from(await response.arrayBuffer());
       fs.writeFileSync(filePath, buffer);
 
       return await loadImage(buffer);

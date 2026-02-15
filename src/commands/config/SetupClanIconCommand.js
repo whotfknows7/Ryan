@@ -2,7 +2,7 @@ const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js'
 const { AssetService } = require('../../services/AssetService');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { getIds } = require('../../utils/GuildIdsHelper');
-const axios = require('axios');
+
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,10 +47,11 @@ module.exports = {
 
     try {
       // 2. Process Icon Upload (for GIF Service)
-      const response = await axios.get(iconAttachment.url, { responseType: 'arraybuffer' });
-      const imgBuffer = Buffer.from(response.data);
+      const response = await fetch(iconAttachment.url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const imgBuffer = Buffer.from(await response.arrayBuffer());
       const filename = `clan_icon_${clanId}_${Date.now()}.png`;
-      
+
       const persistentUrl = await AssetService.storeToDevChannel(
         interaction.client,
         imgBuffer,
@@ -64,13 +65,13 @@ module.exports = {
       await Promise.all([
         // Store Icon Link for GIF Service
         DatabaseService.setClanAsset(interaction.guildId, role.id, persistentUrl),
-        
+
         // Store Emoji String for Webhooks
         DatabaseService.atomicJsonSetPath(
-            interaction.guildId, 
-            'clans', 
-            [clanId.toString(), 'emoji'], 
-            emoji
+          interaction.guildId,
+          'clans',
+          [clanId.toString(), 'emoji'],
+          emoji
         )
       ]);
 
