@@ -119,12 +119,20 @@ const handleInteraction = async (interaction) => {
       }
       // --- JAIL VOTE RELEASE ---
       if (customId.startsWith('vote_release:')) {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const targetUserId = customId.split(':')[1];
         const voterId = user.id;
 
         const hasVoted = await ConfigService.hasVoted(guildId, targetUserId, voterId);
-        if (hasVoted) return interaction.editReply({ content: '❌ You have already voted.' });
+        if (hasVoted) {
+          return interaction.reply({ content: '❌ You have already voted.', flags: MessageFlags.Ephemeral });
+        }
+
+        // Defer update to stop button loading if we are just updating components, 
+        // OR reply ephemeral if we just want to notify.
+        // Since we are not changing the button state (it's a static "vote" button), 
+        // and we want to confirm to the user, a reply is best.
+
+        await interaction.reply({ content: '✅ Vote registered!', flags: MessageFlags.Ephemeral });
 
         await ConfigService.addVote(guildId, targetUserId, voterId);
         const voteCount = await ConfigService.getVoteCount(guildId, targetUserId);
@@ -135,10 +143,9 @@ const handleInteraction = async (interaction) => {
         const ids = await getIds(guildId);
         if (ids.logsChannelId) {
           const logChannel = guild.channels.cache.get(ids.logsChannelId);
-          if (logChannel) await logChannel.send(`${user.username} voted to release ${targetName}. Total: ${voteCount}`);
+          if (logChannel) await logChannel.send(`🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Total: ${voteCount})`);
         }
-
-        return interaction.editReply({ content: `✅ Vote registered for ${targetName}.` });
+        return;
       }
 
       // --- CUSTOM ROLE LOGIC ---

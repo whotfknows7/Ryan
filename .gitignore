@@ -7,3 +7,4 @@ Cargo.lock
 error.log
 chrome/
 role template/
+tests/

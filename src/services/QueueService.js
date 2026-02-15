@@ -25,7 +25,7 @@ class QueueService {
 
         // 2. Define Workers
         this.workers.cron = new Worker('cron-jobs', async (job) => {
-            logger.info(`⚙️ Processing job: ${job.name}`);
+            // logger.info(`⚙️ Processing job: ${job.name}`);
             try {
                 switch (job.name) {
                     case 'db-heartbeat':
@@ -92,7 +92,7 @@ class QueueService {
             else options.repeat.pattern = pattern;
 
             await this.queues.cron.add(name, {}, options);
-            logger.info(`📅 Scheduled job '${name}'`);
+          //  logger.info(`📅 Scheduled job '${name}'`);
         };
 
         // --- Schedule Definition ---

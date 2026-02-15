@@ -57,6 +57,7 @@ model JailLog {
   punishmentEnd    DateTime?
   status           String    @default("jailed")
   messageId        String?
+  caseId           String?
   votes            String[]  @default([])
   updatedAt        DateTime  @updatedAt
 
