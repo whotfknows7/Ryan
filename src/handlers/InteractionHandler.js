@@ -26,10 +26,13 @@ const handleInteraction = async (interaction) => {
     try {
       await command.execute(interaction);
     } catch (error) {
+      if (error.code === 40060) return; // Ignore "Interaction already acknowledged"
       logger.error(`Error executing ${interaction.commandName}:`, error);
       const payload = { content: '❌ Error executing command!', flags: MessageFlags.Ephemeral };
-      if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
-      else await interaction.reply(payload);
+      try {
+        if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
+        else await interaction.reply(payload);
+      } catch (e) { /* ignore secondary error */ }
     }
     return;
   }
@@ -134,8 +137,11 @@ const handleInteraction = async (interaction) => {
 
         await interaction.reply({ content: '✅ Vote registered!', flags: MessageFlags.Ephemeral });
 
-        await ConfigService.addVote(guildId, targetUserId, voterId);
-        const voteCount = await ConfigService.getVoteCount(guildId, targetUserId);
+        const updatedLog = await ConfigService.addVote(guildId, targetUserId, voterId);
+        if (!updatedLog) return;
+
+        const voteCount = updatedLog.votes.length;
+        const caseId = updatedLog.caseId || 'N/A';
 
         const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
         const targetName = targetMember ? targetMember.user.username : 'Unknown';
@@ -143,7 +149,7 @@ const handleInteraction = async (interaction) => {
         const ids = await getIds(guildId);
         if (ids.logsChannelId) {
           const logChannel = guild.channels.cache.get(ids.logsChannelId);
-          if (logChannel) await logChannel.send(`🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Total: ${voteCount})`);
+          if (logChannel) await logChannel.send(`🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Case ID: ${caseId}, Total: ${voteCount})`);
         }
         return;
       }

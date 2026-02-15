@@ -165,6 +165,14 @@ const JailCommand = {
             votes: [] // Reset votes on extend
           });
 
+          // [NEW] Salty Message for Extension
+          if (jailChannelId) {
+            const jailChannel = guild.channels.cache.get(jailChannelId);
+            if (jailChannel) {
+              await jailChannel.send(`## ${member.toString()} Your sentence has been increased *(bahahaha)* (Sin #${newOffences}) \n*Enjoy your extended stay!*`);
+            }
+          }
+
           const embed = new EmbedBuilder()
             .setTitle('⚠️ Member Already Punished')
             .setColor('Red')
@@ -236,7 +244,7 @@ const JailCommand = {
           const jailChannel = guild.channels.cache.get(jailChannelId);
           if (jailChannel) {
             await jailChannel.send(
-              `## ${member.toString()}, Oh no, It looks like someone Cheeky got locked up in The Torture Chamber for violating the <#1228738698292625570>!\n` +
+              `## ${member.toString()}, Oh no, It looks like someone Cheeky got locked up in The Torture Chamber for violating the <#1228738698292625570>! (Sin #${newOffences})\n` +
               `### Don't worry, we'll take good care of you… by making you suffer in the most boring way possible.\n` +
               `**The only thing you'll hear is the echoes of your sins.**\n` +
               `* __Punishments:__\n` +
@@ -282,12 +290,17 @@ const JailCommand = {
         logger.info(`${interaction.user.tag} punished ${member.user.tag} (Offence ${newOffences})`);
 
       } catch (error) {
+        if (error.code === 10062 || error.code === 10008) return; // Ignore unknown interaction/message
         logger.error('Punish error:', error);
-        if (!interaction.replied) {
-          await interaction.reply({
-            content: '❌ Error executing punishment.',
-            flags: MessageFlags.Ephemeral
-          });
+        const payload = { content: '❌ Error executing punishment.', flags: MessageFlags.Ephemeral };
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(payload);
+          } else {
+            await interaction.reply(payload);
+          }
+        } catch (e) {
+          logger.error('Failed to send error response:', e);
         }
       }
     }
@@ -305,7 +318,16 @@ const JailCommand = {
         }
 
         if (log.status === 'jailed') {
-          await PunishmentService.releaseMember(interaction.client, guildId, userId, log);
+          // Suppress notification effectively handled by setting notify: false (need to update service first)
+          // Actually, I need to update PunishmentService first to accept options.
+          // Assuming service update is next:
+          await PunishmentService.releaseMember(interaction.client, guildId, userId, log, { notify: false });
+        } else if (log.status === 'released') {
+          // ALREADY RELEASED - Do NOT log to channel, just reply ephemeral
+          return interaction.reply({
+            content: `Member is already released. (Offences: ${log.offences})`,
+            flags: MessageFlags.Ephemeral
+          });
         }
 
         // Update status to released, REMOVE punishmentEnd, KEEP offences
@@ -344,10 +366,14 @@ const JailCommand = {
 
       } catch (error) {
         logger.error('Error executing release command:', error);
-        await interaction.reply({
-          content: '❌ Failed to release member.',
-          flags: MessageFlags.Ephemeral
-        });
+        const payload = { content: '❌ Failed to release member.', flags: MessageFlags.Ephemeral };
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(payload);
+          } else {
+            await interaction.reply(payload);
+          }
+        } catch (e) { logger.error('Failed to send error response:', e); }
       }
     }
 
@@ -461,10 +487,14 @@ const JailCommand = {
 
       } catch (error) {
         logger.error('Error executing forgive command:', error);
-        await interaction.reply({
-          content: '❌ Failed to forgive (reduce punishment).',
-          flags: MessageFlags.Ephemeral
-        });
+        const payload = { content: '❌ Failed to forgive (reduce punishment).', flags: MessageFlags.Ephemeral };
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(payload);
+          } else {
+            await interaction.reply(payload);
+          }
+        } catch (e) { logger.error('Failed to send error response:', e); }
       }
     }
   }

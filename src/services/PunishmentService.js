@@ -57,7 +57,7 @@ class PunishmentService {
     }
   }
 
-  static async releaseMember(client, guildId, userId, log) {
+  static async releaseMember(client, guildId, userId, log, options = { notify: true }) {
     let guild;
 
     try {
@@ -111,7 +111,7 @@ class PunishmentService {
       }
 
       // Send Success Log
-      if (logChannel) {
+      if (logChannel && options.notify) {
         const embed = new EmbedBuilder()
           .setTitle('Member Released Automatically')
           .setColor('Green')
