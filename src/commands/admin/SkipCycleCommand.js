@@ -22,25 +22,24 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setTitle('⏩ Cycle Skipped & Timer Reset')
-        .setColor(0x00FF00)
+        .setColor(0x00ff00)
         .setDescription(
           `**Action Successful!**\n` +
-          `The current cycle has been finalized manually.\n\n` +
-          `**Details:**\n` +
-          `• **Type:** ${result.isWeekly ? '🏆 WEEKLY RESET (Leaderboard Sent)' : '📅 DAILY RESET'}\n` +
-          `• **New Cycle Day:** ${result.newCycle} / 7\n` +
-          `• **New Reset Time:** Set to **${new Date().toLocaleTimeString()}**\n` +
-          `• **Next Reset:** <t:${Math.floor(result.nextReset.getTime() / 1000)}:R>`
+            `The current cycle has been finalized manually.\n\n` +
+            `**Details:**\n` +
+            `• **Type:** ${result.isWeekly ? '🏆 WEEKLY RESET (Leaderboard Sent)' : '📅 DAILY RESET'}\n` +
+            `• **New Cycle Day:** ${result.newCycle} / 7\n` +
+            `• **New Reset Time:** Set to **${new Date().toLocaleTimeString()}**\n` +
+            `• **Next Reset:** <t:${Math.floor(result.nextReset.getTime() / 1000)}:R>`
         )
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
-
     } catch (error) {
       logger.error('Error executing /skip-cycle:', error);
       await interaction.editReply({
-        content: `❌ **Failed to skip cycle.**\nError: ${error.message}`
+        content: `❌ **Failed to skip cycle.**\nError: ${error.message}`,
       });
     }
-  }
+  },
 };

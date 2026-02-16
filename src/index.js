@@ -9,15 +9,14 @@ const { MessageFlags } = require('discord.js');
 const { CustomClient } = require('./structures/CustomClient');
 const { DatabaseService } = require('./services/DatabaseService');
 const { PunishmentService } = require('./services/PunishmentService');
-const { ResetService } = require('./services/ResetService');
+
 const { XpService } = require('./services/XpService');
-const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateService');
-const { WeeklyRoleService } = require('./services/WeeklyRoleService');
+
 const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
-const { LeaderboardCleanupService } = require('./services/LeaderboardCleanupService');
-const { cleanExpiredResetRoles } = require('./commands/admin/ResetRoleCommands');
+
+
 const { setRoleSkip } = require('./lib/cooldowns');
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
 const logger = require('./lib/logger');
@@ -31,13 +30,19 @@ function cleanupStaleProcesses() {
   logger.info('🧹 Running startup cleanup...');
 
   // 1. Kill any stale renderer processes
-  try { execSync("pkill -f 'target/release/renderer' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync("pkill -f 'target/release/renderer' 2>/dev/null || true", { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 2. Kill any stale chrome/chromium processes
-  try { execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 3. Free port 3000
-  try { execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 4. Remove Chrome lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
@@ -49,7 +54,9 @@ function cleanupStaleProcesses() {
   // 5. Clean ChromiumOxide temp directory
   const chromiumDir = '/tmp/chromiumoxide-runner';
   if (fs.existsSync(chromiumDir)) {
-    try { fs.rmSync(chromiumDir, { recursive: true, force: true }); } catch (_) { }
+    try {
+      fs.rmSync(chromiumDir, { recursive: true, force: true });
+    } catch { /* best-effort */ }
     logger.info('🧹 Cleared Chrome temp directory.');
   }
 
@@ -71,24 +78,32 @@ async function gracefulShutdown(signal) {
     try {
       // Kill the entire process group (renderer + chrome children)
       process.kill(-startRenderer._currentProcess.pid, 'SIGTERM');
-    } catch (_) {
-      try { startRenderer._currentProcess.kill('SIGKILL'); } catch (_) { }
+    } catch {
+      try {
+        startRenderer._currentProcess.kill('SIGKILL');
+      } catch { /* best-effort */ }
     }
     logger.info('🦀 Renderer process terminated.');
   }
 
   // 2. Kill any remaining chrome processes
-  try { execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 3. Free port 3000
-  try { execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 4. Clean lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
   if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
   const chromiumDir = '/tmp/chromiumoxide-runner';
   if (fs.existsSync(chromiumDir)) {
-    try { fs.rmSync(chromiumDir, { recursive: true, force: true }); } catch (_) { }
+    try {
+      fs.rmSync(chromiumDir, { recursive: true, force: true });
+    } catch { /* best-effort */ }
   }
 
   // 5. Destroy Discord client
@@ -96,19 +111,21 @@ async function gracefulShutdown(signal) {
   try {
     client.destroy();
     logger.info('🤖 Discord client destroyed.');
-  } catch (_) { }
+  } catch { /* best-effort */ }
 
   // 6. Shutdown QueueService
   try {
     await QueueService.shutdown();
-  } catch (e) { logger.error('Error shutting down queues:', e); }
+  } catch (e) {
+    logger.error('Error shutting down queues:', e);
+  }
 
   logger.info('👋 Goodbye!');
   process.exit(0);
 }
 
 // Register signal handlers
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C
+process.on('SIGINT', () => gracefulShutdown('SIGINT')); // Ctrl+C
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // kill command
 
 // =================================================================
@@ -128,9 +145,11 @@ function startRenderer() {
       // Attempt to build using cargo
       execSync('cargo build --release', { cwd: rendererDir, stdio: 'inherit' });
       logger.info('✅ Rust Renderer built successfully.');
-    } catch (e) {
+    } catch {
       logger.error('❌ FAILED TO BUILD RENDERER. Do you have Rust/Cargo installed?');
-      logger.error('If you are on a shared host, you may need to compile "Renderer" on your PC and upload the "target" folder.');
+      logger.error(
+        'If you are on a shared host, you may need to compile "Renderer" on your PC and upload the "target" folder.'
+      );
       return; // Stop here if build fails
     }
   }
@@ -141,7 +160,9 @@ function startRenderer() {
     fs.unlinkSync(lockFile);
     logger.info('🧹 Cleared stale Chrome SingletonLock.');
   }
-  try { execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' }); } catch (_) { }
+  try {
+    execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' });
+  } catch { /* best-effort */ }
 
   // 3. Spawn the process (detached so we can kill the process group)
   logger.info('🚀 Launching Renderer Service...');
@@ -149,7 +170,7 @@ function startRenderer() {
   const rendererProcess = spawn(binaryPath, [], {
     cwd: rendererDir,
     detached: true,
-    stdio: 'inherit' // Pipe logs to console so you can see "Listening on..."
+    stdio: 'inherit', // Pipe logs to console so you can see "Listening on..."
   });
   startRenderer._currentProcess = rendererProcess;
 
@@ -161,7 +182,7 @@ function startRenderer() {
   startRenderer._failures = (startRenderer._failures || 0) + 1;
   const MAX_RESTARTS = 10;
 
-  rendererProcess.on('exit', (code, signal) => {
+  rendererProcess.on('exit', (code, _signal) => {
     if (isShuttingDown) return; // Don't restart during shutdown
     if (code === 0 || code === null) {
       startRenderer._failures = 0; // Reset on clean exit
@@ -171,7 +192,9 @@ function startRenderer() {
       logger.error(`❌ Renderer failed ${MAX_RESTARTS} times in a row. Giving up. Use /reconnect or restart the bot.`);
       return;
     }
-    logger.warn(`⚠️ Renderer exited with code ${code}. Restarting in 5s... (${startRenderer._failures}/${MAX_RESTARTS})`);
+    logger.warn(
+      `⚠️ Renderer exited with code ${code}. Restarting in 5s... (${startRenderer._failures}/${MAX_RESTARTS})`
+    );
     setTimeout(startRenderer, 5000);
   });
 }
@@ -219,10 +242,12 @@ async function main() {
       } catch (error) {
         logger.error('Critical error in interaction handler:', error);
         if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: '💥 An unexpected error occurred. Our engineers have been notified!',
-            flags: MessageFlags.Ephemeral
-          }).catch(logger.error);
+          await interaction
+            .reply({
+              content: '💥 An unexpected error occurred. Our engineers have been notified!',
+              flags: MessageFlags.Ephemeral,
+            })
+            .catch(logger.error);
         }
       }
     });
@@ -294,7 +319,6 @@ async function main() {
     QueueService.initialize(client);
 
     logger.info('✅ All background services started.');
-
   } catch (error) {
     logger.error('Failed to start bot:', error);
     process.exit(1);
@@ -302,7 +326,7 @@ async function main() {
 }
 
 // Global Error Handlers
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   logger.error('Unhandled Rejection:', reason);
 });
 process.on('uncaughtException', (error) => {
@@ -311,4 +335,3 @@ process.on('uncaughtException', (error) => {
 });
 
 main();
-

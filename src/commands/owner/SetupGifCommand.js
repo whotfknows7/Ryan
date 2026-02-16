@@ -14,19 +14,16 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-gif')
     .setDescription('Upload and process a new Clan GIF template (Owner Only)')
-    .addStringOption(option =>
-      option.setName('name')
-        .setDescription('Unique name for this template')
-        .setRequired(true))
-    .addIntegerOption(option =>
-      option.setName('clan_count')
+    .addStringOption((option) =>
+      option.setName('name').setDescription('Unique name for this template').setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('clan_count')
         .setDescription('How many clans are in this GIF?')
         .setRequired(true)
-        .addChoices(
-          { name: '2 Clans', value: 2 },
-          { name: '3 Clans', value: 3 },
-          { name: '4 Clans', value: 4 }
-        )),
+        .addChoices({ name: '2 Clans', value: 2 }, { name: '3 Clans', value: 3 }, { name: '4 Clans', value: 4 })
+    ),
 
   async execute(interaction) {
     if (interaction.user.id !== process.env.OWNER_ID) {
@@ -37,10 +34,10 @@ module.exports = {
     const clanCount = interaction.options.getInteger('clan_count');
 
     await interaction.reply({
-      content: `Please upload the GIF file for **"${name}"** (${clanCount} Clans) now. I am listening...`
+      content: `Please upload the GIF file for **"${name}"** (${clanCount} Clans) now. I am listening...`,
     });
 
-    const filter = m => m.author.id === interaction.user.id && m.attachments.size > 0;
+    const filter = (m) => m.author.id === interaction.user.id && m.attachments.size > 0;
     const collector = interaction.channel.createMessageCollector({ filter, time: 60000, max: 1 });
 
     collector.on('collect', async (message) => {
@@ -75,9 +72,7 @@ module.exports = {
         for (let i = 0; i < pages; i++) {
           const fileName = `${String(i).padStart(3, '0')}.png`;
 
-          await sharp(buffer, { page: i })
-            .png()
-            .toFile(path.join(framesDir, fileName));
+          await sharp(buffer, { page: i }).png().toFile(path.join(framesDir, fileName));
 
           // Init coords
           coords.push(Array(clanCount).fill({ x: 0, y: 0 }));
@@ -89,12 +84,13 @@ module.exports = {
         // 5. Register in DB
         await DatabaseService.createGifTemplate(name, clanCount, targetDir);
 
-        await interaction.followUp(`✅ **Success!**\n- Template: \`${name}\`\n- Frames: ${pages}\n- Path: \`${targetDir}\`\n\n**Next:** Edit \`coords.json\` in that folder.`);
-
+        await interaction.followUp(
+          `✅ **Success!**\n- Template: \`${name}\`\n- Frames: ${pages}\n- Path: \`${targetDir}\`\n\n**Next:** Edit \`coords.json\` in that folder.`
+        );
       } catch (error) {
         logger.error('GIF Setup failed:', error);
         await interaction.followUp(`❌ Error processing GIF: ${error.message}`);
       }
     });
-  }
+  },
 };

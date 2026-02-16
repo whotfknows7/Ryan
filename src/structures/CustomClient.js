@@ -1,7 +1,7 @@
 // src/structures/CustomClient.js
 
 const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js');
-const { config } = require('../config'); 
+const { config } = require('../config');
 const logger = require('../lib/logger');
 
 class CustomClient extends Client {
@@ -11,17 +11,17 @@ class CustomClient extends Client {
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent, // Crucial for XP/Chatbot
-        GatewayIntentBits.GuildMembers,   // Crucial for Roles/Jail
+        GatewayIntentBits.GuildMembers, // Crucial for Roles/Jail
         GatewayIntentBits.GuildMessageReactions,
       ],
       partials: [
-        Partials.Message, 
-        Partials.Channel, 
-        Partials.Reaction // Required for fetching reactions on old messages
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction, // Required for fetching reactions on old messages
       ],
       rest: {
-        timeout: 30000
-      }
+        timeout: 30000,
+      },
     });
 
     this.commands = new Collection();

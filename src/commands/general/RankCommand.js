@@ -6,9 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('rank')
     .setDescription('Displays your current rank and stats.')
-    .addUserOption(option => 
-      option.setName('user').setDescription('The user to check').setRequired(false)
-    ),
+    .addUserOption((option) => option.setName('user').setDescription('The user to check').setRequired(false)),
 
   async execute(interaction) {
     await interaction.deferReply();
@@ -32,7 +30,7 @@ module.exports = {
       weeklyRank: weeklyRank,
       allTimeRank: allTimeRank,
       // Color (optional, can fetch from role)
-      hexColor: interaction.member.displayHexColor
+      hexColor: interaction.member.displayHexColor,
     };
 
     // 3. Generate Card
@@ -44,5 +42,5 @@ module.exports = {
       console.error(error);
       await interaction.editReply({ content: 'Failed to generate rank card.' });
     }
-  }
+  },
 };

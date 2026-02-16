@@ -14,7 +14,6 @@ const path = require('path');
 const { prisma } = require('../lib/prisma');
 
 class ResetService {
-
   static DAYS_IN_CYCLE = 7;
   static WEEKLY_RESET_DAY = 0;
   static TOP_USERS_LIMIT = 10;
@@ -37,7 +36,7 @@ class ResetService {
   static async getOrInitializeCycle(guildId) {
     let cycle = await DatabaseService.getResetCycle(guildId);
     if (!cycle) {
-      cycle = await DatabaseService.initResetCycle(guildId);
+      await DatabaseService.initResetCycle(guildId);
       logger.info(`Initialized reset cycle for guild ${guildId}`);
       return null;
     }
@@ -71,7 +70,7 @@ class ResetService {
 
   static async forceSkipCycle(client, guildId) {
     const cycle = await this.getOrInitializeCycle(guildId);
-    if (!cycle) throw new Error("Could not initialize reset cycle.");
+    if (!cycle) throw new Error('Could not initialize reset cycle.');
     const now = new Date();
     const nextCycleCount = (cycle.cycleCount + 1) % this.DAYS_IN_CYCLE;
     logger.info(`[Force Skip] Guild ${guildId} skipping to cycle ${nextCycleCount}`);
@@ -85,7 +84,12 @@ class ResetService {
         await this.processDailyReset(client, guildId, nextCycleCount, resetStats);
       }
       await DatabaseService.updateResetCycle(guildId, nextCycleCount, now);
-      return { success: true, newCycle: nextCycleCount, isWeekly: nextCycleCount === this.WEEKLY_RESET_DAY, nextReset: new Date(now.getTime() + 24 * 60 * 60 * 1000) };
+      return {
+        success: true,
+        newCycle: nextCycleCount,
+        isWeekly: nextCycleCount === this.WEEKLY_RESET_DAY,
+        nextReset: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+      };
     } catch (error) {
       logger.error(`[Force Skip] Failed for guild ${guildId}:`, error);
       throw error;
@@ -118,7 +122,7 @@ class ResetService {
       const topDaily = await prisma.userXp.findMany({
         where: { guildId },
         orderBy: { dailyXp: 'desc' },
-        take: 1
+        take: 1,
       });
 
       if (topDaily.length > 0 && topDaily[0].dailyXp > 0) {
@@ -153,7 +157,7 @@ class ResetService {
       const topWeekly = await prisma.userXp.findMany({
         where: { guildId },
         orderBy: { weeklyXp: 'desc' },
-        take: 1
+        take: 1,
       });
 
       if (topWeekly.length > 0 && topWeekly[0].weeklyXp > 0) {
@@ -186,8 +190,8 @@ class ResetService {
   static wipeAssetCache() {
     try {
       const emojiDir = path.join(process.cwd(), 'assets', 'emojis');
-      if (fs.existsSync(emojiDir)) fs.readdirSync(emojiDir).forEach(f => fs.unlinkSync(path.join(emojiDir, f)));
-    } catch (e) { }
+      if (fs.existsSync(emojiDir)) fs.readdirSync(emojiDir).forEach((f) => fs.unlinkSync(path.join(emojiDir, f)));
+    } catch { /* best-effort wipe */ }
   }
 
   static async calculateClanUpdates(client, guildId) {
@@ -210,7 +214,7 @@ class ResetService {
     for (let i = 0; i < allUsers.length; i += chunkSize) {
       const chunk = allUsers.slice(i, i + chunkSize);
       try {
-        const members = await guild.members.fetch({ user: chunk.map(u => u.userId) });
+        const members = await guild.members.fetch({ user: chunk.map((u) => u.userId) });
         for (const user of chunk) {
           const member = members.get(user.userId);
           if (!member) continue;
@@ -221,7 +225,9 @@ class ResetService {
             }
           }
         }
-      } catch (e) { logger.error(`Member fetch failed: ${e.message}`); }
+      } catch (e) {
+        logger.error(`Member fetch failed: ${e.message}`);
+      }
     }
     return updates;
   }
@@ -241,14 +247,17 @@ class ResetService {
       const channel = await this.getLeaderboardChannel(client, guildId);
       if (!channel) return;
 
-      const clanTotals = dataSnapshot ?? await DatabaseService.getClanTotalXp(guildId);
+      const clanTotals = dataSnapshot ?? (await DatabaseService.getClanTotalXp(guildId));
       const config = await DatabaseService.getGuildConfig(guildId);
       const ids = config.ids || {};
       const clansConfig = config.clans || {};
       const totalXp = this.calculateTotalXp(clanTotals);
 
       const clanRoles = {
-        1: ids.clanRole1Id, 2: ids.clanRole2Id, 3: ids.clanRole3Id, 4: ids.clanRole4Id
+        1: ids.clanRole1Id,
+        2: ids.clanRole2Id,
+        3: ids.clanRole3Id,
+        4: ids.clanRole4Id,
       };
 
       const activeClans = [];
@@ -258,7 +267,6 @@ class ResetService {
         }
       }
 
-
       activeClans.sort((a, b) => b.xp - a.xp);
 
       const getClanEmoji = (id) => {
@@ -266,20 +274,22 @@ class ResetService {
       };
 
       const embed = new EmbedBuilder()
-        .setTitle("⚔️ **CLAN WAR CONQUEST** ⚔️")
-        .setColor(0xFFD700)
-        .setFooter({ text: "Help your clan earn more XP points!" })
+        .setTitle('⚔️ **CLAN WAR CONQUEST** ⚔️')
+        .setColor(0xffd700)
+        .setFooter({ text: 'Help your clan earn more XP points!' })
         .setTimestamp();
 
-      let description = "";
+      let description = '';
       const isTie = activeClans.length >= 2 && activeClans[0].xp === activeClans[1].xp && totalXp > 0;
 
       if (isTie) description = "**IT'S A TIE!**\n\n";
 
       activeClans.forEach((clan, index) => {
-        const percentage = totalXp > 0 ? (clan.xp / totalXp * 100) : 0;
-        let rankEmoji = index === 0 ? CONSTANTS.EMOJIS.RANK_1 : (index === 1 ? CONSTANTS.EMOJIS.RANK_2 : `**#${index + 1}**`);
-        description += `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${clan.roleId ? `<@&${clan.roleId}>` : `Clan ${clan.id}`}\n` +
+        const percentage = totalXp > 0 ? (clan.xp / totalXp) * 100 : 0;
+        let rankEmoji =
+          index === 0 ? CONSTANTS.EMOJIS.RANK_1 : index === 1 ? CONSTANTS.EMOJIS.RANK_2 : `**#${index + 1}**`;
+        description +=
+          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${clan.roleId ? `<@&${clan.roleId}>` : `Clan ${clan.id}`}\n` +
           `\`\`\`\n${clan.xp.toLocaleString()} XP • ${percentage.toFixed(1)}%\n\`\`\`\n`;
       });
 
@@ -292,9 +302,8 @@ class ResetService {
       let gifUrl = null;
 
       if (!isTie && activeClans.length >= 2) {
-        const winnerRoleIds = activeClans.map(c => c.roleId || 'unknown');
-        const rankHash = `count:${activeClans.length}|` +
-          activeClans.map((c, i) => `${i + 1}:${c.roleId}`).join('|');
+        const winnerRoleIds = activeClans.map((c) => c.roleId || 'unknown');
+        const rankHash = `count:${activeClans.length}|` + activeClans.map((c, i) => `${i + 1}:${c.roleId}`).join('|');
 
         const cachedEntry = await DatabaseService.getGifCache(rankHash);
 
@@ -315,7 +324,12 @@ class ResetService {
             const fileStream = fs.createReadStream(tempFilePath);
             const contextText = `Clan Win: ${activeClans[0].id} (Count: ${activeClans.length})`;
 
-            const persistentMsgLink = await AssetService.storeToDevChannel(client, fileStream, 'winner.gif', contextText);
+            const persistentMsgLink = await AssetService.storeToDevChannel(
+              client,
+              fileStream,
+              'winner.gif',
+              contextText
+            );
 
             if (persistentMsgLink) {
               await DatabaseService.setGifCache(rankHash, persistentMsgLink);
@@ -325,7 +339,6 @@ class ResetService {
 
             fs.unlinkSync(tempFilePath);
             logger.info(`[GifPipeline] Generation complete & cleaned up.`);
-
           } catch (err) {
             logger.error(`[GifPipeline] Failed: ${err.message}`);
           }
@@ -338,7 +351,7 @@ class ResetService {
         try {
           const oldMsg = await channel.messages.fetch(ids.clanLeaderboardMessageId).catch(() => null);
           if (oldMsg) await oldMsg.delete();
-        } catch (e) { }
+        } catch { /* best-effort delete old msg */ }
       }
 
       const content = withPings ? await this.getClanMentions(guildId) : undefined;
@@ -346,7 +359,6 @@ class ResetService {
 
       await DatabaseService.updateGuildIds(guildId, { clanLeaderboardMessageId: newMsg.id });
       clearCache(guildId);
-
     } catch (error) {
       logger.error('Error sending weekly announcement:', error);
     }
@@ -356,10 +368,12 @@ class ResetService {
     try {
       const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
       if (!match) return null;
-      const [, gId, cId, mId] = match;
+      const [, _gId, cId, mId] = match;
       const ch = await client.channels.fetch(cId);
       return await ch.messages.fetch(mId);
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   static async getLeaderboardChannel(client, guildId) {
@@ -372,7 +386,9 @@ class ResetService {
   static async getClanMentions(guildId) {
     const ids = await getIds(guildId);
     return [ids.clanRole1Id, ids.clanRole2Id, ids.clanRole3Id, ids.clanRole4Id]
-      .filter(Boolean).map(id => `<@&${id}>`).join(' ');
+      .filter(Boolean)
+      .map((id) => `<@&${id}>`)
+      .join(' ');
   }
 
   static calculateTotalXp(clanTotals) {

@@ -11,9 +11,7 @@ const CATEGORY_LABELS = {
 };
 
 const HelpCommand = {
-  data: new SlashCommandBuilder()
-    .setName('help')
-    .setDescription('Show all available commands'),
+  data: new SlashCommandBuilder().setName('help').setDescription('Show all available commands'),
 
   execute: async (interaction) => {
     const commands = interaction.client.commands;
@@ -28,7 +26,7 @@ const HelpCommand = {
 
     const embed = new EmbedBuilder()
       .setTitle('📖 Ryan — Command List')
-      .setColor(0x5865F2)
+      .setColor(0x5865f2)
       .setFooter({ text: `${commands.size} commands available` })
       .setTimestamp();
 

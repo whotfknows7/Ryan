@@ -8,8 +8,9 @@ module.exports = {
     .setDescription('Configure essential bot settings and role hierarchies.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     // --- [NEW] Module Selection ---
-    .addStringOption(opt =>
-      opt.setName('reset_module')
+    .addStringOption((opt) =>
+      opt
+        .setName('reset_module')
         .setDescription('Select the XP Reset Behavior.')
         .addChoices(
           { name: 'Module 1: Default (Daily User Reset)', value: 'module_1' },
@@ -18,19 +19,37 @@ module.exports = {
         )
     )
     // ------------------------------
-    .addChannelOption(opt => opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.'))
-    .addChannelOption(opt => opt.setName('mod_log_channel').setDescription('Channel for Admin Requests (Custom Roles) and Logs.'))
-    .addChannelOption(opt => opt.setName('release_channel').setDescription('Channel where users are pinged upon release from jail.'))
-    .addRoleOption(opt => opt.setName('admin_role').setDescription('Users with this role can use Bot Admin commands.'))
-    .addRoleOption(opt => opt.setName('mod_role').setDescription('Users with this role receive Emergency Pings.'))
-    .addRoleOption(opt => opt.setName('jail_role').setDescription('The role assigned to Jailed users (should restrict channel access).'))
-    .addRoleOption(opt => opt.setName('anchor_role_default').setDescription('HIERARCHY: Standard Custom Roles will be placed relative to this role.'))
-    .addRoleOption(opt => opt.setName('anchor_role_color').setDescription('HIERARCHY: "Color Your Name" roles will be placed relative to this role.'))
-    .addRoleOption(opt => opt.setName('clan_role_1').setDescription('The role for Clan 1'))
-    .addRoleOption(opt => opt.setName('clan_role_2').setDescription('The role for Clan 2'))
-    .addRoleOption(opt => opt.setName('clan_role_3').setDescription('The role for Clan 3 (Optional)'))
-    .addRoleOption(opt => opt.setName('clan_role_4').setDescription('The role for Clan 4 (Optional)'))
-    .addRoleOption(opt => opt.setName('weekly_best_chatter_role').setDescription('Role for the top weekly chatter')),
+    .addChannelOption((opt) =>
+      opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.')
+    )
+    .addChannelOption((opt) =>
+      opt.setName('mod_log_channel').setDescription('Channel for Admin Requests (Custom Roles) and Logs.')
+    )
+    .addChannelOption((opt) =>
+      opt.setName('release_channel').setDescription('Channel where users are pinged upon release from jail.')
+    )
+    .addRoleOption((opt) =>
+      opt.setName('admin_role').setDescription('Users with this role can use Bot Admin commands.')
+    )
+    .addRoleOption((opt) => opt.setName('mod_role').setDescription('Users with this role receive Emergency Pings.'))
+    .addRoleOption((opt) =>
+      opt.setName('jail_role').setDescription('The role assigned to Jailed users (should restrict channel access).')
+    )
+    .addRoleOption((opt) =>
+      opt
+        .setName('anchor_role_default')
+        .setDescription('HIERARCHY: Standard Custom Roles will be placed relative to this role.')
+    )
+    .addRoleOption((opt) =>
+      opt
+        .setName('anchor_role_color')
+        .setDescription('HIERARCHY: "Color Your Name" roles will be placed relative to this role.')
+    )
+    .addRoleOption((opt) => opt.setName('clan_role_1').setDescription('The role for Clan 1'))
+    .addRoleOption((opt) => opt.setName('clan_role_2').setDescription('The role for Clan 2'))
+    .addRoleOption((opt) => opt.setName('clan_role_3').setDescription('The role for Clan 3 (Optional)'))
+    .addRoleOption((opt) => opt.setName('clan_role_4').setDescription('The role for Clan 4 (Optional)'))
+    .addRoleOption((opt) => opt.setName('weekly_best_chatter_role').setDescription('Role for the top weekly chatter')),
 
   execute: async (interaction) => {
     const guildId = interaction.guildId;
@@ -54,7 +73,7 @@ module.exports = {
       const weeklyRole = interaction.options.getRole('weekly_best_chatter_role');
 
       const idUpdates = {};
-      let summary = ["✅ **Configuration Updated Successfully!**\n"];
+      let summary = ['✅ **Configuration Updated Successfully!**\n'];
 
       if (leaderboardChannel) {
         idUpdates.leaderboardChannelId = leaderboardChannel.id;
@@ -93,9 +112,12 @@ module.exports = {
       if (resetModule) {
         // [FIX] atomicJsonMerge expects a plain object, not a stringified JSON
         await DatabaseService.atomicJsonMerge(guildId, 'config', { resetModule });
-        const niceName = resetModule === 'module_1' ? "Default (Daily Reset)"
-          : resetModule === 'module_2' ? "Weekly User Reset"
-            : "Lifetime User XP";
+        const niceName =
+          resetModule === 'module_1'
+            ? 'Default (Daily Reset)'
+            : resetModule === 'module_2'
+              ? 'Weekly User Reset'
+              : 'Lifetime User XP';
         summary.push(`**XP Reset System:** ${niceName}`);
       }
 
@@ -128,14 +150,13 @@ module.exports = {
       clearCache(guildId);
 
       if (summary.length === 1) {
-        summary.push("_No changes were made. Please select options to configure._");
+        summary.push('_No changes were made. Please select options to configure._');
       }
 
       await interaction.editReply({ content: summary.join('\n') });
-
     } catch (error) {
       console.error('Setup command error:', error);
       await interaction.editReply({ content: '❌ An error occurred while saving the configuration.' });
     }
-  }
+  },
 };

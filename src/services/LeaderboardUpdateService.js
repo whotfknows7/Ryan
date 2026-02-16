@@ -12,7 +12,6 @@ const logger = require('../lib/logger');
 const previousTopUsersJSON = new Map();
 
 class LeaderboardUpdateService {
-
   static async updateLiveLeaderboard(client) {
     for (const [guildId, guild] of client.guilds.cache) {
       try {
@@ -67,8 +66,10 @@ class LeaderboardUpdateService {
             break; // Success!
           } catch (sendError) {
             if (i === maxRetries - 1) throw sendError; // Rethrow if last attempt
-            logger.warn(`[${guildId}] Failed to send message (Attempt ${i + 1}/${maxRetries}): ${sendError.message}. Retrying...`);
-            await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+            logger.warn(
+              `[${guildId}] Failed to send message (Attempt ${i + 1}/${maxRetries}): ${sendError.message}. Retrying...`
+            );
+            await new Promise((r) => setTimeout(r, 1000)); // Wait 1s
           }
         }
 
@@ -78,7 +79,6 @@ class LeaderboardUpdateService {
         previousTopUsersJSON.set(guildId, currentJSON);
         await DatabaseService.updateGuildIds(guildId, { dailyLeaderboardMessageId: newMessage.id });
         clearCache(guildId);
-
       } catch (e) {
         logger.error(`Failed to update leaderboard for guild ${guildId}: ${e.message}`, e);
         if (e.name === 'AbortError' || e.code === 'UND_ERR_SOCKET') {
@@ -90,7 +90,7 @@ class LeaderboardUpdateService {
 
   /**
    * Generates the embed, image, and buttons for any leaderboard page
-   * @param {Guild} guild 
+   * @param {Guild} guild
    * @param {string} type - 'daily', 'weekly', or 'lifetime'
    * @param {number} page - Page number (1-based)
    * @param {string|null} highlightUserId - ID of user to highlight (for "Me" button)
@@ -106,10 +106,9 @@ class LeaderboardUpdateService {
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
     // 2. Map Data for Image
-    // 2. Map Data for Image
     let members = new Map();
     try {
-      const userIds = topUsers.map(u => u.userId);
+      const userIds = topUsers.map((u) => u.userId);
       if (userIds.length > 0) {
         members = await guild.members.fetch({ user: userIds });
       }
@@ -121,17 +120,14 @@ class LeaderboardUpdateService {
       const member = members.get(u.userId);
 
       // Determine which XP value to display
-      let xpVal = 0;
-      if (type === 'weekly') xpVal = u.weeklyXp;
-      else if (type === 'lifetime') xpVal = u.xp;
-      else xpVal = u.dailyXp;
+      const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
 
       return {
         rank: skip + index + 1,
         userId: u.userId,
         username: member ? member.displayName : 'Unknown',
         avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
-        xp: xpVal
+        xp: xpVal,
       };
     });
 
@@ -142,25 +138,22 @@ class LeaderboardUpdateService {
 
     // 4. Build Embed
     const titles = {
-      daily: "Yappers of the day!",
-      weekly: "Yappers of the week!",
-      lifetime: "All-time Yappers!"
+      daily: 'Yappers of the day!',
+      weekly: 'Yappers of the week!',
+      lifetime: 'All-time Yappers!',
     };
 
     const embed = new EmbedBuilder()
       .setTitle(titles[type] || titles.daily)
       .setDescription(`Leaderboard • Page ${page}/${totalPages}`)
       .setColor('Gold')
-      .setThumbnail("https://media.discordapp.net/attachments/1301183910838796460/1333160889419038812/tenor.gif")
-      .setImage("attachment://leaderboard.png")
+      .setThumbnail('https://media.discordapp.net/attachments/1301183910838796460/1333160889419038812/tenor.gif')
+      .setImage('attachment://leaderboard.png')
       .setFooter({ text: `Page ${page} of ${totalPages} • Updates Live` });
 
     // Show legend only if switchers are active (Main LB)
     if (showSwitchers) {
-      embed.setDescription(
-        `Leaderboard • Page ${page}/${totalPages}\n` +
-        `📅 **Weekly** | 🌎 **All-time**`
-      );
+      embed.setDescription(`Leaderboard • Page ${page}/${totalPages}\n` + `📅 **Weekly** | 🌎 **All-time**`);
     }
 
     // 5. Build Buttons

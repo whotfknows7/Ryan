@@ -1,14 +1,14 @@
-const { 
-  SlashCommandBuilder, 
-  PermissionFlagsBits, 
-  ActionRowBuilder, 
-  RoleSelectMenuBuilder, 
-  ModalBuilder, 
-  TextInputBuilder, 
+const {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  RoleSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
   TextInputStyle,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType
+  ComponentType,
 } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { ImageService } = require('../../services/ImageService');
@@ -34,22 +34,22 @@ module.exports = {
     const initialReply = await interaction.reply({
       content: '👇 **Select the roles you want to configure as rewards:**',
       components: [row],
-      fetchReply: true
+      fetchReply: true,
     });
 
     // Create a collector for the Select Menu
     const collector = initialReply.createMessageComponentCollector({
       componentType: ComponentType.RoleSelect,
-      filter: i => i.user.id === interaction.user.id,
+      filter: (i) => i.user.id === interaction.user.id,
       time: 60000,
-      max: 1
+      max: 1,
     });
 
     collector.on('collect', async (selectInteraction) => {
       // Sort roles by position (Ascending: Lowest Role First)
       const selectedRoles = selectInteraction.roles.sort((a, b) => a.position - b.position);
       const guildId = interaction.guildId;
-      
+
       // Store state for the wizard
       let currentIndex = 0;
       const rolesArray = [...selectedRoles.values()];
@@ -68,7 +68,7 @@ module.exports = {
         }
 
         const role = rolesArray[currentIndex];
-        
+
         const btnRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`config_btn_${role.id}`)
@@ -93,17 +93,15 @@ module.exports = {
       // Collector for the "Configure" button (Longer timeout for user input)
       const buttonCollector = initialReply.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        filter: i => i.user.id === interaction.user.id,
-        time: 900000 // 15 minutes total session time
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 900000, // 15 minutes total session time
       });
 
       buttonCollector.on('collect', async (btnInteraction) => {
         const role = rolesArray[currentIndex];
 
         // Open Modal
-        const modal = new ModalBuilder()
-          .setCustomId(`modal_${role.id}`)
-          .setTitle(`Config: ${role.name.slice(0, 20)}`);
+        const modal = new ModalBuilder().setCustomId(`modal_${role.id}`).setTitle(`Config: ${role.name.slice(0, 20)}`);
 
         const xpInput = new TextInputBuilder()
           .setCustomId('xp_threshold')
@@ -125,7 +123,7 @@ module.exports = {
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('https://example.com/icon.png')
           .setRequired(false);
-          
+
         const customRoleInput = new TextInputBuilder()
           .setCustomId('is_custom_role')
           .setLabel('Unlock Custom Role Command? (yes/no)')
@@ -145,8 +143,8 @@ module.exports = {
         // Await Modal Submit
         try {
           const modalSubmit = await btnInteraction.awaitModalSubmit({
-            filter: i => i.customId === `modal_${role.id}`,
-            time: 300000 // 5 mins per role
+            filter: (i) => i.customId === `modal_${role.id}`,
+            time: 300000, // 5 mins per role
           });
 
           // Defer immediately to allow time for Image Gen & DB Save
@@ -165,24 +163,23 @@ module.exports = {
 
           // --- 1. Hybrid Image Gen (Base Image) ---
           let assetMessageId = null;
-          if (message) { 
-             try {
-                // Generate the Base Image (Icon + Role Name)
-                const buffer = await ImageService.generateBaseReward(role.name, role.hexColor, iconUrl);
-                
-                // Store in Dev Channel
-                const assetLink = await AssetService.storeToDevChannel(
-                    interaction.client, 
-                    buffer, 
-                    `base_reward_${role.id}.png`, 
-                    `Base Reward Template: ${role.name} (${role.id})`
-                );
-                
-                assetMessageId = assetLink; 
+          if (message) {
+            try {
+              // Generate the Base Image (Icon + Role Name)
+              const buffer = await ImageService.generateBaseReward(role.name, role.hexColor, iconUrl);
 
-             } catch (err) {
-                console.error('Base Image Gen Failed:', err);
-             }
+              // Store in Dev Channel
+              const assetLink = await AssetService.storeToDevChannel(
+                interaction.client,
+                buffer,
+                `base_reward_${role.id}.png`,
+                `Base Reward Template: ${role.name} (${role.id})`
+              );
+
+              assetMessageId = assetLink;
+            } catch (err) {
+              console.error('Base Image Gen Failed:', err);
+            }
           }
 
           // --- 2. Update Database ---
@@ -194,13 +191,13 @@ module.exports = {
             xp: xp,
             message: message || null, // Null = Silent
             assetMessageLink: assetMessageId,
-            roleId: role.id
+            roleId: role.id,
           };
-          
+
           configData.announcement_roles = announcementRoles;
-          
+
           const updatePayload = { config: configData };
-          
+
           // Handle Custom Role Eligibility ID
           if (isCustom) {
             // Merge into IDs object
@@ -217,11 +214,10 @@ module.exports = {
           // Move to next role
           currentIndex++;
           await showConfigButton(modalSubmit);
-
         } catch (err) {
           console.error('Modal Error or Timeout:', err);
         }
       });
     });
-  }
+  },
 };

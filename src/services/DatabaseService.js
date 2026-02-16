@@ -5,7 +5,6 @@ const { Prisma } = require('@prisma/client');
 const logger = require('../lib/logger');
 
 class DatabaseService {
-
   // =================================================================
   // 1. ATOMIC XP OPERATIONS (UPDATED FOR DAILY/WEEKLY)
   // =================================================================
@@ -16,18 +15,18 @@ class DatabaseService {
   static async addUserXp(guildId, userId, amount) {
     return await prisma.userXp.upsert({
       where: { guildId_userId: { guildId, userId } },
-      create: { 
-        guildId, 
-        userId, 
-        xp: amount, 
-        dailyXp: amount, 
-        weeklyXp: amount 
+      create: {
+        guildId,
+        userId,
+        xp: amount,
+        dailyXp: amount,
+        weeklyXp: amount,
       },
-      update: { 
+      update: {
         xp: { increment: amount },
         dailyXp: { increment: amount },
-        weeklyXp: { increment: amount }
-      }
+        weeklyXp: { increment: amount },
+      },
     });
   }
 
@@ -46,7 +45,7 @@ class DatabaseService {
       const currentXp = result[0].xp;
       if (currentXp === 0) {
         await prisma.userXp.deleteMany({
-          where: { guildId, userId, xp: 0 }
+          where: { guildId, userId, xp: 0 },
         });
       }
       return { xp: currentXp, dailyXp: result[0].dailyXp, weeklyXp: result[0].weeklyXp };
@@ -72,7 +71,7 @@ class DatabaseService {
       return await prisma.userXp.upsert({
         where: { guildId_userId: { guildId, userId } },
         create: { guildId, userId, xp: newXp, dailyXp: 0, weeklyXp: 0 },
-        update: { xp: newXp }
+        update: { xp: newXp },
       });
     }
   }
@@ -83,7 +82,7 @@ class DatabaseService {
   static async getUserStats(guildId, userId) {
     const stats = await prisma.userXp.findUnique({
       where: { guildId_userId: { guildId, userId } },
-      select: { dailyXp: true, weeklyXp: true, xp: true }
+      select: { dailyXp: true, weeklyXp: true, xp: true },
     });
     return stats || { dailyXp: 0, weeklyXp: 0, xp: 0 };
   }
@@ -93,16 +92,14 @@ class DatabaseService {
    * type: 'daily' | 'weekly' | 'lifetime'
    */
   static async fetchTopUsers(guildId, limit = 10, type = 'daily', skip = 0) {
-    const orderBy = 
-      type === 'weekly' ? { weeklyXp: 'desc' } :
-      type === 'lifetime' ? { xp: 'desc' } :
-      { dailyXp: 'desc' }; // Default daily
+    const orderBy =
+      type === 'weekly' ? { weeklyXp: 'desc' } : type === 'lifetime' ? { xp: 'desc' } : { dailyXp: 'desc' }; // Default daily
 
     // We filter for XP > 0 to avoid listing inactive users
     const orderByField = Object.keys(orderBy)[0];
     const whereClause = {
       guildId,
-      [orderByField]: { gt: 0 }
+      [orderByField]: { gt: 0 },
     };
 
     return prisma.userXp.findMany({
@@ -110,12 +107,12 @@ class DatabaseService {
       orderBy,
       take: limit,
       skip: skip,
-      select: { 
-        userId: true, 
-        dailyXp: true, 
-        weeklyXp: true, 
-        xp: true 
-      }
+      select: {
+        userId: true,
+        dailyXp: true,
+        weeklyXp: true,
+        xp: true,
+      },
     });
   }
 
@@ -123,12 +120,12 @@ class DatabaseService {
    * [UPDATED] Count users with XP > 0 for pagination
    */
   static async getUserCount(guildId, type = 'daily') {
-    const column = type === 'weekly' ? 'weeklyXp' : (type === 'lifetime' ? 'xp' : 'dailyXp');
-    return prisma.userXp.count({ 
-      where: { 
+    const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
+    return prisma.userXp.count({
+      where: {
         guildId,
-        [column]: { gt: 0 } 
-      } 
+        [column]: { gt: 0 },
+      },
     });
   }
 
@@ -139,45 +136,45 @@ class DatabaseService {
   static async getUserRank(guildId, userId, type = 'lifetime') {
     // 1. Get user's score
     const user = await prisma.userXp.findUnique({
-      where: { guildId_userId: { guildId, userId } }
+      where: { guildId_userId: { guildId, userId } },
     });
-    
+
     if (!user) return null;
 
     // 2. Map type to column name
-    const column = type === 'weekly' ? 'weeklyXp' : (type === 'daily' ? 'dailyXp' : 'xp');
-    
+    const column = type === 'weekly' ? 'weeklyXp' : type === 'daily' ? 'dailyXp' : 'xp';
+
     // 3. Count how many people have MORE score than them
     const count = await prisma.userXp.count({
       where: {
         guildId,
-        [column]: { gt: user[column] }
-      }
+        [column]: { gt: user[column] },
+      },
     });
 
     return count + 1;
   }
 
   /**
-   * Keep getAllUserXp for specific bulk operations if strictly needed, 
+   * Keep getAllUserXp for specific bulk operations if strictly needed,
    * but avoid using it in frequent loops.
    */
   static async getAllUserXp(guildId) {
     return prisma.userXp.findMany({
       where: { guildId },
-      select: { 
-        userId: true, 
-        xp: true, 
-        dailyXp: true, 
-        weeklyXp: true 
-      }
+      select: {
+        userId: true,
+        xp: true,
+        dailyXp: true,
+        weeklyXp: true,
+      },
     });
   }
 
   static async deleteUserData(guildId, userId) {
     await prisma.$transaction([
       prisma.userXp.deleteMany({ where: { guildId, userId } }),
-      prisma.clanXp.deleteMany({ where: { guildId, userId } })
+      prisma.clanXp.deleteMany({ where: { guildId, userId } }),
     ]);
   }
 
@@ -191,7 +188,7 @@ class DatabaseService {
   static async resetDailyXp(guildId) {
     const result = await prisma.userXp.updateMany({
       where: { guildId },
-      data: { dailyXp: 0 }
+      data: { dailyXp: 0 },
     });
     logger.info(`Reset daily XP for ${result.count} users in guild ${guildId}`);
     return result.count;
@@ -203,7 +200,7 @@ class DatabaseService {
   static async resetWeeklyXp(guildId) {
     const result = await prisma.userXp.updateMany({
       where: { guildId },
-      data: { weeklyXp: 0 }
+      data: { weeklyXp: 0 },
     });
     logger.info(`Reset weekly XP for ${result.count} users in guild ${guildId}`);
     return result.count;
@@ -214,7 +211,7 @@ class DatabaseService {
    */
   static async resetDailyXpAllGuilds() {
     const result = await prisma.userXp.updateMany({
-      data: { dailyXp: 0 }
+      data: { dailyXp: 0 },
     });
     logger.info(`Reset daily XP for ${result.count} total users across all guilds`);
     return result.count;
@@ -225,7 +222,7 @@ class DatabaseService {
    */
   static async resetWeeklyXpAllGuilds() {
     const result = await prisma.userXp.updateMany({
-      data: { weeklyXp: 0 }
+      data: { weeklyXp: 0 },
     });
     logger.info(`Reset weekly XP for ${result.count} total users across all guilds`);
     return result.count;
@@ -238,25 +235,25 @@ class DatabaseService {
    */
   static async syncUserXpToClanXp(guildId, clanUpdates) {
     if (clanUpdates.length === 0) return;
-    const userIds = clanUpdates.map(u => u.userId);
+    const userIds = clanUpdates.map((u) => u.userId);
 
-    // 1. Delete existing ClanXp entries for these users to prevent "Clan Hopping" exploits 
+    // 1. Delete existing ClanXp entries for these users to prevent "Clan Hopping" exploits
     //    or stale data from previous clans.
     await prisma.clanXp.deleteMany({
       where: {
         guildId,
-        userId: { in: userIds }
-      }
+        userId: { in: userIds },
+      },
     });
 
     // 2. Create fresh entries matching current UserXp
     await prisma.clanXp.createMany({
-      data: clanUpdates.map(u => ({
+      data: clanUpdates.map((u) => ({
         guildId,
         clanId: u.clanId,
         userId: u.userId,
-        xp: u.xp
-      }))
+        xp: u.xp,
+      })),
     });
   }
 
@@ -266,7 +263,7 @@ class DatabaseService {
 
   static async atomicJsonMerge(guildId, columnName, mergeData) {
     await this.ensureGuildConfig(guildId);
-    
+
     const allowedColumns = ['ids', 'config', 'keywords', 'reactionRoles', 'clans', 'resetRoleData'];
     if (!allowedColumns.includes(columnName)) {
       throw new Error(`Invalid configuration column: ${columnName}`);
@@ -284,7 +281,7 @@ class DatabaseService {
 
   static async atomicJsonSetPath(guildId, columnName, path, value) {
     await this.ensureGuildConfig(guildId);
-    
+
     const allowedColumns = ['ids', 'config', 'keywords', 'reactionRoles', 'clans'];
     if (!allowedColumns.includes(columnName)) throw new Error(`Invalid column: ${columnName}`);
 
@@ -307,7 +304,7 @@ class DatabaseService {
 
   static async atomicJsonDeleteKey(guildId, columnName, key) {
     await this.ensureGuildConfig(guildId);
-    
+
     const allowedColumns = ['ids', 'config', 'keywords', 'reactionRoles', 'clans', 'resetRoleData'];
     if (!allowedColumns.includes(columnName)) throw new Error(`Invalid column: ${columnName}`);
 
@@ -323,7 +320,7 @@ class DatabaseService {
 
   static async atomicArrayPush(guildId, columnName, item) {
     await this.ensureGuildConfig(guildId);
-    
+
     const allowedColumns = ['roleRequests'];
     if (!allowedColumns.includes(columnName)) throw new Error(`Invalid array column: ${columnName}`);
 
@@ -339,7 +336,7 @@ class DatabaseService {
 
   static async atomicArrayRemoveById(guildId, columnName, targetId) {
     await this.ensureGuildConfig(guildId);
-    
+
     const allowedColumns = ['roleRequests'];
     if (!allowedColumns.includes(columnName)) throw new Error(`Invalid array column: ${columnName}`);
 
@@ -364,7 +361,7 @@ class DatabaseService {
   static async getClanXp(guildId, clanId) {
     const result = await prisma.clanXp.aggregate({
       where: { guildId, clanId },
-      _sum: { xp: true }
+      _sum: { xp: true },
     });
     return result._sum.xp ?? 0;
   }
@@ -373,10 +370,10 @@ class DatabaseService {
     const results = await prisma.clanXp.groupBy({
       by: ['clanId'],
       where: { guildId },
-      _sum: { xp: true }
+      _sum: { xp: true },
     });
     const clanTotals = {};
-    results.forEach(r => {
+    results.forEach((r) => {
       if (r.clanId) clanTotals[r.clanId] = r._sum.xp || 0;
     });
     return clanTotals;
@@ -386,7 +383,7 @@ class DatabaseService {
     await prisma.clanXp.upsert({
       where: { guildId_clanId_userId: { guildId, clanId, userId } },
       create: { guildId, clanId, userId, xp },
-      update: { xp: { increment: xp } }
+      update: { xp: { increment: xp } },
     });
   }
 
@@ -404,7 +401,7 @@ class DatabaseService {
       await prisma.guildConfig.upsert({
         where: { guildId },
         create: { guildId },
-        update: {}
+        update: {},
       });
     }
   }
@@ -422,14 +419,14 @@ class DatabaseService {
     await this.ensureGuildConfig(guildId);
     return prisma.guildConfig.update({
       where: { guildId },
-      data
+      data,
     });
   }
 
   static async getGuildIds(guildId) {
     const res = await prisma.guildConfig.findUnique({
       where: { guildId },
-      select: { ids: true }
+      select: { ids: true },
     });
     return res?.ids || {};
   }
@@ -454,36 +451,36 @@ class DatabaseService {
       await this.atomicJsonDeleteKey(guildId, 'ids', key);
     }
   }
-  
+
   static async clearGuildIds(guildId) {
     await prisma.guildConfig.update({
       where: { guildId },
-      data: { ids: {} }
+      data: { ids: {} },
     });
   }
 
   // =================================================================
   // 5. SYSTEM UTILS
   // =================================================================
-  
+
   static async getResetCycle(guildId) {
     return prisma.resetCycle.findUnique({ where: { guildId } });
   }
-  
+
   static async initResetCycle(guildId) {
     return prisma.resetCycle.create({
-      data: { 
-        guildId, 
-        lastResetUtc: new Date(), 
-        cycleCount: 0 
-      }
+      data: {
+        guildId,
+        lastResetUtc: new Date(),
+        cycleCount: 0,
+      },
     });
   }
-  
+
   static async updateResetCycle(guildId, cycleCount, lastReset) {
     await prisma.resetCycle.update({
       where: { guildId },
-      data: { cycleCount, lastResetUtc: lastReset }
+      data: { cycleCount, lastResetUtc: lastReset },
     });
   }
 
@@ -503,35 +500,35 @@ class DatabaseService {
 
   static async createGifTemplate(name, clanCount, folderPath) {
     return prisma.gifTemplate.create({
-      data: { name, clanCount, folderPath }
+      data: { name, clanCount, folderPath },
     });
   }
 
   static async getGifTemplate(clanCount) {
     const count = await prisma.gifTemplate.count({ where: { clanCount } });
     if (count === 0) return null;
-    
+
     const skip = Math.floor(Math.random() * count);
     const templates = await prisma.gifTemplate.findMany({
       where: { clanCount },
       take: 1,
-      skip: skip
+      skip: skip,
     });
-    
+
     return templates[0] || null;
   }
 
   static async setClanAsset(guildId, roleId, messageLink) {
     return prisma.clanAsset.upsert({
-      where: { roleId }, 
+      where: { roleId },
       create: { guildId, roleId, messageLink },
-      update: { messageLink, guildId }
+      update: { messageLink, guildId },
     });
   }
 
   static async getClanAsset(roleId) {
     return prisma.clanAsset.findUnique({
-      where: { roleId }
+      where: { roleId },
     });
   }
 
@@ -541,28 +538,28 @@ class DatabaseService {
 
   static async getLeaderboardState(guildId) {
     return prisma.leaderboardState.findUnique({
-      where: { guildId }
+      where: { guildId },
     });
   }
 
   static async updateLeaderboardState(guildId, messageId, ranksArray) {
     return prisma.leaderboardState.upsert({
       where: { guildId },
-      create: { 
-        guildId, 
-        lastMessageId: messageId, 
-        lastRanks: ranksArray 
+      create: {
+        guildId,
+        lastMessageId: messageId,
+        lastRanks: ranksArray,
       },
-      update: { 
-        lastMessageId: messageId, 
-        lastRanks: ranksArray 
-      }
+      update: {
+        lastMessageId: messageId,
+        lastRanks: ranksArray,
+      },
     });
   }
 
   static async getGifCache(rankHash) {
     return prisma.gifCache.findUnique({
-      where: { rankHash }
+      where: { rankHash },
     });
   }
 
@@ -570,7 +567,7 @@ class DatabaseService {
     return prisma.gifCache.upsert({
       where: { rankHash },
       create: { rankHash, messageLink },
-      update: { messageLink }
+      update: { messageLink },
     });
   }
 }

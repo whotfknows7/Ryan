@@ -7,7 +7,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags
+  MessageFlags,
 } = require('discord.js');
 const { PunishmentService } = require('../../services/PunishmentService');
 const { ConfigService } = require('../../services/ConfigService');
@@ -20,21 +20,26 @@ const JailCommand = {
     .setName('jail')
     .setDescription('Jail moderation system commands')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addSubcommand(sub =>
-      sub.setName('punish')
+    .addSubcommand((sub) =>
+      sub
+        .setName('punish')
         .setDescription('Punish a member')
-        .addUserOption(opt => opt.setName('member').setDescription('Target member').setRequired(true))
-        .addStringOption(opt => opt.setName('reason').setDescription('Reason (optional, can include Message IDs)').setRequired(false))
+        .addUserOption((opt) => opt.setName('member').setDescription('Target member').setRequired(true))
+        .addStringOption((opt) =>
+          opt.setName('reason').setDescription('Reason (optional, can include Message IDs)').setRequired(false)
+        )
     )
-    .addSubcommand(sub =>
-      sub.setName('release')
+    .addSubcommand((sub) =>
+      sub
+        .setName('release')
         .setDescription('Release a member (keep offences)')
-        .addUserOption(opt => opt.setName('member').setDescription('Target member').setRequired(true))
+        .addUserOption((opt) => opt.setName('member').setDescription('Target member').setRequired(true))
     )
-    .addSubcommand(sub =>
-      sub.setName('forgive')
+    .addSubcommand((sub) =>
+      sub
+        .setName('forgive')
         .setDescription('Forgive a member (reduce offences)')
-        .addUserOption(opt => opt.setName('member').setDescription('Target member').setRequired(true))
+        .addUserOption((opt) => opt.setName('member').setDescription('Target member').setRequired(true))
     ),
 
   execute: async (interaction) => {
@@ -44,8 +49,9 @@ const JailCommand = {
     // 1. SELF-HARM PREVENTION CHECK
     if (targetUser.id === interaction.client.user.id) {
       return interaction.reply({
-        content: "🛡️ **Security Alert:** I cannot punish myself. Doing so would cause a paradox and likely crash the universe.",
-        flags: MessageFlags.Ephemeral
+        content:
+          '🛡️ **Security Alert:** I cannot punish myself. Doing so would cause a paradox and likely crash the universe.',
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -55,7 +61,7 @@ const JailCommand = {
     if (!member) {
       await interaction.reply({
         content: 'Member not found or not in server!',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -84,7 +90,9 @@ const JailCommand = {
             if (msg && msg.content) {
               fetchedContents.push(`${msgId} = "${msg.content}"`);
             }
-          } catch (e) { /* ignore fetch errors */ }
+          } catch {
+            /* ignore fetch errors */
+          }
         }
 
         if (fetchedContents.length > 0) {
@@ -95,7 +103,7 @@ const JailCommand = {
       if (!groundRoleId) {
         return interaction.reply({
           content: '❌ Ground role not configured.',
-          flags: MessageFlags.Ephemeral
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -111,12 +119,13 @@ const JailCommand = {
             await member.ban({ reason: 'Reached 8 offences' });
 
             await ConfigService.createOrUpdateJailLog({
-              guildId, userId,
+              guildId,
+              userId,
               username: member.user.username,
               status: 'jailed',
               offences: newOffences,
               punishmentEnd: null,
-              votes: []
+              votes: [],
             });
 
             if (logsChannelId) {
@@ -139,13 +148,13 @@ const JailCommand = {
 
             return interaction.reply({
               content: `${member} banned (8 offences).`,
-              flags: MessageFlags.Ephemeral
+              flags: MessageFlags.Ephemeral,
             });
           } catch (e) {
             logger.error(`Ban failed: ${e}`);
             return interaction.reply({
               content: 'Failed to ban member.',
-              flags: MessageFlags.Ephemeral
+              flags: MessageFlags.Ephemeral,
             });
           }
         }
@@ -157,19 +166,22 @@ const JailCommand = {
           if (groundRoleId) await member.roles.add(groundRoleId).catch(() => { });
 
           await ConfigService.createOrUpdateJailLog({
-            guildId, userId,
+            guildId,
+            userId,
             username: member.user.username,
             offences: newOffences,
             status: 'jailed',
             punishmentEnd: newEnd,
-            votes: [] // Reset votes on extend
+            votes: [], // Reset votes on extend
           });
 
           // [NEW] Salty Message for Extension
           if (jailChannelId) {
             const jailChannel = guild.channels.cache.get(jailChannelId);
             if (jailChannel) {
-              await jailChannel.send(`## ${member.toString()} Your sentence has been increased *(bahahaha)* (Sin #${newOffences}) \n*Enjoy your extended stay!*`);
+              await jailChannel.send(
+                `## ${member.toString()} Your sentence has been increased *(bahahaha)* (Sin #${newOffences}) \n*Enjoy your extended stay!*`
+              );
             }
           }
 
@@ -195,7 +207,7 @@ const JailCommand = {
 
           return interaction.reply({
             content: `Offences increased to ${newOffences}. Time extended.`,
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
         }
 
@@ -211,7 +223,9 @@ const JailCommand = {
         // --- 3a. Send "Vote to Release" Embed to the CURRENT CHANNEL ---
         const voteEmbed = new EmbedBuilder()
           .setTitle(`${member.user.username} has been thrown into the Torture Chamber!`)
-          .setDescription(`**Reason:** ${reason}\n**Offence:** ${newOffences}\n**Release:** <t:${Math.floor(punishmentEnd.getTime() / 1000)}:R>`)
+          .setDescription(
+            `**Reason:** ${reason}\n**Offence:** ${newOffences}\n**Release:** <t:${Math.floor(punishmentEnd.getTime() / 1000)}:R>`
+          )
           .setColor('Red')
           .setThumbnail(member.user.displayAvatarURL())
           .setFooter({ text: `Case ID: ${caseId}` });
@@ -229,14 +243,14 @@ const JailCommand = {
               .setTitle('⚖️ Justice Served')
               .setDescription(`Member punished successfully.\n**User:** ${member.user.username}`)
               .setColor('Red')
-              .setFooter({ text: `Case ID: ${caseId}` })
+              .setFooter({ text: `Case ID: ${caseId}` }),
           ],
-          flags: MessageFlags.Ephemeral
+          flags: MessageFlags.Ephemeral,
         });
 
         const voteMessage = await interaction.channel.send({
           embeds: [voteEmbed],
-          components: [row]
+          components: [row],
         });
 
         // --- 3b. Send Flavor Text to the JAIL CHANNEL ---
@@ -255,14 +269,15 @@ const JailCommand = {
 
         // Save to DB
         await ConfigService.createOrUpdateJailLog({
-          guildId, userId,
+          guildId,
+          userId,
           username: member.user.username,
           offences: newOffences,
           status: 'jailed',
           punishmentEnd,
           messageId: voteMessage.id,
           caseId: caseId,
-          votes: []
+          votes: [],
         });
 
         // Send Log
@@ -288,7 +303,6 @@ const JailCommand = {
         }
 
         logger.info(`${interaction.user.tag} punished ${member.user.tag} (Offence ${newOffences})`);
-
       } catch (error) {
         if (error.code === 10062 || error.code === 10008) return; // Ignore unknown interaction/message
         logger.error('Punish error:', error);
@@ -313,7 +327,7 @@ const JailCommand = {
         if (!log) {
           return interaction.reply({
             content: 'Member is not in the system.',
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
         }
 
@@ -326,18 +340,19 @@ const JailCommand = {
           // ALREADY RELEASED - Do NOT log to channel, just reply ephemeral
           return interaction.reply({
             content: `Member is already released. (Offences: ${log.offences})`,
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
         }
 
         // Update status to released, REMOVE punishmentEnd, KEEP offences
         await ConfigService.createOrUpdateJailLog({
-          guildId, userId,
+          guildId,
+          userId,
           username: member.user.username,
           status: 'released',
           offences: log.offences, // Keep current offences
           punishmentEnd: null,
-          votes: []
+          votes: [],
         });
 
         if (logsChannelId) {
@@ -361,9 +376,8 @@ const JailCommand = {
 
         await interaction.reply({
           content: `${member} has been released (offences maintained).`,
-          flags: MessageFlags.Ephemeral
+          flags: MessageFlags.Ephemeral,
         });
-
       } catch (error) {
         logger.error('Error executing release command:', error);
         const payload = { content: '❌ Failed to release member.', flags: MessageFlags.Ephemeral };
@@ -373,7 +387,9 @@ const JailCommand = {
           } else {
             await interaction.reply(payload);
           }
-        } catch (e) { logger.error('Failed to send error response:', e); }
+        } catch (e) {
+          logger.error('Failed to send error response:', e);
+        }
       }
     }
 
@@ -385,7 +401,7 @@ const JailCommand = {
         if (!log || log.offences === 0) {
           return interaction.reply({
             content: 'No offences to reduce.',
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
         }
 
@@ -400,26 +416,26 @@ const JailCommand = {
           }
 
           await ConfigService.createOrUpdateJailLog({
-            guildId, userId,
+            guildId,
+            userId,
             username: member.user.username,
             offences: 0,
             status: 'released',
             punishmentEnd: null,
-            votes: []
+            votes: [],
           });
 
           await interaction.reply({
             content: 'Offences reduced to 0. Member released.',
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
-
         } else {
           // Recalculate time
           const oldDuration = PunishmentService.getDurationMs(log.offences);
           const newDuration = PunishmentService.getDurationMs(newOffences);
           const diff = oldDuration - newDuration;
 
-          let replyMsg = "";
+          let replyMsg = '';
 
           if (log.status === 'jailed' && log.punishmentEnd) {
             const currentEnd = new Date(log.punishmentEnd).getTime();
@@ -431,38 +447,41 @@ const JailCommand = {
               await PunishmentService.releaseMember(interaction.client, guildId, userId, updatedLog);
 
               await ConfigService.createOrUpdateJailLog({
-                guildId, userId,
+                guildId,
+                userId,
                 username: member.user.username,
                 offences: newOffences,
                 status: 'released',
                 punishmentEnd: null,
-                votes: []
+                votes: [],
               });
               replyMsg = `Offences reduced to ${newOffences}. Time served! Member released.`;
             } else {
               // Just shorten time
               const newEnd = new Date(newEndMs);
               await ConfigService.createOrUpdateJailLog({
-                guildId, userId,
+                guildId,
+                userId,
                 username: member.user.username,
                 offences: newOffences,
                 status: 'jailed',
-                punishmentEnd: newEnd
+                punishmentEnd: newEnd,
               });
               replyMsg = `Offences reduced to ${newOffences}. New release: <t:${Math.floor(newEndMs / 1000)}:R>`;
             }
           } else {
             await ConfigService.createOrUpdateJailLog({
-              guildId, userId,
+              guildId,
+              userId,
               username: member.user.username,
-              offences: newOffences
+              offences: newOffences,
             });
             replyMsg = `Offences reduced to ${newOffences}. (Member was not currently jailed or timer was paused).`;
           }
 
           await interaction.reply({
             content: replyMsg,
-            flags: MessageFlags.Ephemeral
+            flags: MessageFlags.Ephemeral,
           });
         }
 
@@ -484,7 +503,6 @@ const JailCommand = {
             await logChannel.send({ embeds: [embed] });
           }
         }
-
       } catch (error) {
         logger.error('Error executing forgive command:', error);
         const payload = { content: '❌ Failed to forgive (reduce punishment).', flags: MessageFlags.Ephemeral };
@@ -494,10 +512,12 @@ const JailCommand = {
           } else {
             await interaction.reply(payload);
           }
-        } catch (e) { logger.error('Failed to send error response:', e); }
+        } catch (e) {
+          logger.error('Failed to send error response:', e);
+        }
       }
     }
-  }
+  },
 };
 
 module.exports = JailCommand;

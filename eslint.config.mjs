@@ -24,6 +24,8 @@ export default [
                 Buffer: 'readonly',
                 URL: 'readonly',
                 URLSearchParams: 'readonly',
+                fetch: 'readonly',
+                AbortSignal: 'readonly',
             },
         },
         rules: {

@@ -33,13 +33,13 @@ class XpCalculator {
    * - URLs are excluded from calculation
    */
   static calculateMessageXp(content) {
-    const cleanContent = content.replace(URL_REGEX, "");
-    const alphaChars = cleanContent.replace(/[^a-zA-Z]/g, "").length;
-    
+    const cleanContent = content.replace(URL_REGEX, '');
+    const alphaChars = cleanContent.replace(/[^a-zA-Z]/g, '').length;
+
     const customEmojiCount = (cleanContent.match(/<a?:\w+:\d+>/g) || []).length;
     const unicodeEmojiCount = (cleanContent.match(emojiRegex()) || []).length;
     const emojiXp = (customEmojiCount + unicodeEmojiCount) * 2;
-    
+
     return alphaChars + emojiXp;
   }
 }
@@ -55,13 +55,13 @@ class KeywordReactionHandler {
    */
   static async handle(message) {
     if (message.author.bot || !message.guild) return;
-    
+
     try {
       const keywords = await ConfigService.getKeywords(message.guild.id);
       if (!keywords || Object.keys(keywords).length === 0) return;
-      
+
       const content = message.content;
-      
+
       for (const [keyword, emojis] of Object.entries(keywords)) {
         if (this.shouldReact(content, keyword)) {
           await this.reactWithEmojis(message, emojis);
@@ -71,7 +71,7 @@ class KeywordReactionHandler {
       logger.error('Error in KeywordReactionHandler:', error);
     }
   }
-  
+
   /**
    * Checks if content matches keyword (case-insensitive, word boundary aware)
    * Supports possessive forms (e.g., "bot's" matches "bot")
@@ -80,7 +80,7 @@ class KeywordReactionHandler {
     const regex = new RegExp(`\\b${this.escapeRegex(keyword)}(?:'s)?\\b`, 'i');
     return regex.test(content);
   }
-  
+
   /**
    * Reacts to message with multiple emojis, with delay between each
    */
@@ -88,13 +88,13 @@ class KeywordReactionHandler {
     for (const emoji of emojis) {
       try {
         await message.react(emoji);
-        await new Promise(resolve => setTimeout(resolve, EMOJI_REACTION_DELAY));
+        await new Promise((resolve) => setTimeout(resolve, EMOJI_REACTION_DELAY));
       } catch (error) {
         logger.error(`Failed to react with ${emoji}:`, error);
       }
     }
   }
-  
+
   /**
    * Escapes special regex characters in keyword string
    */
@@ -115,16 +115,16 @@ class RoleRewardCacheManager {
   static async loadRoleRewards(guildId) {
     const config = await DatabaseService.getFullGuildConfig(guildId);
     const rewardsMap = config?.config?.announcement_roles || {};
-    
+
     // Sort Descending by XP for efficient checking
     const rewards = Object.values(rewardsMap)
-      .map(r => ({
+      .map((r) => ({
         roleId: r.roleId || r.id,
         xp: parseInt(r.xp || 0),
         message: r.message,
-        assetMessageLink: r.assetMessageLink
+        assetMessageLink: r.assetMessageLink,
       }))
-      .filter(r => r.xp > 0)
+      .filter((r) => r.xp > 0)
       .sort((a, b) => b.xp - a.xp);
 
     RoleRewardCache.set(guildId, rewards);
@@ -173,7 +173,7 @@ class RoleRewardHandler {
    * Phase 1: RAM Check (nanoseconds) - Check cache against member's roles
    * Phase 2: Verification (milliseconds) - Fetch fresh member data from API
    * Phase 3: Execution (seconds) - Grant roles and send announcements
-   * 
+   *
    * @param {Guild} guild - Discord guild object
    * @param {GuildMember} member - Guild member (may be stale)
    * @param {number} currentXp - Current total XP of user
@@ -188,10 +188,10 @@ class RoleRewardHandler {
     // Phase 1: The RAM Check (Nanoseconds)
     // Filter for rewards they qualify for BUT don't have in cache
     const potentialRewards = rewards.filter(
-      reward => currentXp >= reward.xp && !member.roles.cache.has(reward.roleId)
+      (reward) => currentXp >= reward.xp && !member.roles.cache.has(reward.roleId)
     );
 
-    if (potentialRewards.length === 0) return; 
+    if (potentialRewards.length === 0) return;
 
     // Phase 2: The Double-Check (Verification)
     // We only fetch the API if we strongly suspect a reward is needed
@@ -219,7 +219,6 @@ class RoleRewardHandler {
         if (reward.message) {
           await this.sendAnnouncement(guild, freshMember, reward, currentXp);
         }
-
       } catch (err) {
         logger.error(`Failed to grant reward ${reward.roleId} to ${freshMember.user.tag}:`, err);
       }
@@ -234,7 +233,7 @@ class RoleRewardHandler {
     try {
       // Fetch announcement channel
       const ids = await getIds(guild.id);
-      const channelId = ids.leaderboardChannelId; 
+      const channelId = ids.leaderboardChannelId;
       if (!channelId) {
         logger.debug(`No announcement channel configured for guild ${guild.id}`);
         return;
@@ -249,7 +248,7 @@ class RoleRewardHandler {
       // Get role information
       const role = guild.roles.cache.get(reward.roleId);
       const roleName = role ? role.name : 'Level Up';
-      const roleColor = role ? role.color : 0xFFFFFF;
+      const roleColor = role ? role.color : 0xffffff;
 
       // Parse message template
       const description = reward.message
@@ -265,7 +264,7 @@ class RoleRewardHandler {
         .setTimestamp();
 
       let files = [];
-      
+
       // Hybrid Image Generation: Fetch Base -> Generate Final
       if (reward.assetMessageLink) {
         try {
@@ -282,7 +281,6 @@ class RoleRewardHandler {
 
       await channel.send({ embeds: [embed], files });
       logger.info(`Sent reward announcement for ${member.user.tag} - ${roleName}`);
-
     } catch (error) {
       logger.error('Error sending role announcement:', error);
     }
@@ -301,27 +299,27 @@ class ManualRoleAnnouncementHandler {
   static async handle(oldMember, newMember) {
     try {
       if (this.shouldSkipAnnouncement(newMember)) return;
-      
+
       // Don't announce for jailed users
       const jailLog = await ConfigService.getJailLog(newMember.guild.id, newMember.id);
       if (jailLog && jailLog.status === 'jailed') return;
-      
+
       const channel = await this.getAnnouncementChannel(newMember.guild);
       if (!channel) return;
-      
+
       const addedRoles = this.getAddedRoles(oldMember, newMember);
       if (addedRoles.size === 0) return;
-      
+
       // Fetch announcement config
       const guildConfig = await DatabaseService.getFullGuildConfig(newMember.guild.id);
       const announcementRoles = guildConfig?.config?.announcement_roles || {};
-      
+
       await this.announceRoles(newMember, addedRoles, channel, announcementRoles);
     } catch (error) {
       logger.error('Error in ManualRoleAnnouncementHandler:', error);
     }
   }
-  
+
   /**
    * Checks if announcement should be skipped due to cooldown
    */
@@ -333,7 +331,7 @@ class ManualRoleAnnouncementHandler {
     }
     return false;
   }
-  
+
   /**
    * Gets the configured announcement channel
    */
@@ -343,36 +341,34 @@ class ManualRoleAnnouncementHandler {
     if (!channelId) return null;
     return guild.channels.cache.get(channelId);
   }
-  
+
   /**
    * Determines which roles were added (difference between old and new)
    */
   static getAddedRoles(oldMember, newMember) {
     const newRoles = newMember.roles.cache;
     const oldRoles = oldMember.roles.cache;
-    return newRoles.filter(role => !oldRoles.has(role.id));
+    return newRoles.filter((role) => !oldRoles.has(role.id));
   }
-  
+
   /**
    * Announces each added role that has a configured announcement
    */
   static async announceRoles(member, roles, channel, announcementConfig) {
     for (const role of roles.values()) {
       const reward = announcementConfig[role.id];
-      
+
       if (reward && reward.message) {
         try {
-          const msgContent = reward.message
-            .replace(/{user}/g, member.toString())
-            .replace(/{role}/g, role.name);
-          
+          const msgContent = reward.message.replace(/{user}/g, member.toString()).replace(/{role}/g, role.name);
+
           const payload = { content: msgContent };
-          
+
           // Attach image if configured
           if (reward.image) {
             payload.files = [reward.image];
           }
-          
+
           await channel.send(payload);
           logger.info(`Manual role announcement sent for ${member.user.tag} - ${role.name}`);
         } catch (error) {
@@ -408,66 +404,56 @@ class PermissionChecker {
 // ============================================================================
 
 class XpService {
-  
   // --- Keyword Reactions ---
-  
+
   /**
    * Handles automatic keyword-based emoji reactions
    */
   static async handleKeywords(message) {
     await KeywordReactionHandler.handle(message);
   }
-  
+
   // --- XP Processing ---
-  
+
   /**
    * Handles XP gain from messages
    * OPTIMIZED: Returns updated user record to avoid extra DB fetch
    */
   static async handleMessageXp(message) {
     if (message.author.bot || !message.guild) return;
-    
+
     try {
       // Don't award XP to jailed users
       const jailLog = await ConfigService.getJailLog(message.guild.id, message.author.id);
       if (jailLog && jailLog.status === 'jailed') return;
-      
+
       // Calculate XP
       const xpToAdd = XpCalculator.calculateMessageXp(message.content);
       if (xpToAdd <= 0) return;
-      
+
       // Database Update - returns updated user record
-      const updatedUser = await DatabaseService.updateUserXp(
-        message.guild.id, 
-        message.author.id, 
-        xpToAdd
-      );
-      
+      const updatedUser = await DatabaseService.updateUserXp(message.guild.id, message.author.id, xpToAdd);
+
       if (!updatedUser) return;
 
       // Check for role rewards using the new total XP
-      await RoleRewardHandler.checkRoleRewards(
-        message.guild, 
-        message.member, 
-        updatedUser.xp
-      );
-
+      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, updatedUser.xp);
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }
   }
-  
+
   // --- Manual Role Announcements ---
-  
+
   /**
    * Handles announcements when roles are manually added by admins
    */
   static async checkRoleAnnouncements(oldMember, newMember) {
     await ManualRoleAnnouncementHandler.handle(oldMember, newMember);
   }
-  
+
   // --- Cache Management (Admin/Utility) ---
-  
+
   /**
    * Loads role rewards into cache for a guild
    */
@@ -488,16 +474,16 @@ class XpService {
   static clearRoleRewardCache(guildId = null) {
     RoleRewardCacheManager.clearCache(guildId);
   }
-  
+
   // --- Permissions & Utilities ---
-  
+
   /**
    * Checks if member has admin command permissions
    */
   static async canUseAdminCommand(member) {
     return PermissionChecker.canUseAdminCommand(member);
   }
-  
+
   /**
    * Gets the announcement channel ID for a guild
    */

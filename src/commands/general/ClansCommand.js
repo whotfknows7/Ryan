@@ -8,15 +8,13 @@ const fs = require('fs');
 const WebhookUtils = require('../../utils/WebhookUtils');
 
 const ClanCommand = {
-  data: new SlashCommandBuilder()
-    .setName('clans')
-    .setDescription('Display live Clan Wars leaderboard'),
+  data: new SlashCommandBuilder().setName('clans').setDescription('Display live Clan Wars leaderboard'),
 
   execute: async (interaction) => {
     if (!interaction.guildId) {
       return interaction.reply({
         content: 'This command only works in guilds!',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -35,7 +33,7 @@ const ClanCommand = {
         1: ids.clanRole1Id,
         2: ids.clanRole2Id,
         3: ids.clanRole3Id,
-        4: ids.clanRole4Id
+        4: ids.clanRole4Id,
       };
 
       const activeClans = [];
@@ -44,7 +42,7 @@ const ClanCommand = {
           activeClans.push({
             id: i,
             xp: clanTotals[i] || 0,
-            roleId: clanRoles[i]
+            roleId: clanRoles[i],
           });
         }
       }
@@ -58,17 +56,17 @@ const ClanCommand = {
       };
 
       // 3. Build Embed Description
-      let description = "";
+      let description = '';
       const isTie = activeClans.length >= 2 && activeClans[0].xp === activeClans[1].xp && totalXp > 0;
 
       if (isTie) {
         description += "**IT'S A TIE!**\n\n";
       } else if (activeClans.length === 0) {
-        description = "No active clans found for this server.";
+        description = 'No active clans found for this server.';
       }
 
       activeClans.forEach((clan, index) => {
-        const percentage = totalXp > 0 ? (clan.xp / totalXp * 100) : 0;
+        const percentage = totalXp > 0 ? (clan.xp / totalXp) * 100 : 0;
 
         let rankEmoji;
         if (index === 0) rankEmoji = CONSTANTS.EMOJIS.RANK_1;
@@ -80,19 +78,20 @@ const ClanCommand = {
         // Progress Bar
         const bars = Math.floor(percentage / 10);
         const safeBars = Math.max(0, Math.min(10, bars));
-        const progressBar = "▰".repeat(safeBars) + "▱".repeat(10 - safeBars);
+        const progressBar = '▰'.repeat(safeBars) + '▱'.repeat(10 - safeBars);
 
-        description += `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${roleMention}\n` +
-          "```\n" +
+        description +=
+          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${roleMention}\n` +
+          '```\n' +
           `${clan.xp.toLocaleString()} XP Pts\n` +
           `${progressBar} ${percentage.toFixed(1)}% Destruction Inflicted` +
-          "```\n";
+          '```\n';
       });
 
       const embed = new EmbedBuilder()
         .setTitle('⚔️ **CLAN WAR CONQUEST** ⚔️')
         .setDescription(description)
-        .setColor(0x823EF0) // Custom Purple
+        .setColor(0x823ef0) // Custom Purple
         .setFooter({ text: 'Current standings • Updates live' })
         .setTimestamp();
 
@@ -103,11 +102,10 @@ const ClanCommand = {
       if (!isTie && activeClans.length >= 2) {
         try {
           // A. Generate Hash
-          const rankHash = `count:${activeClans.length}|` +
-            activeClans.map((c, i) => `${i + 1}:${c.roleId}`).join('|');
+          const rankHash = `count:${activeClans.length}|` + activeClans.map((c, i) => `${i + 1}:${c.roleId}`).join('|');
 
           let gifUrl = null;
-          const winnerRoleIds = activeClans.map(c => c.roleId || 'unknown');
+          const winnerRoleIds = activeClans.map((c) => c.roleId || 'unknown');
 
           // B. Check Cache
           const cachedEntry = await DatabaseService.getGifCache(rankHash);
@@ -128,7 +126,12 @@ const ClanCommand = {
             // Upload to Dev Channel
             const fileBuffer = fs.readFileSync(tempFilePath);
             const contextText = `CMD Gen: ${activeClans[0].id} (Count: ${activeClans.length})`;
-            const persistentMsgLink = await AssetService.storeToDevChannel(interaction.client, fileBuffer, 'clan_status.gif', contextText);
+            const persistentMsgLink = await AssetService.storeToDevChannel(
+              interaction.client,
+              fileBuffer,
+              'clan_status.gif',
+              contextText
+            );
 
             // Cache
             if (persistentMsgLink) {
@@ -153,16 +156,15 @@ const ClanCommand = {
       await WebhookUtils.sendLeaderboard(interaction.channel, embed);
 
       await interaction.editReply({
-        content: "✅ Clan leaderboard has been posted below!"
+        content: '✅ Clan leaderboard has been posted below!',
       });
-
     } catch (error) {
       logger.error('Clan command error:', error);
       await interaction.editReply({
-        content: '❌ Failed to fetch clan data. Please try again later.'
+        content: '❌ Failed to fetch clan data. Please try again later.',
       });
     }
-  }
+  },
 };
 
 // Helper to resolve Message Link to actual Object
@@ -170,10 +172,12 @@ async function fetchMessageFromLink(client, link) {
   try {
     const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
     if (!match) return null;
-    const [, gId, cId, mId] = match;
+    const [, _gId, cId, mId] = match;
     const ch = await client.channels.fetch(cId);
     return await ch.messages.fetch(mId);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 module.exports = ClanCommand;

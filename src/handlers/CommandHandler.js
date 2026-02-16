@@ -20,7 +20,7 @@ async function loadCommands(client) {
     const folderPath = path.join(commandsPath, folder);
     if (!fs.statSync(folderPath).isDirectory()) continue;
 
-    const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
+    const commandFiles = fs.readdirSync(folderPath).filter((file) => file.endsWith('.js'));
 
     for (const file of commandFiles) {
       const filePath = path.join(folderPath, file);
@@ -62,7 +62,9 @@ async function registerCommands(client, slashCommands) {
           try {
             // Sending an empty body [] deletes all commands for that guild
             await rest.put(Routes.applicationGuildCommands(config.CLIENT_ID, guildId), { body: [] });
-          } catch (e) { /* Ignore access errors */ }
+          } catch {
+            /* Ignore access errors */
+          }
         }
       }
     }
@@ -84,8 +86,8 @@ async function registerCommands(client, slashCommands) {
         }
       } else {
         // Register to ALL Guilds (Not recommended for large bots, but fine for private ones)
-        if (!client.isReady()) await new Promise(r => client.once('ready', r));
-        for (const [guildId, guild] of client.guilds.cache) {
+        if (!client.isReady()) await new Promise((r) => client.once('ready', r));
+        for (const [guildId] of client.guilds.cache) {
           await rest.put(Routes.applicationGuildCommands(config.CLIENT_ID, guildId), { body: slashCommands });
         }
       }

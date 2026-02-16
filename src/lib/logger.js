@@ -10,10 +10,7 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
+      format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
     }),
     // Optional: Save errors to a file
     new winston.transports.File({ filename: 'error.log', level: 'error' }),

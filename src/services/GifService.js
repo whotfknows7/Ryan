@@ -62,13 +62,27 @@ class GifService {
       if (!template) throw new Error(`No template for ${clanCount} clans`);
 
       // EXPECTATION: You must convert the background sequence to a 'template.mp4' for maximum speed
-      const templatePath = path.join(process.cwd(), 'assets', 'gif_templates', String(clanCount), template.name, 'template.mp4');
-      const coordsPath = path.join(process.cwd(), 'assets', 'gif_templates', String(clanCount), template.name, 'coords.json');
+      const templatePath = path.join(
+        process.cwd(),
+        'assets',
+        'gif_templates',
+        String(clanCount),
+        template.name,
+        'template.mp4'
+      );
+      const coordsPath = path.join(
+        process.cwd(),
+        'assets',
+        'gif_templates',
+        String(clanCount),
+        template.name,
+        'coords.json'
+      );
 
       if (!fs.existsSync(coordsPath)) throw new Error('Missing coords.json');
       const coordsData = JSON.parse(fs.readFileSync(coordsPath, 'utf8'));
 
-      const effectiveRoles = (clanCount === 2) ? [clanRoleIds[0]] : clanRoleIds;
+      const effectiveRoles = clanCount === 2 ? [clanRoleIds[0]] : clanRoleIds;
       const iconBuffers = await this.prepareClanIcons(client, effectiveRoles);
       const iconPaths = [];
 
@@ -78,7 +92,9 @@ class GifService {
         if (iconBuffers[i]) {
           await sharp(iconBuffers[i]).toFile(p);
         } else {
-          await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toFile(p);
+          await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+            .png()
+            .toFile(p);
         }
         iconPaths.push(p);
         tempFiles.push(p);
@@ -89,20 +105,20 @@ class GifService {
 
       // Spin up the FFmpeg Worker
       const worker = new Worker(path.join(__dirname, '../workers/gifWorker.js'), {
-        workerData: { templatePath, iconPaths, outputPath, clanCount, coords: coordsData }
+        workerData: { templatePath, iconPaths, outputPath, clanCount, coords: coordsData },
       });
 
       await new Promise((wRes, wErr) => {
-        worker.on('message', m => m.success ? wRes() : wErr(new Error(m.error)));
+        worker.on('message', (m) => (m.success ? wRes() : wErr(new Error(m.error))));
         worker.on('error', wErr);
-        worker.on('exit', c => c !== 0 && wErr(new Error(`Exit ${c}`)));
+        worker.on('exit', (c) => c !== 0 && wErr(new Error(`Exit ${c}`)));
         worker.postMessage({});
       });
 
       // Final optimization with Gifsicle
       const finalPath = path.join(process.cwd(), `final_${Date.now()}.gif`);
       await new Promise((res, rej) => {
-        execFile(gifsicle, ['-O3', '--no-warnings', '-i', outputPath, '-o', finalPath], (e) => e ? rej(e) : res());
+        execFile(gifsicle, ['-O3', '--no-warnings', '-i', outputPath, '-o', finalPath], (e) => (e ? rej(e) : res()));
       });
 
       resolve(finalPath);
@@ -110,7 +126,7 @@ class GifService {
       reject(e);
     } finally {
       // Clean up RAM Disk instantly
-      tempFiles.forEach(f => fs.existsSync(f) && fs.unlinkSync(f));
+      tempFiles.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
     }
   }
 
@@ -129,7 +145,7 @@ class GifService {
           }
         }
         icons.push(null);
-      } catch (e) {
+      } catch {
         icons.push(null);
       }
     }

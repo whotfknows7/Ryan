@@ -6,30 +6,45 @@ const logger = require('../lib/logger');
 const { prisma } = require('../lib/prisma');
 
 class PunishmentService {
-
   static getDurationMs(offences) {
     switch (offences) {
-      case 1: return 30 * 60 * 1000;              // 30 minutes
-      case 2: return 60 * 60 * 1000;              // 1 hour
-      case 3: return 12 * 60 * 60 * 1000;         // 12 hours
-      case 4: return 36 * 60 * 60 * 1000;         // 36 hours
-      case 5: return 7 * 24 * 60 * 60 * 1000;     // 7 days
-      case 6: return 14 * 24 * 60 * 60 * 1000;    // 2 weeks
-      case 7: return 28 * 24 * 60 * 60 * 1000;    // 4 weeks
-      default: return 52 * 7 * 24 * 60 * 60 * 1000; // 1 year
+      case 1:
+        return 30 * 60 * 1000; // 30 minutes
+      case 2:
+        return 60 * 60 * 1000; // 1 hour
+      case 3:
+        return 12 * 60 * 60 * 1000; // 12 hours
+      case 4:
+        return 36 * 60 * 60 * 1000; // 36 hours
+      case 5:
+        return 7 * 24 * 60 * 60 * 1000; // 7 days
+      case 6:
+        return 14 * 24 * 60 * 60 * 1000; // 2 weeks
+      case 7:
+        return 28 * 24 * 60 * 60 * 1000; // 4 weeks
+      default:
+        return 52 * 7 * 24 * 60 * 60 * 1000; // 1 year
     }
   }
 
   static getDurationText(offences) {
     switch (offences) {
-      case 1: return "30 minutes";
-      case 2: return "1 hour";
-      case 3: return "12 hours";
-      case 4: return "36 hours";
-      case 5: return "7 days";
-      case 6: return "2 weeks";
-      case 7: return "4 weeks";
-      default: return "Ban";
+      case 1:
+        return '30 minutes';
+      case 2:
+        return '1 hour';
+      case 3:
+        return '12 hours';
+      case 4:
+        return '36 hours';
+      case 5:
+        return '7 days';
+      case 6:
+        return '2 weeks';
+      case 7:
+        return '4 weeks';
+      default:
+        return 'Ban';
     }
   }
 
@@ -44,9 +59,9 @@ class PunishmentService {
           status: 'jailed',
           punishmentEnd: {
             lte: new Date(),
-            not: null
-          }
-        }
+            not: null,
+          },
+        },
       });
 
       for (const log of expiredLogs) {
@@ -64,12 +79,14 @@ class PunishmentService {
       // [FIX] Use fetch to ensure we find the guild even if not in cache (cold boot)
       // If the bot was kicked from the guild, this will throw.
       guild = await client.guilds.fetch(guildId);
-    } catch (e) {
-      logger.warn(`Could not fetch guild ${guildId} for releaseMember. Bot may have been kicked. Marking as released to stop loop.`);
+    } catch {
+      logger.warn(
+        `Could not fetch guild ${guildId} for releaseMember. Bot may have been kicked. Marking as released to stop loop.`
+      );
       // [FIX] Update DB regardless of Discord status to prevent infinite loop of "checkExpiredPunishments"
       await prisma.jailLog.update({
         where: { guildId_userId: { guildId, userId } },
-        data: { status: 'released' }
+        data: { status: 'released' },
       });
       return;
     }
@@ -80,7 +97,7 @@ class PunishmentService {
       // Update DB to Released
       await prisma.jailLog.update({
         where: { guildId_userId: { guildId, userId } },
-        data: { status: 'released' }
+        data: { status: 'released' },
       });
 
       const ids = await getIds(guildId);
@@ -100,8 +117,12 @@ class PunishmentService {
               const errEmbed = new EmbedBuilder()
                 .setTitle('⚠️ Release Error: Role Removal Failed')
                 .setColor('DarkOrange')
-                .setDescription(`The user <@${userId}> was marked as released in the database, but I could not remove the Ground Role. **Please check my role hierarchy.**`)
-                .setDescription(`The user <@${userId}> was marked as released in the database, but I could not remove the Ground Role. **Please check my role hierarchy.**`)
+                .setDescription(
+                  `The user <@${userId}> was marked as released in the database, but I could not remove the Ground Role. **Please check my role hierarchy.**`
+                )
+                .setDescription(
+                  `The user <@${userId}> was marked as released in the database, but I could not remove the Ground Role. **Please check my role hierarchy.**`
+                )
                 .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
                 .setTimestamp();
               await logChannel.send({ embeds: [errEmbed] });
@@ -134,7 +155,6 @@ class PunishmentService {
       }
 
       logger.info(`Automatically released member ${userId}`);
-
     } catch (error) {
       logger.error(`Failed to release member ${userId}: ${error}`);
     }
@@ -143,13 +163,13 @@ class PunishmentService {
   static async handleMemberJoin(member) {
     try {
       const log = await prisma.jailLog.findUnique({
-        where: { guildId_userId: { guildId: member.guild.id, userId: member.id } }
+        where: { guildId_userId: { guildId: member.guild.id, userId: member.id } },
       });
 
       if (!log || log.status !== 'jailed') return false;
 
       if (log.offences >= 8) {
-        await member.ban({ reason: "Rejoined after reaching 8 offences." });
+        await member.ban({ reason: 'Rejoined after reaching 8 offences.' });
         logger.info(`Banned ${member.user.tag} for reaching 8 offences upon rejoin`);
         return true;
       }
@@ -167,7 +187,7 @@ class PunishmentService {
 
       await prisma.jailLog.update({
         where: { guildId_userId: { guildId: member.guild.id, userId: member.id } },
-        data: { punishmentEnd: newEnd }
+        data: { punishmentEnd: newEnd },
       });
 
       if (jailChannelId) {
@@ -183,13 +203,13 @@ class PunishmentService {
         const logChannel = member.guild.channels.cache.get(logsChannelId);
         if (logChannel) {
           const embed = new EmbedBuilder()
-            .setTitle("Member Grounded (Rejoined)")
-            .setColor("Red")
+            .setTitle('Member Grounded (Rejoined)')
+            .setColor('Red')
             .setThumbnail(member.user.displayAvatarURL())
             .addFields(
-              { name: "Member", value: `${member} (${member.user.username})`, inline: true },
-              { name: "Offences", value: `${log.offences}`, inline: true },
-              { name: "Action", value: "Re-jailed for evasion", inline: false }
+              { name: 'Member', value: `${member} (${member.user.username})`, inline: true },
+              { name: 'Offences', value: `${log.offences}`, inline: true },
+              { name: 'Action', value: 'Re-jailed for evasion', inline: false }
             )
             .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
             .setTimestamp();
@@ -199,7 +219,6 @@ class PunishmentService {
 
       logger.info(`Re-jailed ${member.user.tag} for evasion attempt`);
       return true;
-
     } catch (error) {
       logger.error('Error in handleMemberJoin:', error);
       return false;
@@ -211,15 +230,13 @@ class PunishmentService {
 
     try {
       const log = await prisma.jailLog.findUnique({
-        where: { guildId_userId: { guildId, userId: member.id } }
+        where: { guildId_userId: { guildId, userId: member.id } },
       });
 
       if (log && log.status === 'jailed') {
         const ids = await getIds(guildId);
         const logsChannelId = ids.logsChannelId;
-        const logChannel = logsChannelId
-          ? member.guild.channels.cache.get(logsChannelId)
-          : null;
+        const logChannel = logsChannelId ? member.guild.channels.cache.get(logsChannelId) : null;
 
         const newOffences = log.offences + 1;
         const userTag = member.user?.tag || `User ${member.id}`;
@@ -228,7 +245,7 @@ class PunishmentService {
         if (newOffences >= 8) {
           try {
             await member.guild.members.ban(member.id, {
-              reason: "Reached 8 offences upon leaving."
+              reason: 'Reached 8 offences upon leaving.',
             });
 
             await prisma.jailLog.update({
@@ -236,17 +253,17 @@ class PunishmentService {
               data: {
                 status: 'jailed',
                 offences: newOffences,
-                punishmentEnd: null
-              }
+                punishmentEnd: null,
+              },
             });
 
             if (logChannel) {
               const embed = new EmbedBuilder()
-                .setTitle("Member Banned")
-                .setColor("DarkRed")
+                .setTitle('Member Banned')
+                .setColor('DarkRed')
                 .addFields(
-                  { name: "Member", value: `${userTag}`, inline: false },
-                  { name: "Reason", value: "Reached 8 offences upon leaving", inline: false }
+                  { name: 'Member', value: `${userTag}`, inline: false },
+                  { name: 'Reason', value: 'Reached 8 offences upon leaving', inline: false }
                 )
                 .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
                 .setTimestamp();
@@ -262,18 +279,18 @@ class PunishmentService {
             where: { guildId_userId: { guildId, userId: member.id } },
             data: {
               offences: newOffences,
-              punishmentEnd: null
-            }
+              punishmentEnd: null,
+            },
           });
 
           if (logChannel) {
             const embed = new EmbedBuilder()
-              .setTitle("Member Left While Jailed")
-              .setColor("Orange")
+              .setTitle('Member Left While Jailed')
+              .setColor('Orange')
               .addFields(
-                { name: "Member", value: `${userTag}`, inline: false },
-                { name: "New Offence Count", value: `${newOffences}`, inline: false },
-                { name: "Penalty", value: "Offence increased. Timer paused until rejoin.", inline: false }
+                { name: 'Member', value: `${userTag}`, inline: false },
+                { name: 'New Offence Count', value: `${newOffences}`, inline: false },
+                { name: 'Penalty', value: 'Offence increased. Timer paused until rejoin.', inline: false }
               )
               .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
               .setTimestamp();

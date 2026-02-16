@@ -12,7 +12,7 @@ class ConfigService {
     await prisma.guildConfig.update({
       where: { guildId },
       data: {
-        [key]: value
+        [key]: value,
       },
     });
   }
@@ -29,7 +29,7 @@ class ConfigService {
       channelId: raw.channelId || raw.channel_id,
       isClanRole: raw.isClanRole ?? raw.is_clan_role ?? false,
       uniqueRoles: raw.uniqueRoles ?? raw.unique_roles ?? false,
-      linkedMessageIds: raw.linkedMessageIds || raw.linked_message_ids
+      linkedMessageIds: raw.linkedMessageIds || raw.linked_message_ids,
     };
   }
 
@@ -55,7 +55,7 @@ class ConfigService {
 
   static async getJailLog(guildId, userId) {
     return await prisma.jailLog.findUnique({
-      where: { guildId_userId: { guildId, userId } }
+      where: { guildId_userId: { guildId, userId } },
     });
   }
 
@@ -78,7 +78,7 @@ class ConfigService {
         punishmentEnd: log.punishmentEnd ? log.punishmentEnd.toISOString() : null,
         messageId: log.messageId || undefined,
         caseId: log.caseId || undefined,
-        votes: log.votes
+        votes: log.votes,
       };
     }
     return logsDict;
@@ -96,7 +96,7 @@ class ConfigService {
         punishmentEnd: data.punishmentEnd ? new Date(data.punishmentEnd) : null,
         messageId: data.messageId,
         caseId: data.caseId,
-        votes: data.votes
+        votes: data.votes,
       });
     }
   }
@@ -114,7 +114,7 @@ class ConfigService {
         punishmentEnd: data.punishmentEnd,
         messageId: data.messageId,
         caseId: data.caseId,
-        votes: data.votes ?? []
+        votes: data.votes ?? [],
       },
       update: {
         username: data.username,
@@ -123,8 +123,8 @@ class ConfigService {
         punishmentEnd: data.punishmentEnd,
         messageId: data.messageId,
         caseId: data.caseId,
-        votes: data.votes
-      }
+        votes: data.votes,
+      },
     });
   }
 
@@ -147,8 +147,8 @@ class ConfigService {
     return await prisma.jailLog.update({
       where: { guildId_userId: { guildId, userId } },
       data: {
-        votes: [...currentVotes, voterId]
-      }
+        votes: [...currentVotes, voterId],
+      },
     });
   }
 
@@ -176,7 +176,7 @@ class ConfigService {
   static async clearVotes(guildId, userId) {
     await prisma.jailLog.update({
       where: { guildId_userId: { guildId, userId } },
-      data: { votes: [] }
+      data: { votes: [] },
     });
   }
 
@@ -240,7 +240,7 @@ class ConfigService {
     return await prisma.$transaction(async (tx) => {
       const guildConfig = await tx.guildConfig.findUnique({
         where: { guildId },
-        select: { config: true }
+        select: { config: true },
       });
 
       let currentConfig = guildConfig?.config || {};
@@ -253,7 +253,7 @@ class ConfigService {
 
       await tx.guildConfig.update({
         where: { guildId },
-        data: { config: currentConfig }
+        data: { config: currentConfig },
       });
 
       return nextCount;

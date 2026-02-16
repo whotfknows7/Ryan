@@ -12,13 +12,9 @@ const envSchema = z.object({
     .string({ required_error: 'Missing DISCORD_BOT_TOKEN' })
     .min(1, 'DISCORD_BOT_TOKEN cannot be empty'),
 
-  CLIENT_ID: z
-    .string({ required_error: 'Missing CLIENT_ID' })
-    .min(1, 'CLIENT_ID cannot be empty'),
+  CLIENT_ID: z.string({ required_error: 'Missing CLIENT_ID' }).min(1, 'CLIENT_ID cannot be empty'),
 
-  DATABASE_URL: z
-    .string({ required_error: 'Missing DATABASE_URL' })
-    .min(1, 'DATABASE_URL cannot be empty'),
+  DATABASE_URL: z.string({ required_error: 'Missing DATABASE_URL' }).min(1, 'DATABASE_URL cannot be empty'),
 
   REGISTER_COMMANDS_GLOBALLY: z
     .string()
@@ -37,9 +33,7 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  const formatted = parsed.error.issues
-    .map((issue) => `  ✗ ${issue.path.join('.')}: ${issue.message}`)
-    .join('\n');
+  const formatted = parsed.error.issues.map((issue) => `  ✗ ${issue.path.join('.')}: ${issue.message}`).join('\n');
   console.error('❌ Invalid environment variables:\n' + formatted);
   process.exit(1);
 }

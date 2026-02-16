@@ -3,23 +3,17 @@ const { AssetService } = require('../../services/AssetService');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { getIds } = require('../../utils/GuildIdsHelper');
 
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-clan-icon')
     .setDescription('Set the Emoji and Icon for a Clan')
-    .addRoleOption(option =>
-      option.setName('role')
-        .setDescription('The Clan Role')
-        .setRequired(true))
-    .addStringOption(option =>
-      option.setName('emoji')
-        .setDescription('The External Emoji String (e.g. <:icon:123456>)')
-        .setRequired(true))
-    .addAttachmentOption(option =>
-      option.setName('icon')
-        .setDescription('The PNG Icon File (Transparent Background)')
-        .setRequired(true)),
+    .addRoleOption((option) => option.setName('role').setDescription('The Clan Role').setRequired(true))
+    .addStringOption((option) =>
+      option.setName('emoji').setDescription('The External Emoji String (e.g. <:icon:123456>)').setRequired(true)
+    )
+    .addAttachmentOption((option) =>
+      option.setName('icon').setDescription('The PNG Icon File (Transparent Background)').setRequired(true)
+    ),
 
   async execute(interaction) {
     if (!interaction.member.permissions.has('Administrator')) {
@@ -59,7 +53,7 @@ module.exports = {
         `Icon for Clan ${clanId} (${role.name})`
       );
 
-      if (!persistentUrl) throw new Error("Failed to store icon in Dev Channel.");
+      if (!persistentUrl) throw new Error('Failed to store icon in Dev Channel.');
 
       // 3. Update Database
       await Promise.all([
@@ -67,12 +61,7 @@ module.exports = {
         DatabaseService.setClanAsset(interaction.guildId, role.id, persistentUrl),
 
         // Store Emoji String for Webhooks
-        DatabaseService.atomicJsonSetPath(
-          interaction.guildId,
-          'clans',
-          [clanId.toString(), 'emoji'],
-          emoji
-        )
+        DatabaseService.atomicJsonSetPath(interaction.guildId, 'clans', [clanId.toString(), 'emoji'], emoji),
       ]);
 
       // 4. Success Response
@@ -80,13 +69,12 @@ module.exports = {
         .setTitle(`✅ Clan ${clanId} Updated`)
         .setDescription(`**Role:** ${role}\n**Emoji:** ${emoji}\n**Icon:** Saved for Animations`)
         .setThumbnail(iconAttachment.url)
-        .setColor(role.color || 0x00FF00);
+        .setColor(role.color || 0x00ff00);
 
       await interaction.editReply({ embeds: [embed] });
-
     } catch (error) {
       console.error(error);
       await interaction.editReply(`❌ Failed: ${error.message}`);
     }
-  }
+  },
 };

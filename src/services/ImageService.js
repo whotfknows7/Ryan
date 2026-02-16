@@ -26,7 +26,6 @@ if (!fs.existsSync(ROLE_TEMPLATE_PATH)) {
 }
 
 class ImageService {
-
   constructor() {
     // Rust renderer URL for rank cards
     // [FIX] Ensure this matches your Docker/Localhost setup
@@ -46,7 +45,7 @@ class ImageService {
       return Buffer.from(arrayBuffer).toString('base64');
     } catch (error) {
       console.error(`Failed to convert image to base64: ${url}`, error.message);
-      return "";
+      return '';
     }
   }
 
@@ -64,7 +63,7 @@ class ImageService {
         rank: data.rank,
         level: data.level,
         hex_color: data.hexColor,
-        badge_urls: data.badgeUrls || []
+        badge_urls: data.badgeUrls || [],
       };
 
       // 3. Call Rust Renderer
@@ -73,13 +72,12 @@ class ImageService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!response.ok) throw new Error(`Renderer HTTP error! status: ${response.status}`);
 
       return Buffer.from(await response.arrayBuffer());
-
     } catch (error) {
       // [FIX] Improved error logging to see WHY it failed
       if (error.code === 'ECONNREFUSED') {
@@ -87,7 +85,7 @@ class ImageService {
       } else {
         console.error('Rank Card Generation Failed:', error.message);
       }
-      throw new Error('Failed to generate rank card via Rust service.');
+      throw new Error('Failed to generate rank card via Rust service.', { cause: error });
     }
   }
 
@@ -98,15 +96,12 @@ class ImageService {
   async loadFont() {
     if (cachedFont) return cachedFont;
 
-    const fontDirs = [
-      path.join(ASSETS_DIR, 'font'),
-      path.join(ASSETS_DIR, 'fonts')
-    ];
+    const fontDirs = [path.join(ASSETS_DIR, 'font'), path.join(ASSETS_DIR, 'fonts')];
 
     for (const fontDir of fontDirs) {
       if (fs.existsSync(fontDir)) {
         const files = fs.readdirSync(fontDir);
-        const fontFile = files.find(f => f.toLowerCase().endsWith('.ttf'));
+        const fontFile = files.find((f) => f.toLowerCase().endsWith('.ttf'));
 
         if (fontFile) {
           const fullPath = path.join(fontDir, fontFile);
@@ -125,7 +120,7 @@ class ImageService {
     const font = await this.loadFont();
 
     const width = 800;
-    const height = (users.length * 60) + 20;
+    const height = users.length * 60 + 20;
 
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
@@ -134,7 +129,7 @@ class ImageService {
 
     if (users.length === 0) {
       canvas.height = 100;
-      this.renderOpenTypeText(ctx, font, "No-one is yapping right now...", 10, 60, 30);
+      this.renderOpenTypeText(ctx, font, 'No-one is yapping right now...', 10, 60, 30);
       return canvas.toBuffer('image/png');
     }
 
@@ -148,7 +143,7 @@ class ImageService {
     };
 
     // Pre-fetch all avatars in parallel (Optimization)
-    const avatarPromises = users.map(user => {
+    const avatarPromises = users.map((user) => {
       const url = user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
       return this.fetchImage(url).catch(() => null);
     });
@@ -170,7 +165,7 @@ class ImageService {
 
       ctx.fillStyle = bgColor;
       ctx.beginPath();
-      ctx.roundRect(padding, yPosition, width - (padding * 2), 57, 10);
+      ctx.roundRect(padding, yPosition, width - padding * 2, 57, 10);
       ctx.fill();
 
       if (avatarImage) {
@@ -197,13 +192,21 @@ class ImageService {
       const rankEndX = this.renderOpenTypeText(ctx, font, rankText, rankX, textBaselineY, fontSize);
 
       const separatorX = rankEndX + 12;
-      const sep1EndX = this.renderOpenTypeText(ctx, font, "|", separatorX, textBaselineY, fontSize);
+      const sep1EndX = this.renderOpenTypeText(ctx, font, '|', separatorX, textBaselineY, fontSize);
 
       const nameStartX = sep1EndX + 12;
-      const nameEndX = await this.renderNameWithEmojis(ctx, font, user.username, nameStartX, textBaselineY, fontSize, 440);
+      const nameEndX = await this.renderNameWithEmojis(
+        ctx,
+        font,
+        user.username,
+        nameStartX,
+        textBaselineY,
+        fontSize,
+        440
+      );
 
       const sep2X = nameEndX + 8;
-      const sep2EndX = this.renderOpenTypeText(ctx, font, "|", sep2X, textBaselineY, fontSize);
+      const sep2EndX = this.renderOpenTypeText(ctx, font, '|', sep2X, textBaselineY, fontSize);
 
       const xpText = `XP: ${this.formatPoints(user.xp)} pts`;
       const xpX = sep2EndX + 12;
@@ -366,7 +369,10 @@ class ImageService {
   }
 
   async renderNameWithEmojis(ctx, font, text, x, y, fontSize, maxWidth) {
-    const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}]/gu;
+    /* eslint-disable no-misleading-character-class */
+    const emojiRegex =
+      /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}]/gu;
+    /* eslint-enable no-misleading-character-class */
 
     const textPart = text.replace(emojiRegex, '').trim();
     const emojis = text.match(emojiRegex) || [];
@@ -404,14 +410,14 @@ class ImageService {
       const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await loadImage(Buffer.from(await response.arrayBuffer()));
-    } catch (e) {
+    } catch {
       console.warn(`[ImageService] Failed to fetch image: ${url}`);
       throw new Error(`Failed to load image from ${url}`);
     }
   }
 
   async fetchEmojiImage(char) {
-    const hex = [...char].map(c => c.codePointAt(0).toString(16)).join('-');
+    const hex = [...char].map((c) => c.codePointAt(0).toString(16)).join('-');
     if (!hex) return null;
 
     const filePath = path.join(EMOJI_DIR, `${hex}.png`);
@@ -430,7 +436,7 @@ class ImageService {
       fs.writeFileSync(filePath, buffer);
 
       return await loadImage(buffer);
-    } catch (e) {
+    } catch {
       console.warn(`[ImageService] Failed to fetch emoji: ${char} (${hex})`);
       return null;
     }

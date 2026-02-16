@@ -1,6 +1,9 @@
 // src/handlers/InteractionHandler.js
 
-const { EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+const {
+  EmbedBuilder,
+  MessageFlags,
+} = require('discord.js');
 const logger = require('../lib/logger');
 const { CustomRoleService } = require('../services/CustomRoleService');
 const { ConfigService } = require('../services/ConfigService');
@@ -19,7 +22,7 @@ const handleInteraction = async (interaction) => {
     if (cooldown.onCooldown) {
       return interaction.reply({
         content: `Please wait ${cooldown.timeLeft.toFixed(1)} more second(s) before reusing the \`${command.data.name}\` command.`,
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -32,7 +35,9 @@ const handleInteraction = async (interaction) => {
       try {
         if (interaction.replied || interaction.deferred) await interaction.followUp(payload);
         else await interaction.reply(payload);
-      } catch (e) { /* ignore secondary error */ }
+      } catch {
+        /* ignore secondary error */
+      }
     }
     return;
   }
@@ -79,12 +84,7 @@ const handleInteraction = async (interaction) => {
           // Import service inside method to avoid circular deps if needed, or stick to top-level if safe.
           const { LeaderboardCleanupService } = require('../services/LeaderboardCleanupService');
 
-          await LeaderboardCleanupService.addLeaderboard(
-            guildId,
-            msg.channelId,
-            msg.id,
-            msg.url
-          );
+          await LeaderboardCleanupService.addLeaderboard(guildId, msg.channelId, msg.id, msg.url);
         } catch (e) {
           logger.error('Failed to register leaderboard for cleanup:', e);
         }
@@ -108,14 +108,20 @@ const handleInteraction = async (interaction) => {
           // Main LB click -> Ephemeral Reply
           await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           const payload = await LeaderboardUpdateService.generateLeaderboardPayload(
-            guild, type, targetPage, highlightUserId
+            guild,
+            type,
+            targetPage,
+            highlightUserId
           );
           return interaction.editReply(payload);
         } else {
           // Inside "Me" view or other ephemeral view -> Update In Place
           await interaction.deferUpdate();
           const payload = await LeaderboardUpdateService.generateLeaderboardPayload(
-            guild, type, targetPage, highlightUserId
+            guild,
+            type,
+            targetPage,
+            highlightUserId
           );
           return interaction.editReply(payload);
         }
@@ -131,22 +137,34 @@ const handleInteraction = async (interaction) => {
         const log = await ConfigService.getJailLog(guildId, targetUserId);
 
         if (!log) {
-          return interaction.reply({ content: '❌ Member is not currently in the system.', flags: MessageFlags.Ephemeral });
+          return interaction.reply({
+            content: '❌ Member is not currently in the system.',
+            flags: MessageFlags.Ephemeral,
+          });
         }
 
         // 2. Validate Case ID (if button has one)
         if (buttonCaseId && log.caseId !== buttonCaseId) {
-          return interaction.reply({ content: '❌ This vote is for a previous/different case.', flags: MessageFlags.Ephemeral });
+          return interaction.reply({
+            content: '❌ This vote is for a previous/different case.',
+            flags: MessageFlags.Ephemeral,
+          });
         }
 
         // 3. Validate Status
         if (log.status !== 'jailed') {
-          return interaction.reply({ content: '❌ Member is already released or not jailed.', flags: MessageFlags.Ephemeral });
+          return interaction.reply({
+            content: '❌ Member is already released or not jailed.',
+            flags: MessageFlags.Ephemeral,
+          });
         }
 
         // 4. Validate Ban (Offences >= 8)
         if (log.offences >= 8) {
-          return interaction.reply({ content: '❌ Voting is disabled for banned members.', flags: MessageFlags.Ephemeral });
+          return interaction.reply({
+            content: '❌ Voting is disabled for banned members.',
+            flags: MessageFlags.Ephemeral,
+          });
         }
 
         const hasVoted = await ConfigService.hasVoted(guildId, targetUserId, voterId);
@@ -168,7 +186,10 @@ const handleInteraction = async (interaction) => {
         const ids = await getIds(guildId);
         if (ids.logsChannelId) {
           const logChannel = guild.channels.cache.get(ids.logsChannelId);
-          if (logChannel) await logChannel.send(`🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Case ID: ${caseId}, Total: ${voteCount})`);
+          if (logChannel)
+            await logChannel.send(
+              `🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Case ID: ${caseId}, Total: ${voteCount})`
+            );
         }
         return;
       }
@@ -179,20 +200,20 @@ const handleInteraction = async (interaction) => {
         await interaction.deferUpdate();
         await CustomRoleService.approveRoleRequest(guild, user, requestId);
         const newEmbed = new EmbedBuilder(interaction.message.embeds[0].data)
-          .setColor(0x00FF00).setTitle('✅ Request Approved')
+          .setColor(0x00ff00)
+          .setTitle('✅ Request Approved')
           .addFields({ name: 'Approved By', value: user.toString(), inline: true });
         return interaction.editReply({ embeds: [newEmbed], components: [] });
-      }
-      else if (customId.startsWith('custom_role_deny_')) {
+      } else if (customId.startsWith('custom_role_deny_')) {
         const requestId = customId.replace('custom_role_deny_', '');
         await interaction.deferUpdate();
         await CustomRoleService.denyRoleRequest(guildId, requestId);
         const newEmbed = new EmbedBuilder(interaction.message.embeds[0].data)
-          .setColor(0xFF0000).setTitle('❌ Request Denied')
+          .setColor(0xff0000)
+          .setTitle('❌ Request Denied')
           .addFields({ name: 'Denied By', value: user.toString(), inline: true });
         return interaction.editReply({ embeds: [newEmbed], components: [] });
       }
-
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };

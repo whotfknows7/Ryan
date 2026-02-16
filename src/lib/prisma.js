@@ -12,7 +12,7 @@ const pool = new Pool({
   ssl: needsSSL ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: 30000,
   idleTimeoutMillis: 60000,
-  max: 30
+  max: 30,
 });
 
 const adapter = new PrismaPg(pool);
