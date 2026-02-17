@@ -1,6 +1,7 @@
 // src/services/ConfigService.js
 
 const { prisma } = require('../lib/prisma');
+const { Prisma } = require('@prisma/client');
 const { DatabaseService } = require('./DatabaseService');
 
 class ConfigService {

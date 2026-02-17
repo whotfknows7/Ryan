@@ -10,18 +10,43 @@ const logger = require('../lib/logger');
 // CRITICAL: This variable must be defined HERE (Top Level Scope)
 // =================================================================
 const previousTopUsersJSON = new Map();
+const updatingGuilds = new Set();
+const lastUpdateTimes = new Map();
+const tempLeaderboards = new Map(); // guildId -> messageId (for Weekly/Lifetime views)
 
 class LeaderboardUpdateService {
   static async updateLiveLeaderboard(client) {
+    logger.debug('Starting updateLiveLeaderboard...');
     for (const [guildId, guild] of client.guilds.cache) {
+      // 0. Concurrency Lock & Rate Limit
+      if (updatingGuilds.has(guildId)) {
+        logger.warn(`[${guildId}] Leaderboard update skipped: Already in progress.`);
+        continue;
+      }
+
+      // THROTTLE: Don't update more than once every 15 seconds per guild
+      const lastUpdate = lastUpdateTimes.get(guildId) || 0;
+      if (Date.now() - lastUpdate < 15000) {
+        // logger.debug(`[${guildId}] Throttled.`);
+        continue;
+      }
+
+      updatingGuilds.add(guildId);
+
       try {
         const ids = await getIds(guildId);
         const channelId = ids.leaderboardChannelId;
 
-        if (!channelId) continue;
+        if (!channelId) {
+          logger.debug(`[${guildId}] No leaderboard channel configured.`);
+          continue;
+        }
 
         const channel = guild.channels.cache.get(channelId);
-        if (!channel?.isTextBased()) continue;
+        if (!channel?.isTextBased()) {
+          logger.debug(`[${guildId}] Leaderboard channel not found or not text-based.`);
+          continue;
+        }
 
         // 1. Fetch Top 10 for display (Fast)
         const topUsers = await DatabaseService.fetchTopUsers(guildId, 10, 'daily');
@@ -31,31 +56,71 @@ class LeaderboardUpdateService {
 
         // Check map existence safely
         if (previousTopUsersJSON.has(guildId) && currentJSON === previousTopUsersJSON.get(guildId)) {
+          // Even if content didn't change, we might want to ensure the message exists?
+          // But strict optimization says skip.
+          logger.debug(`[${guildId}] Leaderboard data unchanged. Skipping.`);
           continue;
         }
 
-        // logger.info(`Updating leaderboard for guild ${guildId}...`);
+        logger.info(`Updating leaderboard for guild ${guildId}... (Data changed)`);
 
         // 2. Generate Payload
         // logger.info(`[${guildId}] Generating payload...`);
         const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true);
         // logger.info(`[${guildId}] Payload generated.`);
 
-        // 3. Delete Old Message & Send New
+        // 3. Scan & Clean Old Leaderboards (Fix for Glitch/Restarts)
+        try {
+          // Fetch last 50 messages to find any previous leaderboards sent by me
+          const messages = await channel.messages.fetch({ limit: 50 });
+          const leaderboardTitles = ['Yappers of the day!', 'Yappers of the week!', 'All-time Yappers!'];
+
+          const currentTempId = tempLeaderboards.get(guildId);
+          const currentMainId = ids.dailyLeaderboardMessageId;
+
+          const messagesToDelete = messages.filter((msg) => {
+            // Must be sent by me
+            if (msg.author.id !== client.user.id) return false;
+
+            // PROTECT: Do not delete the active Temporary Leaderboard (Weekly/Lifetime)
+            if (currentTempId && msg.id === currentTempId) return false;
+
+            // PROTECT: Do not delete the active Main Leaderboard (Daily) - We handle this explicitly below
+            if (currentMainId && msg.id === currentMainId) return false;
+
+            // Must have an embed with a matching title
+            if (msg.embeds.length > 0 && leaderboardTitles.includes(msg.embeds[0].title)) return true;
+            return false;
+          });
+
+          if (messagesToDelete.size > 0) {
+            logger.info(`[${guildId}] Found ${messagesToDelete.size} old leaderboard messages. Cleaning up...`);
+            await channel.bulkDelete(messagesToDelete).catch((err) => {
+              // Fallback if bulk delete fails (e.g. messages older than 14 days)
+              logger.warn(`[${guildId}] Bulk delete failed: ${err.message}. Trying individual delete...`);
+              messagesToDelete.forEach((msg) => msg.delete().catch(() => { }));
+            });
+          } else {
+            logger.debug(`[${guildId}] No old leaderboard messages found to clean.`);
+          }
+        } catch (e) {
+          logger.warn(`[${guildId}] Failed to cleanup old leaderboards: ${e.message}`);
+        }
+
+        // 4. Double-Check DB ID (In case it wasn't in the last 50 messages)
         if (ids.dailyLeaderboardMessageId) {
           try {
-            logger.debug(`[${guildId}] Fetching old message ${ids.dailyLeaderboardMessageId}...`);
             const oldMsg = await channel.messages.fetch(ids.dailyLeaderboardMessageId).catch(() => null);
             if (oldMsg) {
-              logger.debug(`[${guildId}] Deleting old message...`);
+              logger.debug(`[${guildId}] Deleting tracked old message (DB ID)...`);
               await oldMsg.delete();
             }
-          } catch (e) {
-            logger.warn(`[${guildId}] Failed to delete old message: ${e.message}`);
+          } catch {
+            // Ignore valid errors like "Unknown Message"
           }
         }
 
-        // logger.info(`[${guildId}] Sending new leaderboard message...`);
+        logger.info(`[${guildId}] Sending new leaderboard message...`);
 
         // Retry logic for unstable connections
         let newMessage;
@@ -77,6 +142,7 @@ class LeaderboardUpdateService {
 
         // Update State
         previousTopUsersJSON.set(guildId, currentJSON);
+        lastUpdateTimes.set(guildId, Date.now());
         await DatabaseService.updateGuildIds(guildId, { dailyLeaderboardMessageId: newMessage.id });
         clearCache(guildId);
       } catch (e) {
@@ -84,6 +150,8 @@ class LeaderboardUpdateService {
         if (e.name === 'AbortError' || e.code === 'UND_ERR_SOCKET') {
           logger.error(`[${guildId}] Network/Socket Error detected. Request failed.`);
         }
+      } finally {
+        updatingGuilds.delete(guildId);
       }
     }
   }
@@ -195,4 +263,4 @@ class LeaderboardUpdateService {
   }
 }
 
-module.exports = { LeaderboardUpdateService };
+module.exports = { LeaderboardUpdateService, tempLeaderboards };

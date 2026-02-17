@@ -50,7 +50,15 @@ const handleInteraction = async (interaction) => {
         const parts = customId.split(':');
         const type = parts[1] || 'daily';
 
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        } catch (e) {
+          if (e.code === 10062) {
+            logger.warn(`[Interaction] Unknown interaction (timeout): ${customId}`);
+            return;
+          }
+          throw e;
+        }
 
         // 1. Get exact rank for this type
         const rank = await DatabaseService.getUserRank(guildId, user.id, type);
@@ -71,20 +79,34 @@ const handleInteraction = async (interaction) => {
       // --- VIEW SWITCHER (WEEKLY / ALL-TIME) ---
       if (customId.startsWith('leaderboard_view:')) {
         const type = customId.split(':')[1]; // 'weekly' or 'lifetime'
-        await interaction.deferReply();
+        try {
+          await interaction.deferReply(); // Public
+        } catch (e) {
+          if (e.code === 10062) {
+            logger.warn(`[Interaction] Unkown interaction (timeout): ${customId}`);
+            return;
+          }
+          throw e; // Rethrow other errors
+        }
+
+        const { tempLeaderboards } = require('../services/LeaderboardUpdateService');
+
+        // Delete previous temp leaderboard if exists
+        const prevTempId = tempLeaderboards.get(guildId);
+        if (prevTempId) {
+          try {
+            const previousMsg = await interaction.channel.messages.fetch(prevTempId).catch(() => null);
+            if (previousMsg) await previousMsg.delete();
+          } catch (e) {
+            logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
+          }
+        }
 
         const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1);
         const msg = await interaction.editReply(payload);
 
-        // Create persistent leaderboard record (Deleted after 5 mins)
-        try {
-          // Import service inside method to avoid circular deps if needed, or stick to top-level if safe.
-          const { LeaderboardCleanupService } = require('../services/LeaderboardCleanupService');
-
-          await LeaderboardCleanupService.addLeaderboard(guildId, msg.channelId, msg.id, msg.url);
-        } catch (e) {
-          logger.error('Failed to register leaderboard for cleanup:', e);
-        }
+        // Store new temp ID
+        tempLeaderboards.set(guildId, msg.id);
 
         return;
       }
