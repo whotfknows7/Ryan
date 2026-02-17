@@ -165,7 +165,7 @@ class ReactionHandler {
         if (clan.roleId) {
           try {
             await member.roles.remove(clan.roleId, 'Clan Cleanup (Stateless)');
-          } catch { }
+          } catch { /* best-effort */ }
         }
 
         // Blind Remove Reaction
@@ -229,9 +229,9 @@ class ReactionHandler {
 
             // Fix Reactions for incorrect clans
             try {
-              const clanMsg = await guild.channels.fetch(guildIds.clanChannelId) // Assuming checks are in clan channel?
-                .then(ch => ch.messages.fetch(guildIds.clanMessageId))
-                .catch(() => null);
+              // const clanMsg = await guild.channels.fetch(guildIds.clanChannelId) // Assuming checks are in clan channel?
+              //   .then(ch => ch.messages.fetch(guildIds.clanMessageId))
+              //   .catch(() => null);
 
               // Actually we have the message ID from the reaction passed in, or we can fetch via config if needed.
               // But inside setTimeout `reaction.message` might be stale/gone from cache?
@@ -251,7 +251,7 @@ class ReactionHandler {
                   }
                 }
               }
-            } catch (e) {
+            } catch {
               // Ignore reaction fix errors
             }
           }

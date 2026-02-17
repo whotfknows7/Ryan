@@ -6,7 +6,7 @@ const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
-const { createGuildHelper, getIds } = require('../utils/GuildIdsHelper');
+const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 const emojiRegex = require('emoji-regex');
 const { EmbedBuilder } = require('discord.js');
@@ -17,7 +17,6 @@ const { EmbedBuilder } = require('discord.js');
 
 const URL_REGEX = /http[s]?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+/g;
 const EMOJI_REACTION_DELAY = 500;
-const ROLE_SKIP_CHECK_LOG_LEVEL = 'debug';
 
 // ============================================================================
 // XP Calculation Utilities

@@ -56,7 +56,7 @@ class XpSyncService {
             // Rename is atomic. If key missing (already processed), it throws, which we catch.
             try {
                 await defaultRedis.rename(key, tempKey);
-            } catch (e) {
+            } catch {
                 // Key likely didn't exist or was just processed
                 return;
             }

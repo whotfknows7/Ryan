@@ -1,5 +1,4 @@
 const { DatabaseService } = require('./DatabaseService');
-const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 
 class WeeklyRoleService {

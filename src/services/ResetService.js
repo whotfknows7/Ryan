@@ -211,7 +211,7 @@ class ResetService {
    * We no longer sync from Roles -> DB. The DB is now the source of truth for Clan IDs.
    * ReactionHandler updates DB on every change.
    */
-  static async calculateClanUpdates(client, guildId) {
+  static async calculateClanUpdates() {
     return [];
   }
 
