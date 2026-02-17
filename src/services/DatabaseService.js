@@ -75,7 +75,7 @@ class DatabaseService {
     // These are *increments* to the existing values.
 
     return await prisma.$transaction(
-      updates.map(u =>
+      updates.map((u) =>
         prisma.userXp.upsert({
           where: { guildId_userId: { guildId, userId: u.userId } },
           create: {
@@ -126,7 +126,7 @@ class DatabaseService {
   static async getLiveUserStats(guildId, userId) {
     const [dbStats, redisDelta] = await Promise.all([
       this.getUserStats(guildId, userId),
-      defaultRedis.hget(`xp_buffer:${guildId}`, userId)
+      defaultRedis.hget(`xp_buffer:${guildId}`, userId),
     ]);
 
     const delta = redisDelta ? parseInt(redisDelta, 10) : 0;
@@ -135,7 +135,7 @@ class DatabaseService {
       ...dbStats,
       xp: (dbStats.xp || 0) + delta,
       dailyXp: (dbStats.dailyXp || 0) + delta,
-      weeklyXp: (dbStats.weeklyXp || 0) + delta
+      weeklyXp: (dbStats.weeklyXp || 0) + delta,
     };
   }
 
@@ -337,11 +337,11 @@ class DatabaseService {
     if (clanUpdates.length === 0) return;
 
     // 1. Reset clanId for all users in the guild first (optional, but safer to ensure no stale clans)
-    // Or efficiently, just update the ones we know about. 
+    // Or efficiently, just update the ones we know about.
     // Ideally, we want to set clanId = null for everyone, and then set it for the active ones.
     // But since this runs frequently or on reset, let's just update the ones found.
     // Actually, if a user leaves a clan, they won't be in clanUpdates.
-    // So we should probably set all clanId to 0 (or null) for the guild first? 
+    // So we should probably set all clanId to 0 (or null) for the guild first?
     // Or we can just update the ones we have.
     // "make sure that a user can have 1+ guilds and different clans in different guilds" -> schema handles this via composite key/guildId.
 
@@ -349,7 +349,7 @@ class DatabaseService {
     // 1. Set clanId = 0 for all users in this guild (assuming 0 means no clan)
     await prisma.userXp.updateMany({
       where: { guildId },
-      data: { clanId: 0 }
+      data: { clanId: 0 },
     });
 
     // 2. Bulk update is tricky in Prisma without raw query for different values.
@@ -358,10 +358,10 @@ class DatabaseService {
     // But since this is a background job usually, loop is fine for now or we can use a raw query case statement.
 
     // Let's use a loop with parallel promises for now, or transaction.
-    const updates = clanUpdates.map(u =>
+    const updates = clanUpdates.map((u) =>
       prisma.userXp.updateMany({
         where: { guildId, userId: u.userId },
-        data: { clanId: u.clanId }
+        data: { clanId: u.clanId },
       })
     );
 
@@ -376,7 +376,7 @@ class DatabaseService {
   static async setUserClan(guildId, userId, clanId) {
     return await prisma.userXp.updateMany({
       where: { guildId, userId },
-      data: { clanId }
+      data: { clanId },
     });
   }
 
@@ -494,7 +494,7 @@ class DatabaseService {
       by: ['clanId'],
       where: {
         guildId,
-        clanId: { gt: 0 } // exclude no clan
+        clanId: { gt: 0 }, // exclude no clan
       },
       _sum: { xp: true },
     });
@@ -507,8 +507,6 @@ class DatabaseService {
 
   // addClanXp is no longer needed as we update UserXp directly.
   // clearClanXp is no longer needed as we perform soft resets or clanId updates.
-
-
 
   // =================================================================
   // 4. GUILD CONFIG & IDS

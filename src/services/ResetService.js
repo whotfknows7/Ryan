@@ -184,7 +184,7 @@ class ResetService {
 
       // 4. Reset ClanXP (New war starts next week)
       // ClanXp table is removed. syncUserClanRoles keeps clanId updated.
-      // We might want to clear clanIds or just keep them? 
+      // We might want to clear clanIds or just keep them?
       // If "New war starts next week", and clanId is just a property of the user, it persists.
       // The "XP" relevant for the war is "weeklyXp", which we just reset.
       // So no need to clear 'clanId' from users unless they left the clan.
@@ -203,10 +203,12 @@ class ResetService {
     try {
       const emojiDir = path.join(process.cwd(), 'assets', 'emojis');
       if (fs.existsSync(emojiDir)) fs.readdirSync(emojiDir).forEach((f) => fs.unlinkSync(path.join(emojiDir, f)));
-    } catch { /* best-effort wipe */ }
+    } catch {
+      /* best-effort wipe */
+    }
   }
 
-  /* 
+  /*
    * [REMOVED] calculateClanUpdates
    * We no longer sync from Roles -> DB. The DB is now the source of truth for Clan IDs.
    * ReactionHandler updates DB on every change.
@@ -334,7 +336,9 @@ class ResetService {
         try {
           const oldMsg = await channel.messages.fetch(ids.clanLeaderboardMessageId).catch(() => null);
           if (oldMsg) await oldMsg.delete();
-        } catch { /* best-effort delete old msg */ }
+        } catch {
+          /* best-effort delete old msg */
+        }
       }
 
       const content = withPings ? await this.getClanMentions(guildId) : undefined;

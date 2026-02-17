@@ -29,7 +29,7 @@ class WeeklyRoleService {
 
       if (newWinnerId === oldWinnerId) {
         // Optimization: If winner is same, ensure they have the role?
-        // For stateless, we assume if ID matches, role was given. 
+        // For stateless, we assume if ID matches, role was given.
         // But to be robust against restarts/missed events, we can check.
         // Since GuildMemberManager is 0, checking costs API call.
         // Let's only check if they CHANGED.
@@ -68,7 +68,6 @@ class WeeklyRoleService {
       // c. Update Persisted State in DB
       // We store `currentWeeklyWinnerId` in the `config` JSON column
       await DatabaseService.atomicJsonMerge(guildId, 'config', JSON.stringify({ currentWeeklyWinnerId: newWinnerId }));
-
     } catch (error) {
       logger.error(`Error in WeeklyRoleService for guild ${guildId}:`, error);
     }

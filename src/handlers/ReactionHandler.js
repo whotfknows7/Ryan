@@ -46,7 +46,6 @@ class ReactionHandler {
 
       await member.roles.add(roleConfig.roleId, 'Reaction role assignment');
       logger.info(`Assigned role ${roleConfig.roleId} to ${user.tag} via reaction`);
-
     } catch (error) {
       logger.error(`Error in handleReactionAdd: ${error}`);
     }
@@ -102,16 +101,16 @@ class ReactionHandler {
 
   /**
    * Handles logic for Clan Selection (Stateless Switching)
-   * @param {Guild} guild 
-   * @param {User} user 
-   * @param {MessageReaction} reaction 
+   * @param {Guild} guild
+   * @param {User} user
+   * @param {MessageReaction} reaction
    * @param {boolean} isAdd - true if adding reaction, false if removing
    */
   /**
    * Handles logic for Clan Selection (Stateless Switching)
-   * @param {Guild} guild 
-   * @param {User} user 
-   * @param {MessageReaction} reaction 
+   * @param {Guild} guild
+   * @param {User} user
+   * @param {MessageReaction} reaction
    * @param {boolean} isAdd - true if adding reaction, false if removing
    */
   static async handleClanReaction(guild, user, reaction, isAdd) {
@@ -165,12 +164,14 @@ class ReactionHandler {
         if (clan.roleId) {
           try {
             await member.roles.remove(clan.roleId, 'Clan Cleanup (Stateless)');
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
         }
 
         // Blind Remove Reaction
-        const otherReaction = msg.reactions.cache.find(r =>
-          r.emoji.name === clan.emoji || r.emoji.toString() === clan.emoji || r.emoji.id === clan.emoji
+        const otherReaction = msg.reactions.cache.find(
+          (r) => r.emoji.name === clan.emoji || r.emoji.toString() === clan.emoji || r.emoji.id === clan.emoji
         );
 
         if (otherReaction) {
@@ -178,7 +179,6 @@ class ReactionHandler {
           await otherReaction.users.remove(user.id).catch(() => null);
         }
       }
-
     } else {
       // --- CLAN LEAVE (Blunt Logic) ---
       // user un-reacted.
@@ -195,76 +195,78 @@ class ReactionHandler {
     }
 
     // --- 5-MINUTE INTEGRITY CHECK ---
-    setTimeout(async () => {
-      try {
-        const freshMember = await guild.members.fetch(user.id).catch(() => null);
-        if (!freshMember) return;
+    setTimeout(
+      async () => {
+        try {
+          const freshMember = await guild.members.fetch(user.id).catch(() => null);
+          if (!freshMember) return;
 
-        // Fetch Truth from DB
-        const stats = await DatabaseService.getUserStats(guildId, user.id);
-        const trueClanId = stats.clanId || 0;
+          // Fetch Truth from DB
+          const stats = await DatabaseService.getUserStats(guildId, user.id);
+          const trueClanId = stats.clanId || 0;
 
-        // Fetch Config for Roles
-        const checkConfig = await DatabaseService.getFullGuildConfig(guildId);
-        const allClans = checkConfig?.clans || {};
-        const trueClan = Object.values(allClans).find(c => c.id === trueClanId);
+          // Fetch Config for Roles
+          const checkConfig = await DatabaseService.getFullGuildConfig(guildId);
+          const allClans = checkConfig?.clans || {};
+          const trueClan = Object.values(allClans).find((c) => c.id === trueClanId);
 
-        let correctionNeeded = false;
+          let correctionNeeded = false;
 
-        // 1. Enforce Correct Role
-        if (trueClan) {
-          if (!freshMember.roles.cache.has(trueClan.roleId)) {
-            await freshMember.roles.add(trueClan.roleId, 'Clan Integrity Check');
-            correctionNeeded = true;
-          }
-        }
-
-        // 2. Remove Incorrect Roles
-        for (const c of Object.values(allClans)) {
-          if (c.id !== trueClanId) {
-            if (freshMember.roles.cache.has(c.roleId)) {
-              await freshMember.roles.remove(c.roleId, 'Clan Integrity Check');
+          // 1. Enforce Correct Role
+          if (trueClan) {
+            if (!freshMember.roles.cache.has(trueClan.roleId)) {
+              await freshMember.roles.add(trueClan.roleId, 'Clan Integrity Check');
               correctionNeeded = true;
             }
+          }
 
-            // Fix Reactions for incorrect clans
-            try {
-              // const clanMsg = await guild.channels.fetch(guildIds.clanChannelId) // Assuming checks are in clan channel?
-              //   .then(ch => ch.messages.fetch(guildIds.clanMessageId))
-              //   .catch(() => null);
+          // 2. Remove Incorrect Roles
+          for (const c of Object.values(allClans)) {
+            if (c.id !== trueClanId) {
+              if (freshMember.roles.cache.has(c.roleId)) {
+                await freshMember.roles.remove(c.roleId, 'Clan Integrity Check');
+                correctionNeeded = true;
+              }
 
-              // Actually we have the message ID from the reaction passed in, or we can fetch via config if needed.
-              // But inside setTimeout `reaction.message` might be stale/gone from cache?
-              // Use `guildIds.clanMessageId` fetched earlier or available via `DatabaseService`.
-              // The `msg` from reaction handler scope is available in closure, but better typically to fetch fresh if 5 mins passed.
-              // Let's use the closure `reaction.message` ID.
+              // Fix Reactions for incorrect clans
+              try {
+                // const clanMsg = await guild.channels.fetch(guildIds.clanChannelId) // Assuming checks are in clan channel?
+                //   .then(ch => ch.messages.fetch(guildIds.clanMessageId))
+                //   .catch(() => null);
 
-              if (reaction.message) {
-                const safeMsg = await reaction.message.fetch().catch(() => null);
-                if (safeMsg) {
-                  const badReaction = safeMsg.reactions.cache.find(r =>
-                    r.emoji.name === c.emoji || r.emoji.toString() === c.emoji || r.emoji.id === c.emoji
-                  );
-                  if (badReaction) {
-                    await badReaction.users.remove(user.id).catch(() => null);
-                    correctionNeeded = true;
+                // Actually we have the message ID from the reaction passed in, or we can fetch via config if needed.
+                // But inside setTimeout `reaction.message` might be stale/gone from cache?
+                // Use `guildIds.clanMessageId` fetched earlier or available via `DatabaseService`.
+                // The `msg` from reaction handler scope is available in closure, but better typically to fetch fresh if 5 mins passed.
+                // Let's use the closure `reaction.message` ID.
+
+                if (reaction.message) {
+                  const safeMsg = await reaction.message.fetch().catch(() => null);
+                  if (safeMsg) {
+                    const badReaction = safeMsg.reactions.cache.find(
+                      (r) => r.emoji.name === c.emoji || r.emoji.toString() === c.emoji || r.emoji.id === c.emoji
+                    );
+                    if (badReaction) {
+                      await badReaction.users.remove(user.id).catch(() => null);
+                      correctionNeeded = true;
+                    }
                   }
                 }
+              } catch {
+                // Ignore reaction fix errors
               }
-            } catch {
-              // Ignore reaction fix errors
             }
           }
-        }
 
-        if (correctionNeeded) {
-          logger.info(`Clan integrity check corrected user ${user.tag}`);
+          if (correctionNeeded) {
+            logger.info(`Clan integrity check corrected user ${user.tag}`);
+          }
+        } catch (error) {
+          logger.error(`Error in Clan Integrity Check for ${user.tag}: ${error}`);
         }
-
-      } catch (error) {
-        logger.error(`Error in Clan Integrity Check for ${user.tag}: ${error}`);
-      }
-    }, 5 * 60 * 1000); // 5 minutes
+      },
+      5 * 60 * 1000
+    ); // 5 minutes
   }
 }
 

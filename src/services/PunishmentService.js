@@ -235,96 +235,95 @@ class PunishmentService {
       const hasGroundRole = groundRoleId && member.roles.cache.has(groundRoleId);
 
       if (hasGroundRole) {
-          // User left while grounded. Ensure this is persisted.
-          const userTag = member.user?.tag || `User ${member.id}`;
-          
-          const log = await prisma.jailLog.upsert({
+        // User left while grounded. Ensure this is persisted.
+        const userTag = member.user?.tag || `User ${member.id}`;
+
+        const log = await prisma.jailLog.upsert({
+          where: { guildId_userId: { guildId, userId: member.id } },
+          update: { status: 'jailed' }, // Ensure status is jailed
+          create: {
+            guildId,
+            userId: member.id,
+            username: userTag,
+            status: 'jailed',
+            offences: 1, // Start at 1 if they were manually grounded and left
+          },
+        });
+
+        // Now proceed with existing "evasion" logic (increase offences, ban if > 8, etc)
+        // The log variable is now guaranteed to exist and be 'jailed'.
+
+        const logsChannelId = ids.logsChannelId;
+        const logChannel = logsChannelId ? member.guild.channels.cache.get(logsChannelId) : null;
+        const avatarUrl = member.user?.displayAvatarURL();
+
+        const newOffences = log.offences + 1; // Increment because they left (evasion attempt)
+
+        if (newOffences >= 8) {
+          // ... Ban Logic ...
+          try {
+            await member.guild.members.ban(member.id, {
+              reason: 'Reached 8 offences upon leaving.',
+            });
+
+            await prisma.jailLog.update({
               where: { guildId_userId: { guildId, userId: member.id } },
-              update: { status: 'jailed' }, // Ensure status is jailed
-              create: {
-                  guildId,
-                  userId: member.id,
-                  username: userTag,
-                  status: 'jailed',
-                  offences: 1 // Start at 1 if they were manually grounded and left
-              }
-          });
-      
-          // Now proceed with existing "evasion" logic (increase offences, ban if > 8, etc)
-          // The log variable is now guaranteed to exist and be 'jailed'.
-          
-          const logsChannelId = ids.logsChannelId;
-          const logChannel = logsChannelId ? member.guild.channels.cache.get(logsChannelId) : null;
-          const avatarUrl = member.user?.displayAvatarURL();
+              data: {
+                status: 'jailed',
+                offences: newOffences,
+                punishmentEnd: null,
+              },
+            });
 
-          const newOffences = log.offences + 1; // Increment because they left (evasion attempt)
-
-          if (newOffences >= 8) {
-             // ... Ban Logic ...
-              try {
-                await member.guild.members.ban(member.id, {
-                  reason: 'Reached 8 offences upon leaving.',
-                });
-
-                await prisma.jailLog.update({
-                  where: { guildId_userId: { guildId, userId: member.id } },
-                  data: {
-                    status: 'jailed',
-                    offences: newOffences,
-                    punishmentEnd: null,
-                  },
-                });
-
-                if (logChannel) {
-                  const embed = new EmbedBuilder()
-                    .setTitle('Member Banned')
-                    .setColor('DarkRed')
-                    .addFields(
-                      { name: 'Member', value: `${userTag}`, inline: false },
-                      { name: 'Reason', value: 'Reached 8 offences upon leaving', inline: false }
-                    )
-                    .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
-                    .setTimestamp();
-                  if (avatarUrl) embed.setThumbnail(avatarUrl);
-                  await logChannel.send({ embeds: [embed] });
-                }
-              } catch (e) {
-                logger.error(`Failed to ban ${userTag}: ${e}`);
-              }
-          } else {
-             // ... Increment Offences Logic ...
-              // Pause timer by setting end to null
-              await prisma.jailLog.update({
-                where: { guildId_userId: { guildId, userId: member.id } },
-                data: {
-                  offences: newOffences,
-                  punishmentEnd: null, 
-                },
-              });
-
-              if (logChannel) {
-                const embed = new EmbedBuilder()
-                  .setTitle('Member Left While Jailed')
-                  .setColor('Orange')
-                  .addFields(
-                    { name: 'Member', value: `${userTag}`, inline: false },
-                    { name: 'New Offence Count', value: `${newOffences}`, inline: false },
-                    { name: 'Penalty', value: 'Offence increased. Timer paused until rejoin.', inline: false }
-                  )
-                  .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
-                  .setTimestamp();
-                if (avatarUrl) embed.setThumbnail(avatarUrl);
-                await logChannel.send({ embeds: [embed] });
-              }
-              logger.info(`Increased offences for ${userTag} to ${newOffences} and paused timer.`);
+            if (logChannel) {
+              const embed = new EmbedBuilder()
+                .setTitle('Member Banned')
+                .setColor('DarkRed')
+                .addFields(
+                  { name: 'Member', value: `${userTag}`, inline: false },
+                  { name: 'Reason', value: 'Reached 8 offences upon leaving', inline: false }
+                )
+                .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
+                .setTimestamp();
+              if (avatarUrl) embed.setThumbnail(avatarUrl);
+              await logChannel.send({ embeds: [embed] });
+            }
+          } catch (e) {
+            logger.error(`Failed to ban ${userTag}: ${e}`);
           }
-      } 
+        } else {
+          // ... Increment Offences Logic ...
+          // Pause timer by setting end to null
+          await prisma.jailLog.update({
+            where: { guildId_userId: { guildId, userId: member.id } },
+            data: {
+              offences: newOffences,
+              punishmentEnd: null,
+            },
+          });
+
+          if (logChannel) {
+            const embed = new EmbedBuilder()
+              .setTitle('Member Left While Jailed')
+              .setColor('Orange')
+              .addFields(
+                { name: 'Member', value: `${userTag}`, inline: false },
+                { name: 'New Offence Count', value: `${newOffences}`, inline: false },
+                { name: 'Penalty', value: 'Offence increased. Timer paused until rejoin.', inline: false }
+              )
+              .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
+              .setTimestamp();
+            if (avatarUrl) embed.setThumbnail(avatarUrl);
+            await logChannel.send({ embeds: [embed] });
+          }
+          logger.info(`Increased offences for ${userTag} to ${newOffences} and paused timer.`);
+        }
+      }
       // Else: User left without ground role. If they had a log, should we check it?
       // If they don't have the role, they are presumably release or not jailed.
-      // If DB says 'jailed' but they don't have role -> Desync. 
+      // If DB says 'jailed' but they don't have role -> Desync.
       // But typically we trust the role state on leave.
       // If we want to be safe, we could check DB too, but "Persist Ground Role" emphasizes the role.
-      
     } catch (error) {
       logger.error('Error in handleMemberLeave:', error);
     }

@@ -1,9 +1,6 @@
 // src/handlers/InteractionHandler.js
 
-const {
-  EmbedBuilder,
-  MessageFlags,
-} = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const logger = require('../lib/logger');
 const { CustomRoleService } = require('../services/CustomRoleService');
 const { ConfigService } = require('../services/ConfigService');
@@ -217,8 +214,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
-      else await interaction.reply(errorMsg).catch(() => { });
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
+      else await interaction.reply(errorMsg).catch(() => {});
     }
   }
 };

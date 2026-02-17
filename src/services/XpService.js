@@ -210,8 +210,6 @@ class RoleRewardHandler {
   }
 }
 
-
-
 // ============================================================================
 // Permission Checker
 // ============================================================================
@@ -282,7 +280,6 @@ class XpService {
 
       // 3. Check for role rewards using Live XP
       await RoleRewardHandler.checkRoleRewards(message.guild, message.member, liveStats.xp);
-
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }

@@ -16,8 +16,6 @@ const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
-
-
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
 const logger = require('./lib/logger');
 
@@ -32,17 +30,23 @@ function cleanupStaleProcesses() {
   // 1. Kill any stale renderer processes
   try {
     execSync("pkill -f 'target/release/renderer' 2>/dev/null || true", { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 2. Kill any stale chrome/chromium processes
   try {
     execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 3. Free port 3000
   try {
     execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 4. Remove Chrome lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
@@ -56,7 +60,9 @@ function cleanupStaleProcesses() {
   if (fs.existsSync(chromiumDir)) {
     try {
       fs.rmSync(chromiumDir, { recursive: true, force: true });
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     logger.info('🧹 Cleared Chrome temp directory.');
   }
 
@@ -81,7 +87,9 @@ async function gracefulShutdown(signal) {
     } catch {
       try {
         startRenderer._currentProcess.kill('SIGKILL');
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
     }
     logger.info('🦀 Renderer process terminated.');
   }
@@ -89,12 +97,16 @@ async function gracefulShutdown(signal) {
   // 2. Kill any remaining chrome processes
   try {
     execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 3. Free port 3000
   try {
     execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 4. Clean lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
@@ -103,7 +115,9 @@ async function gracefulShutdown(signal) {
   if (fs.existsSync(chromiumDir)) {
     try {
       fs.rmSync(chromiumDir, { recursive: true, force: true });
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   // 5. Destroy Discord client
@@ -111,7 +125,9 @@ async function gracefulShutdown(signal) {
   try {
     client.destroy();
     logger.info('🤖 Discord client destroyed.');
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 6. Shutdown QueueService
   try {
@@ -162,7 +178,9 @@ function startRenderer() {
   }
   try {
     execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 
   // 3. Spawn the process (detached so we can kill the process group)
   logger.info('🚀 Launching Renderer Service...');
@@ -266,8 +284,6 @@ async function main() {
         logger.error('XP/Keyword Error:', error);
       }
     });
-
-
 
     client.on('messageReactionAdd', async (reaction, user) => {
       if (user.bot) return;

@@ -120,7 +120,9 @@ const ResetRoleCommand = {
           try {
             await member.roles.add(role);
             addedCount++;
-          } catch { /* best-effort */ }
+          } catch {
+            /* best-effort */
+          }
         }
       }
 

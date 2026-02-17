@@ -88,7 +88,9 @@ const LiveCommand = {
             );
             await interaction.editReply({ components: [disabledRow] });
           }
-        } catch { /* best-effort */ }
+        } catch {
+          /* best-effort */
+        }
       });
     } catch (error) {
       console.error('Error executing /live:', error);

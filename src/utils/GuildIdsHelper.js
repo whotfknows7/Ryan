@@ -83,11 +83,15 @@ class GuildHelper {
   }
 
   async getLegendaryRole() {
-    return this.ids.legendaryRoleId ? await this.guild.roles.fetch(this.ids.legendaryRoleId).catch(() => undefined) : undefined;
+    return this.ids.legendaryRoleId
+      ? await this.guild.roles.fetch(this.ids.legendaryRoleId).catch(() => undefined)
+      : undefined;
   }
 
   async getGroundRole() {
-    return this.ids.groundRoleId ? await this.guild.roles.fetch(this.ids.groundRoleId).catch(() => undefined) : undefined;
+    return this.ids.groundRoleId
+      ? await this.guild.roles.fetch(this.ids.groundRoleId).catch(() => undefined)
+      : undefined;
   }
 
   // --- CHANNEL GETTERS (Async) ---
@@ -97,47 +101,69 @@ class GuildHelper {
   // `guild.channels.fetch(id)` is safe.
 
   async getAdminChannel() {
-    return this.ids.adminChannelId ? await this.guild.channels.fetch(this.ids.adminChannelId).catch(() => undefined) : undefined;
+    return this.ids.adminChannelId
+      ? await this.guild.channels.fetch(this.ids.adminChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getAdminsOnlyChannel() {
-    return this.ids.adminsOnlyId ? await this.guild.channels.fetch(this.ids.adminsOnlyId).catch(() => undefined) : undefined;
+    return this.ids.adminsOnlyId
+      ? await this.guild.channels.fetch(this.ids.adminsOnlyId).catch(() => undefined)
+      : undefined;
   }
 
   async getModChannel() {
-    return this.ids.modChannelId ? await this.guild.channels.fetch(this.ids.modChannelId).catch(() => undefined) : undefined;
+    return this.ids.modChannelId
+      ? await this.guild.channels.fetch(this.ids.modChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getLogsChannel() {
-    return this.ids.logsChannelId ? await this.guild.channels.fetch(this.ids.logsChannelId).catch(() => undefined) : undefined;
+    return this.ids.logsChannelId
+      ? await this.guild.channels.fetch(this.ids.logsChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getTrueLogsChannel() {
-    return this.ids.trueLogsChannelId ? await this.guild.channels.fetch(this.ids.trueLogsChannelId).catch(() => undefined) : undefined;
+    return this.ids.trueLogsChannelId
+      ? await this.guild.channels.fetch(this.ids.trueLogsChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getRoleLogChannel() {
-    return this.ids.roleLogChannelId ? await this.guild.channels.fetch(this.ids.roleLogChannelId).catch(() => undefined) : undefined;
+    return this.ids.roleLogChannelId
+      ? await this.guild.channels.fetch(this.ids.roleLogChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getLeaderboardChannel() {
-    return this.ids.leaderboardChannelId ? await this.guild.channels.fetch(this.ids.leaderboardChannelId).catch(() => undefined) : undefined;
+    return this.ids.leaderboardChannelId
+      ? await this.guild.channels.fetch(this.ids.leaderboardChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getClanChannel() {
-    return this.ids.clanChannelId ? await this.guild.channels.fetch(this.ids.clanChannelId).catch(() => undefined) : undefined;
+    return this.ids.clanChannelId
+      ? await this.guild.channels.fetch(this.ids.clanChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getClansChannel() {
-    return this.ids.clansChannelId ? await this.guild.channels.fetch(this.ids.clansChannelId).catch(() => undefined) : undefined;
+    return this.ids.clansChannelId
+      ? await this.guild.channels.fetch(this.ids.clansChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getJailChannel() {
-    return this.ids.jailChannelId ? await this.guild.channels.fetch(this.ids.jailChannelId).catch(() => undefined) : undefined;
+    return this.ids.jailChannelId
+      ? await this.guild.channels.fetch(this.ids.jailChannelId).catch(() => undefined)
+      : undefined;
   }
 
   async getMessageSearchChannel() {
-    return this.ids.messageSearchChannelId ? await this.guild.channels.fetch(this.ids.messageSearchChannelId).catch(() => undefined) : undefined;
+    return this.ids.messageSearchChannelId
+      ? await this.guild.channels.fetch(this.ids.messageSearchChannelId).catch(() => undefined)
+      : undefined;
   }
 
   // --- PERMISSION HELPERS (Async) ---
