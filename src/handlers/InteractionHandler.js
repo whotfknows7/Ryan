@@ -43,6 +43,26 @@ const handleInteraction = async (interaction) => {
   if (interaction.isButton()) {
     const { customId, guildId, guild, user } = interaction;
 
+    // --- BUTTON COOLDOWN (3 Seconds) ---
+    // Simple in-memory map to prevent spam/race conditions
+    if (!global.buttonCooldowns) global.buttonCooldowns = new Map();
+    const now = Date.now();
+    const cooldownEnd = global.buttonCooldowns.get(user.id) || 0;
+
+    if (now < cooldownEnd) {
+      const timeLeft = ((cooldownEnd - now) / 1000).toFixed(1);
+      return interaction.reply({
+        content: `Please wait ${timeLeft}s before using another button.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // Set 3s cooldown
+    global.buttonCooldowns.set(user.id, now + 3000);
+    // Cleanup after 3s to keep map small
+    setTimeout(() => global.buttonCooldowns.delete(user.id), 3000);
+
+
     try {
       // --- "ME" BUTTON (SHOW MY RANK & HIGHLIGHT) ---
       if (customId.startsWith('leaderboard_show_rank')) {
@@ -79,20 +99,24 @@ const handleInteraction = async (interaction) => {
       // --- VIEW SWITCHER (WEEKLY / ALL-TIME) ---
       if (customId.startsWith('leaderboard_view:')) {
         const type = customId.split(':')[1]; // 'weekly' or 'lifetime'
+
+        const { tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard } = require('../services/LeaderboardUpdateService');
+        const guildTemps = tempLeaderboards.get(guildId) || {};
+        const prevTempId = guildTemps[type]; // Only same type
+
+        let useFallback = false;
         try {
           await interaction.deferReply(); // Public
         } catch (e) {
           if (e.code === 10062) {
-            logger.warn(`[Interaction] Unkown interaction (timeout): ${customId}`);
-            return;
+            logger.warn(`[Interaction] Unknown interaction (timeout): ${customId}. Switching to fallback mode.`);
+            useFallback = true;
+          } else {
+            throw e;
           }
-          throw e; // Rethrow other errors
         }
 
-        const { tempLeaderboards } = require('../services/LeaderboardUpdateService');
-
-        // Delete previous temp leaderboard if exists
-        const prevTempId = tempLeaderboards.get(guildId);
+        // Delete previous temp leaderboard of the SAME TYPE only
         if (prevTempId) {
           try {
             const previousMsg = await interaction.channel.messages.fetch(prevTempId).catch(() => null);
@@ -100,13 +124,22 @@ const handleInteraction = async (interaction) => {
           } catch (e) {
             logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
           }
+          removeTempLeaderboard(guildId, type);
         }
 
+        // Generate Payload
         const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1);
-        const msg = await interaction.editReply(payload);
 
-        // Store new temp ID
-        tempLeaderboards.set(guildId, msg.id);
+        // Send Message
+        let msg;
+        if (useFallback) {
+          msg = await interaction.channel.send(payload);
+        } else {
+          msg = await interaction.editReply(payload);
+        }
+
+        // Persist new temp ID by type (map + JSON)
+        saveTempLeaderboard(guildId, type, msg.id);
 
         return;
       }
@@ -236,8 +269,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
-      else await interaction.reply(errorMsg).catch(() => {});
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
+      else await interaction.reply(errorMsg).catch(() => { });
     }
   }
 };

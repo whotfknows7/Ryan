@@ -11,6 +11,7 @@ const { DatabaseService } = require('./services/DatabaseService');
 const { PunishmentService } = require('./services/PunishmentService');
 
 const { XpService } = require('./services/XpService');
+const ImageService = require('./services/ImageService');
 
 const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
@@ -243,6 +244,10 @@ async function main() {
     process.exit(1);
   }
   logger.info('Database connection established.');
+
+  // 4a. Preload Assets (Optimization for first interaction speed)
+  logger.info('Preloading assets...');
+  await ImageService.preloadAssets();
 
   // 4. Load Commands
   logger.info('Loading commands...');

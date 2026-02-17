@@ -1,5 +1,7 @@
 // src/services/LeaderboardUpdateService.js
 
+const fs = require('fs');
+const path = require('path');
 const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getIds, clearCache } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
@@ -12,7 +14,80 @@ const logger = require('../lib/logger');
 const previousTopUsersJSON = new Map();
 const updatingGuilds = new Set();
 const lastUpdateTimes = new Map();
-const tempLeaderboards = new Map(); // guildId -> messageId (for Weekly/Lifetime views)
+const tempLeaderboards = new Map(); // guildId -> { weekly: msgId, lifetime: msgId }
+
+const TEMP_LB_PATH = path.join(__dirname, '../events/CurrentLbs.json');
+
+// =================================================================
+// TEMP LEADERBOARD PERSISTENCE — Synced to CurrentLbs.json
+// =================================================================
+
+/**
+ * Load saved temp leaderboard IDs from JSON into the in-memory map.
+ * Called once on bot startup.
+ */
+function loadTempLeaderboards() {
+  try {
+    if (!fs.existsSync(TEMP_LB_PATH)) return;
+    const raw = fs.readFileSync(TEMP_LB_PATH, 'utf8');
+    const data = JSON.parse(raw || '[]');
+    for (const entry of data) {
+      const validTypes = ['weekly', 'lifetime'];
+      if (!entry.guildId || !entry.messageId || !validTypes.includes(entry.type)) continue;
+      const existing = tempLeaderboards.get(entry.guildId) || {};
+      existing[entry.type] = entry.messageId;
+      tempLeaderboards.set(entry.guildId, existing);
+    }
+    logger.info(`[TempLB] Loaded ${data.length} temp leaderboard(s) from disk.`);
+  } catch (e) {
+    logger.warn(`[TempLB] Failed to load from disk: ${e.message}`);
+  }
+}
+
+/**
+ * Persist the entire tempLeaderboards map to JSON.
+ */
+function persistTempLeaderboards() {
+  try {
+    const entries = [];
+    for (const [guildId, types] of tempLeaderboards) {
+      for (const [type, messageId] of Object.entries(types)) {
+        entries.push({ guildId, type, messageId });
+      }
+    }
+    fs.writeFileSync(TEMP_LB_PATH, JSON.stringify(entries, null, 2));
+  } catch (e) {
+    logger.warn(`[TempLB] Failed to persist to disk: ${e.message}`);
+  }
+}
+
+/**
+ * Save a temp leaderboard entry (updates map + JSON).
+ */
+function saveTempLeaderboard(guildId, type, messageId) {
+  const existing = tempLeaderboards.get(guildId) || {};
+  existing[type] = messageId;
+  tempLeaderboards.set(guildId, existing);
+  persistTempLeaderboards();
+}
+
+/**
+ * Remove a temp leaderboard entry (updates map + JSON).
+ */
+function removeTempLeaderboard(guildId, type) {
+  const existing = tempLeaderboards.get(guildId);
+  if (!existing) return;
+  delete existing[type];
+  if (Object.keys(existing).length === 0) {
+    tempLeaderboards.delete(guildId);
+  } else {
+    tempLeaderboards.set(guildId, existing);
+  }
+  persistTempLeaderboards();
+}
+
+// Load on module import (cold start)
+loadTempLeaderboards();
 
 class LeaderboardUpdateService {
   static async updateLiveLeaderboard(client) {
@@ -71,19 +146,20 @@ class LeaderboardUpdateService {
 
         // 3. Scan & Clean Old Leaderboards (Fix for Glitch/Restarts)
         try {
-          // Fetch last 50 messages to find any previous leaderboards sent by me
-          const messages = await channel.messages.fetch({ limit: 50 });
+          // Fetch last 5 messages to find any previous leaderboards sent by me
+          const messages = await channel.messages.fetch({ limit: 5 });
           const leaderboardTitles = ['Yappers of the day!', 'Yappers of the week!', 'All-time Yappers!'];
 
-          const currentTempId = tempLeaderboards.get(guildId);
+          const guildTemps = tempLeaderboards.get(guildId) || {};
+          const protectedTempIds = Object.values(guildTemps);
           const currentMainId = ids.dailyLeaderboardMessageId;
 
           const messagesToDelete = messages.filter((msg) => {
             // Must be sent by me
             if (msg.author.id !== client.user.id) return false;
 
-            // PROTECT: Do not delete the active Temporary Leaderboard (Weekly/Lifetime)
-            if (currentTempId && msg.id === currentTempId) return false;
+            // PROTECT: Do not delete ANY active Temporary Leaderboards (Weekly/Lifetime)
+            if (protectedTempIds.includes(msg.id)) return false;
 
             // PROTECT: Do not delete the active Main Leaderboard (Daily) - We handle this explicitly below
             if (currentMainId && msg.id === currentMainId) return false;
@@ -263,4 +339,4 @@ class LeaderboardUpdateService {
   }
 }
 
-module.exports = { LeaderboardUpdateService, tempLeaderboards };
+module.exports = { LeaderboardUpdateService, tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard };
