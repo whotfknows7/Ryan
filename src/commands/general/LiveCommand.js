@@ -25,7 +25,7 @@ const LiveCommand = {
       const guild = interaction.guild;
 
       // 1. Fetch Data
-      const topUsers = await DatabaseService.fetchTopUsers(guildId, 10);
+      const topUsers = await DatabaseService.getLiveTopUsers(guildId, 10);
       const allUsers = await DatabaseService.getAllUserXp(guildId);
       const totalPages = Math.max(1, Math.ceil(allUsers.length / 10));
 

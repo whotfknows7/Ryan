@@ -9,7 +9,9 @@ const { ResetService } = require('./ResetService');
 const { LeaderboardUpdateService } = require('./LeaderboardUpdateService');
 const { LeaderboardCleanupService } = require('./LeaderboardCleanupService');
 const { WeeklyRoleService } = require('./WeeklyRoleService');
+const { WeeklyRoleService } = require('./WeeklyRoleService');
 const { cleanExpiredResetRoles } = require('../commands/admin/ResetRoleCommands');
+const { XpSyncService } = require('./XpSyncService');
 
 class QueueService {
   constructor() {
@@ -50,6 +52,9 @@ class QueueService {
               break;
             case 'weekly-role-check':
               await this.runPerGuild((guildId) => WeeklyRoleService.checkWeeklyRole(this.client, guildId));
+              break;
+            case 'xp-sync':
+              await XpSyncService.syncXpBuffers();
               break;
             default:
               logger.warn(`⚠️ Unknown job name: ${job.name}`);
@@ -121,6 +126,9 @@ class QueueService {
 
     // Weekly Role Check - every 5 mins
     await addJob('weekly-role-check', '*/5 * * * *');
+
+    // XP Sync - every 30 seconds
+    await addJob('xp-sync', null, 30000);
   }
 
   async shutdown() {

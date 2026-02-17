@@ -3,6 +3,7 @@
 const { prisma } = require('../lib/prisma');
 const { Prisma } = require('@prisma/client');
 const logger = require('../lib/logger');
+const { defaultRedis } = require('../config/redis');
 
 class DatabaseService {
   // =================================================================
@@ -62,6 +63,38 @@ class DatabaseService {
     return null;
   }
 
+  /**
+   * [NEW] Process a batch of XP updates from Redis
+   * Uses a transaction to ensure all updates are applied
+   */
+  static async processXpBatch(guildId, updates) {
+    // Optimization: We could use `prisma.$executeRaw` for a massive single query if needed,
+    // but a transaction of upserts is safer and reasonably fast for batches of ~100-500.
+
+    // Updates is array of { userId, xp }
+    // These are *increments* to the existing values.
+
+    return await prisma.$transaction(
+      updates.map(u =>
+        prisma.userXp.upsert({
+          where: { guildId_userId: { guildId, userId: u.userId } },
+          create: {
+            guildId,
+            userId: u.userId,
+            xp: u.xp,
+            dailyXp: u.xp,
+            weeklyXp: u.xp,
+          },
+          update: {
+            xp: { increment: u.xp },
+            dailyXp: { increment: u.xp },
+            weeklyXp: { increment: u.xp },
+          },
+        })
+      )
+    );
+  }
+
   static async setUserXp(guildId, userId, newXp) {
     // Note: This only sets lifetime XP, preserves daily/weekly
     if (newXp <= 0) {
@@ -85,6 +118,25 @@ class DatabaseService {
       select: { dailyXp: true, weeklyXp: true, xp: true, clanId: true },
     });
     return stats || { dailyXp: 0, weeklyXp: 0, xp: 0, clanId: 0 };
+  }
+
+  /**
+   * [NEW] Fetch Live User Stats (DB + Redis Delta)
+   */
+  static async getLiveUserStats(guildId, userId) {
+    const [dbStats, redisDelta] = await Promise.all([
+      this.getUserStats(guildId, userId),
+      defaultRedis.hget(`xp_buffer:${guildId}`, userId)
+    ]);
+
+    const delta = redisDelta ? parseInt(redisDelta, 10) : 0;
+
+    return {
+      ...dbStats,
+      xp: (dbStats.xp || 0) + delta,
+      dailyXp: (dbStats.dailyXp || 0) + delta,
+      weeklyXp: (dbStats.weeklyXp || 0) + delta
+    };
   }
 
   /**
@@ -114,6 +166,58 @@ class DatabaseService {
         xp: true,
       },
     });
+  }
+
+  /**
+   * [NEW] Fetch Live Top Users (DB + Redis Merge)
+   * This ensures the leaderboard reflects the absolute latest data from the 30s buffer.
+   */
+  static async getLiveTopUsers(guildId, limit = 10, type = 'daily') {
+    // 1. Fetch DB Top (fetch a bit more to allow for re-ordering)
+    const dbTop = await this.fetchTopUsers(guildId, limit + 20, type);
+
+    // 2. Fetch Redis Buffer
+    const buffer = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
+
+    if (!buffer || Object.keys(buffer).length === 0) {
+      return dbTop.slice(0, limit);
+    }
+
+    // 3. Merge Strategies
+    const mergedMap = new Map();
+
+    // Initialize with DB data
+    for (const user of dbTop) {
+      mergedMap.set(user.userId, { ...user });
+    }
+
+    // Apply Redis updates
+    for (const [userId, xpStr] of Object.entries(buffer)) {
+      const delta = parseInt(xpStr, 10);
+
+      if (mergedMap.has(userId)) {
+        const user = mergedMap.get(userId);
+        user.xp = (user.xp || 0) + delta;
+        user.dailyXp = (user.dailyXp || 0) + delta;
+        user.weeklyXp = (user.weeklyXp || 0) + delta;
+      } else {
+        // User not in top DB list, might have jumped up.
+        // We'd strictly need to fetch them from DB to know their base.
+        // For performance, we can skip or try to fetch them if needed.
+        // OR, we just assume they are not in top 10 unless they were already close.
+        // Correct approach: We should technically fetch the user from DB to get Base.
+        // But doing N fetches is bad.
+        // Compromise: We only merge delta for users ALREADY in top list.
+        // Users climbing from rank 100 to 1 won't show until 30s flush, but users in top 10 shuffling positions will show.
+        // This is a good trade-off.
+      }
+    }
+
+    // 4. Sort and Slice
+    const field = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
+    const sorted = Array.from(mergedMap.values()).sort((a, b) => b[field] - a[field]);
+
+    return sorted.slice(0, limit);
   }
 
   /**

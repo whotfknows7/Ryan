@@ -163,7 +163,9 @@ const JailCommand = {
         if (log && log.status === 'jailed') {
           const newEnd = PunishmentService.getPunishmentDuration(newOffences);
 
-          if (groundRoleId) await member.roles.add(groundRoleId).catch(() => { });
+          if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
+            await member.roles.add(groundRoleId).catch(() => { });
+          }
 
           await ConfigService.createOrUpdateJailLog({
             guildId,
@@ -212,7 +214,9 @@ const JailCommand = {
         }
 
         // 3. NEW PUNISHMENT
-        if (groundRoleId) await member.roles.add(groundRoleId);
+        if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
+          await member.roles.add(groundRoleId).catch(() => { });
+        }
 
         const punishmentEnd = PunishmentService.getPunishmentDuration(newOffences);
 

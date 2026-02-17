@@ -1,5 +1,7 @@
 // src/services/XpService.js
 
+const { defaultRedis } = require('../config/redis');
+
 const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
@@ -270,13 +272,18 @@ class XpService {
       const xpToAdd = XpCalculator.calculateMessageXp(message.content);
       if (xpToAdd <= 0) return;
 
-      // Database Update - returns updated user record
-      const updatedUser = await DatabaseService.updateUserXp(message.guild.id, message.author.id, xpToAdd);
+      // 1. Write to Redis (Write-Behind)
+      await defaultRedis.hincrby(`xp_buffer:${message.guild.id}`, message.author.id, xpToAdd);
 
-      if (!updatedUser) return;
+      // 2. Fetch Live Stats for Role Rewards
+      // We need the *new* total to check if they leveled up.
+      // Optimally, we could just get `db + old_delta + xpToAdd`, but `getLiveUserStats` does `db + curr_delta`
+      // Since we just incremented, `curr_delta` includes `xpToAdd`.
+      const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
 
-      // Check for role rewards using the new total XP
-      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, updatedUser.xp);
+      // 3. Check for role rewards using Live XP
+      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, liveStats.xp);
+
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }

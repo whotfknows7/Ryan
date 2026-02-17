@@ -12,6 +12,7 @@ const CONSTANTS = require('../lib/constants');
 const fs = require('fs');
 const path = require('path');
 const { prisma } = require('../lib/prisma');
+const { XpSyncService } = require('./XpSyncService');
 
 class ResetService {
   static DAYS_IN_CYCLE = 7;
@@ -118,6 +119,9 @@ class ResetService {
 
   static async performDailyReset(client, guildId) {
     try {
+      // 0. Force Sync XP Buffer
+      await XpSyncService.processGuildBuffer(`xp_buffer:${guildId}`);
+
       // 1. Capture daily winner (Optional history step)
       const topDaily = await prisma.userXp.findMany({
         where: { guildId },
@@ -153,6 +157,9 @@ class ResetService {
 
   static async performWeeklyResetSilent(client, guildId) {
     try {
+      // 0. Force Sync XP Buffer
+      await XpSyncService.processGuildBuffer(`xp_buffer:${guildId}`);
+
       // 1. Capture weekly winner
       const topWeekly = await prisma.userXp.findMany({
         where: { guildId },

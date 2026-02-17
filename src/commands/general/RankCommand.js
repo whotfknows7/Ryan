@@ -15,7 +15,7 @@ module.exports = {
     const guildId = interaction.guild.id;
 
     // 1. Fetch Stats (Breakthrough 1)
-    const stats = await DatabaseService.getUserStats(guildId, targetUser.id);
+    const stats = await DatabaseService.getLiveUserStats(guildId, targetUser.id);
     const weeklyRank = await DatabaseService.getUserRank(guildId, targetUser.id, 'weekly');
     const allTimeRank = await DatabaseService.getUserRank(guildId, targetUser.id, 'lifetime');
 
