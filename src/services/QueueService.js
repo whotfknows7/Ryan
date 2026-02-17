@@ -9,7 +9,6 @@ const { ResetService } = require('./ResetService');
 const { LeaderboardUpdateService } = require('./LeaderboardUpdateService');
 const { LeaderboardCleanupService } = require('./LeaderboardCleanupService');
 const { WeeklyRoleService } = require('./WeeklyRoleService');
-const { WeeklyRoleService } = require('./WeeklyRoleService');
 const { cleanExpiredResetRoles } = require('../commands/admin/ResetRoleCommands');
 const { XpSyncService } = require('./XpSyncService');
 
