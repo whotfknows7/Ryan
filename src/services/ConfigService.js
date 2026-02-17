@@ -237,27 +237,32 @@ class ConfigService {
     // Let's use Prisma's atomic update features on JSON if possible, but JSON path updates are Postgres specific and raw.
     // For simplicity and safety in this codebase's style:
 
-    return await prisma.$transaction(async (tx) => {
-      const guildConfig = await tx.guildConfig.findUnique({
-        where: { guildId },
-        select: { config: true },
-      });
+    // Use atomic update to prevent race conditions
+    const query = Prisma.sql`
+      UPDATE "GuildConfig"
+      SET "config" = jsonb_set(
+        COALESCE("config", '{}'::jsonb),
+        '{punishmentCount}',
+        (COALESCE(("config"->>'punishmentCount')::int, 0) + 1)::text::jsonb
+      )
+      WHERE "guildId" = ${guildId}
+      RETURNING ("config"->>'punishmentCount')::int as "newCount"
+    `;
 
-      let currentConfig = guildConfig?.config || {};
-      if (typeof currentConfig !== 'object') currentConfig = {};
+    // If the guild config doesn't exist, we might get 0 rows.
+    // However, ensureGuildConfig should have been called before this or we can try upsert logic.
+    // For now, let's assume it exists or use standard update.
+    // Actually, to be safe, let's ensure it exists first.
+    await DatabaseService.ensureGuildConfig(guildId);
 
-      const currentCount = Number(currentConfig.punishmentCount) || 0;
-      const nextCount = currentCount + 1;
+    const result = await prisma.$queryRaw(query);
 
-      currentConfig.punishmentCount = nextCount;
-
-      await tx.guildConfig.update({
-        where: { guildId },
-        data: { config: currentConfig },
-      });
-
-      return nextCount;
-    });
+    if (result && result.length > 0) {
+      return result[0].newCount;
+    } else {
+      // Fallback if update failed (ensureGuildConfig should prevent this)
+      return 1;
+    }
   }
 }
 

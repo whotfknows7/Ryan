@@ -198,19 +198,9 @@ class GuildHelper {
    * Check if user is in a clan
    */
   async isInClan(userId) {
-    // Optimization: Check DB instead of fetching member?
-    // User instruction: "replace the cache check role calls with API calls"
-    // Fetching member IS an API call. Identifying clan via DB is safer/faster for stateless.
-    // "In resetservice... we will simply check in the database".
-    // Let's use DB here too if possible?
-    // But `GuildHelper` is often used for logic that *might* differ from DB (e.g. permission checks).
-    // For 'isInClan', checking roles or DB is similar if sync is working.
-    // Let's stick to checking roles via member fetch for consistency with other methods here.
-    const member = await this.guild.members.fetch(userId).catch(() => null);
-    if (!member) return false;
-
-    const ids = [this.ids.clanRole1Id, this.ids.clanRole2Id, this.ids.clanRole3Id, this.ids.clanRole4Id];
-    return ids.some((id) => id && member.roles.cache.has(id));
+    // Optimization: Check DB instead of fetching member (Stateless & Fast)
+    const stats = await DatabaseService.getUserStats(this.guild.id, userId);
+    return stats && stats.clanId > 0;
   }
 
   /**

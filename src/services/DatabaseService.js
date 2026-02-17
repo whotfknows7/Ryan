@@ -394,8 +394,8 @@ class DatabaseService {
 
     const query = Prisma.sql`
       UPDATE "GuildConfig" 
-      SET "${Prisma.raw(columnName)}" = COALESCE("${Prisma.raw(columnName)}", '{}'::jsonb) || ${mergeData}::jsonb,
-          "updatedAt" = NOW()
+      SET "${Prisma.raw(columnName)}" = COALESCE("${Prisma.raw(columnName)}", '{}'::jsonb) || ${JSON.stringify(mergeData)}::jsonb,
+      "updatedAt" = NOW()
       WHERE "guildId" = ${guildId}
     `;
 

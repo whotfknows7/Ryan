@@ -17,6 +17,7 @@ const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
+const { LeaderboardCleanupService } = require('./services/LeaderboardCleanupService');
 const logger = require('./lib/logger');
 
 const client = new CustomClient();
@@ -328,6 +329,10 @@ async function main() {
 
     // Background Tasks (BullMQ-scheduled)
     QueueService.initialize(client);
+
+    // Leaderboard Cleanup (Startup + Interval)
+    await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
+    setInterval(() => LeaderboardCleanupService.cleanupExpiredLeaderboards(client), 60 * 1000);
 
     logger.info('✅ All background services started.');
   } catch (error) {
