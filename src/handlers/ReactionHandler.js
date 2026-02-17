@@ -155,7 +155,8 @@ class ReactionHandler {
 
       // 3. Cleanup: Check for OTHER clan reactions on the message and remove them/roles
       // We iterate all clans, if it's NOT the target, we try to remove role and reaction.
-      const msg = reaction.message;
+      const msg = reaction.message.partial ? await reaction.message.fetch().catch(() => null) : reaction.message;
+      if (!msg) return;
 
       for (const clan of Object.values(clans)) {
         if (clan.id === targetClan.id) continue;
@@ -168,24 +169,13 @@ class ReactionHandler {
         }
 
         // Blind Remove Reaction
-        try {
-          // Since ReactionManager is 0, we might need to fetch reactions if not available?
-          // Actually `msg.reactions.cache` might be empty.
-          // But the user just reacted, so the message object *might* be partial.
-          // We should fetch the message to be sure if we want to remove reactions.
-          // But typically resolving by emoji works if we have the message.
+        const otherReaction = msg.reactions.cache.find(r =>
+          r.emoji.name === clan.emoji || r.emoji.toString() === clan.emoji || r.emoji.id === clan.emoji
+        );
 
-          // User said: "check for any other clanemoji, if found un-react the older"
-          // To find 'any other', we can just try to remove the user from all other clan emoji reactions.
-          const otherReaction = msg.reactions.cache.find(r =>
-            r.emoji.name === clan.emoji || r.emoji.toString() === clan.emoji || r.emoji.id === clan.emoji
-          );
-
-          if (otherReaction) {
-            await otherReaction.users.remove(user.id);
-          }
-        } catch (e) {
-          logger.error(`Failed to cleanup reaction for clan ${clan.id}: ${e}`);
+        if (otherReaction) {
+          // We don't want to throw an error if we lack permissions
+          await otherReaction.users.remove(user.id).catch(() => null);
         }
       }
 
@@ -203,6 +193,78 @@ class ReactionHandler {
       // 2. Set DB to 0
       await DatabaseService.setUserClan(guildId, user.id, 0);
     }
+
+    // --- 5-MINUTE INTEGRITY CHECK ---
+    setTimeout(async () => {
+      try {
+        const freshMember = await guild.members.fetch(user.id).catch(() => null);
+        if (!freshMember) return;
+
+        // Fetch Truth from DB
+        const stats = await DatabaseService.getUserStats(guildId, user.id);
+        const trueClanId = stats.clanId || 0;
+
+        // Fetch Config for Roles
+        const checkConfig = await DatabaseService.getFullGuildConfig(guildId);
+        const allClans = checkConfig?.clans || {};
+        const trueClan = Object.values(allClans).find(c => c.id === trueClanId);
+
+        let correctionNeeded = false;
+
+        // 1. Enforce Correct Role
+        if (trueClan) {
+          if (!freshMember.roles.cache.has(trueClan.roleId)) {
+            await freshMember.roles.add(trueClan.roleId, 'Clan Integrity Check');
+            correctionNeeded = true;
+          }
+        }
+
+        // 2. Remove Incorrect Roles
+        for (const c of Object.values(allClans)) {
+          if (c.id !== trueClanId) {
+            if (freshMember.roles.cache.has(c.roleId)) {
+              await freshMember.roles.remove(c.roleId, 'Clan Integrity Check');
+              correctionNeeded = true;
+            }
+
+            // Fix Reactions for incorrect clans
+            try {
+              const clanMsg = await guild.channels.fetch(guildIds.clanChannelId) // Assuming checks are in clan channel?
+                .then(ch => ch.messages.fetch(guildIds.clanMessageId))
+                .catch(() => null);
+
+              // Actually we have the message ID from the reaction passed in, or we can fetch via config if needed.
+              // But inside setTimeout `reaction.message` might be stale/gone from cache?
+              // Use `guildIds.clanMessageId` fetched earlier or available via `DatabaseService`.
+              // The `msg` from reaction handler scope is available in closure, but better typically to fetch fresh if 5 mins passed.
+              // Let's use the closure `reaction.message` ID.
+
+              if (reaction.message) {
+                const safeMsg = await reaction.message.fetch().catch(() => null);
+                if (safeMsg) {
+                  const badReaction = safeMsg.reactions.cache.find(r =>
+                    r.emoji.name === c.emoji || r.emoji.toString() === c.emoji || r.emoji.id === c.emoji
+                  );
+                  if (badReaction) {
+                    await badReaction.users.remove(user.id).catch(() => null);
+                    correctionNeeded = true;
+                  }
+                }
+              }
+            } catch (e) {
+              // Ignore reaction fix errors
+            }
+          }
+        }
+
+        if (correctionNeeded) {
+          logger.info(`Clan integrity check corrected user ${user.tag}`);
+        }
+
+      } catch (error) {
+        logger.error(`Error in Clan Integrity Check for ${user.tag}: ${error}`);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
   }
 }
 

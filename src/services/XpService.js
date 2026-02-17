@@ -167,8 +167,8 @@ class RoleRewardHandler {
       const channel = await guild.channels.fetch(channelId).catch(() => null);
       if (!channel) return;
 
-      // Get role information
-      const role = await guild.roles.fetch(reward.roleId).catch(() => null);
+      // Get role information (Use Cache - Roles are always in RAM)
+      const role = guild.roles.cache.get(reward.roleId);
       const roleName = role ? role.name : 'Level Up';
       const roleColor = role ? role.color : 0xffffff;
 
@@ -222,8 +222,15 @@ class PermissionChecker {
    */
   static async canUseAdminCommand(member) {
     try {
-      const helper = await createGuildHelper(member.guild);
-      return (await helper.isAdmin(member.id)) || member.permissions.has('Administrator');
+      if (!member || !member.guild) return false;
+
+      const ids = await getIds(member.guild.id);
+      const adminRoleId = ids.adminRoleId;
+
+      // Check roles from the member object (passed from message event)
+      const hasAdminRole = adminRoleId && member.roles.cache.has(adminRoleId);
+
+      return hasAdminRole || member.permissions.has('Administrator');
     } catch (error) {
       logger.error('Error checking admin permission:', error);
       return false;

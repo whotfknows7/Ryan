@@ -143,28 +143,29 @@ class GuildHelper {
   // --- PERMISSION HELPERS (Async) ---
 
   /**
-   * Check if user has admin role
+   * Check if user has admin role (Synchronous, Stateless)
+   * @param {GuildMember} member
    */
-  async isAdmin(userId) {
-    const member = await this.guild.members.fetch(userId).catch(() => null);
+  isAdmin(member) {
     if (!member || !this.ids.adminRoleId) return false;
     return member.roles.cache.has(this.ids.adminRoleId);
   }
 
   /**
-   * Check if user has moderator role
+   * Check if user has moderator role (Synchronous, Stateless)
+   * @param {GuildMember} member
    */
-  async isModerator(userId) {
-    const member = await this.guild.members.fetch(userId).catch(() => null);
+  isModerator(member) {
     if (!member || !this.ids.modRoleId) return false;
     return member.roles.cache.has(this.ids.modRoleId);
   }
 
   /**
-   * Check if user has admin or mod role
+   * Check if user has admin or mod role (Synchronous, Stateless)
+   * @param {GuildMember} member
    */
-  async isStaff(userId) {
-    return (await this.isAdmin(userId)) || (await this.isModerator(userId));
+  isStaff(member) {
+    return this.isAdmin(member) || this.isModerator(member);
   }
 
   /**

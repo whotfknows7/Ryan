@@ -28,6 +28,7 @@ class CustomClient extends Client {
         GuildMemberManager: 0,
         PresenceManager: 0,
         ThreadManager: 0,
+        VoiceStateManager: 0,
       }),
       // Sweepers to clean up messages every hour
       sweepers: {
