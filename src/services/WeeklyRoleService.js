@@ -10,8 +10,11 @@ class WeeklyRoleService {
    */
   static async checkWeeklyRole(client, guildId) {
     try {
-      // 1. Fetch Config
-      const ids = await getIds(guildId);
+      // 1. Fetch Config & IDs
+      const guildConfig = await DatabaseService.getFullGuildConfig(guildId);
+      const ids = guildConfig?.ids || {};
+      const config = guildConfig?.config || {};
+
       const roleId = ids.weeklyBestChatterRoleId;
 
       // 2. Validation
@@ -20,43 +23,53 @@ class WeeklyRoleService {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) return;
 
-      // 3. Fetch Role
-      const role = guild.roles.cache.get(roleId);
-      if (!role) {
-        logger.warn(`Weekly Role ID ${roleId} configured for guild ${guildId} but role not found.`);
+      // 3. Fetch Top Winner
+      const topUsers = await DatabaseService.fetchTopUsers(guildId, 1, 'weekly');
+      const newWinnerId = topUsers.length > 0 ? topUsers[0].userId : null;
+      const oldWinnerId = config.currentWeeklyWinnerId;
+
+      if (newWinnerId === oldWinnerId) {
+        // Optimization: If winner is same, ensure they have the role?
+        // For stateless, we assume if ID matches, role was given. 
+        // But to be robust against restarts/missed events, we can check.
+        // Since GuildMemberManager is 0, checking costs API call.
+        // Let's only check if they CHANGED.
         return;
       }
 
-      // 4. Fetch Winner
-      // fetchTopUsers(guildId, limit, type)
-      const topUsers = await DatabaseService.fetchTopUsers(guildId, 1, 'weekly');
-      const winnerId = topUsers.length > 0 ? topUsers[0].userId : null;
+      // 4. Handle Change
 
-      // 5. Manage Role
-      // Remove role from users who shouldn't have it
-      for (const [memberId, member] of role.members) {
-        if (memberId !== winnerId) {
-          try {
-            await member.roles.remove(role);
-            logger.info(`Removed Weekly Best Chatter role from ${member.user.tag} in ${guild.name}`);
-          } catch (err) {
-            logger.error(`Failed to remove weekly role from ${member.user.tag}:`, err);
-          }
-        }
-      }
-
-      // Add role to the winner if they don't have it
-      if (winnerId) {
+      // a. Remove Role from Old Winner
+      if (oldWinnerId) {
         try {
-          const winnerMember = await guild.members.fetch(winnerId).catch(() => null);
-          if (winnerMember && !winnerMember.roles.cache.has(roleId)) {
-            await winnerMember.roles.add(role);
-            logger.info(`Assigned Weekly Best Chatter role to ${winnerMember.user.tag} in ${guild.name}`);
+          // We must fetch to remove role
+          const oldMember = await guild.members.fetch(oldWinnerId).catch(() => null);
+          if (oldMember) {
+            await oldMember.roles.remove(roleId, 'Weekly Winner Changed');
+            logger.info(`Removed Weekly Best Chatter role from previous winner ${oldMember.user.tag}`);
           }
-        } catch (err) {
-          logger.error(`Failed to assign weekly role to winner ${winnerId}:`, err);
+        } catch (e) {
+          logger.error(`Failed to remove weekly role from old winner ${oldWinnerId}: ${e}`);
         }
       }
+
+      // b. Add Role to New Winner
+      if (newWinnerId) {
+        try {
+          const newMember = await guild.members.fetch(newWinnerId).catch(() => null);
+          if (newMember) {
+            await newMember.roles.add(roleId, 'New Weekly Best Chatter');
+            logger.info(`Assigned Weekly Best Chatter role to ${newMember.user.tag}`);
+          }
+        } catch (e) {
+          logger.error(`Failed to assign weekly role to new winner ${newWinnerId}: ${e}`);
+        }
+      }
+
+      // c. Update Persisted State in DB
+      // We store `currentWeeklyWinnerId` in the `config` JSON column
+      await DatabaseService.atomicJsonMerge(guildId, 'config', JSON.stringify({ currentWeeklyWinnerId: newWinnerId }));
+
     } catch (error) {
       logger.error(`Error in WeeklyRoleService for guild ${guildId}:`, error);
     }

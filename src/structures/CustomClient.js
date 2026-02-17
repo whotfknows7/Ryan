@@ -1,6 +1,6 @@
 // src/structures/CustomClient.js
 
-const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js');
+const { Client, Collection, GatewayIntentBits, Partials, Options } = require('discord.js');
 const { config } = require('../config');
 const logger = require('../lib/logger');
 
@@ -19,6 +19,24 @@ class CustomClient extends Client {
         Partials.Channel,
         Partials.Reaction, // Required for fetching reactions on old messages
       ],
+      // RAM OPTIMIZATION: Strict Cache Limits for Stateless Architecture
+      makeCache: Options.cacheWithLimits({
+        ...Options.DefaultMakeCacheSettings,
+        MessageManager: 20,
+        ReactionManager: 0,
+        UserManager: 0,
+        GuildMemberManager: 0,
+        PresenceManager: 0,
+        ThreadManager: 0,
+      }),
+      // Sweepers to clean up messages every hour
+      sweepers: {
+        ...Options.DefaultSweeperSettings,
+        messages: {
+          interval: 3600, // 1 hour
+          lifetime: 3600, // 1 hour
+        },
+      },
       rest: {
         timeout: 30000,
       },

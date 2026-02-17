@@ -56,93 +56,97 @@ class GuildHelper {
     this.ids = ids;
   }
 
-  // --- ROLE GETTERS ---
+  // --- ROLE GETTERS (Async) ---
 
-  get adminRole() {
-    return this.ids.adminRoleId ? this.guild.roles.cache.get(this.ids.adminRoleId) : undefined;
+  async getAdminRole() {
+    return this.ids.adminRoleId ? await this.guild.roles.fetch(this.ids.adminRoleId).catch(() => undefined) : undefined;
   }
 
-  get modRole() {
-    return this.ids.modRoleId ? this.guild.roles.cache.get(this.ids.modRoleId) : undefined;
+  async getModRole() {
+    return this.ids.modRoleId ? await this.guild.roles.fetch(this.ids.modRoleId).catch(() => undefined) : undefined;
   }
 
-  get clanRole1() {
-    return this.ids.clanRole1Id ? this.guild.roles.cache.get(this.ids.clanRole1Id) : undefined;
+  async getClanRole1() {
+    return this.ids.clanRole1Id ? await this.guild.roles.fetch(this.ids.clanRole1Id).catch(() => undefined) : undefined;
   }
 
-  get clanRole2() {
-    return this.ids.clanRole2Id ? this.guild.roles.cache.get(this.ids.clanRole2Id) : undefined;
+  async getClanRole2() {
+    return this.ids.clanRole2Id ? await this.guild.roles.fetch(this.ids.clanRole2Id).catch(() => undefined) : undefined;
   }
 
-  get clanRole3() {
-    return this.ids.clanRole3Id ? this.guild.roles.cache.get(this.ids.clanRole3Id) : undefined;
+  async getClanRole3() {
+    return this.ids.clanRole3Id ? await this.guild.roles.fetch(this.ids.clanRole3Id).catch(() => undefined) : undefined;
   }
 
-  get clanRole4() {
-    return this.ids.clanRole4Id ? this.guild.roles.cache.get(this.ids.clanRole4Id) : undefined;
+  async getClanRole4() {
+    return this.ids.clanRole4Id ? await this.guild.roles.fetch(this.ids.clanRole4Id).catch(() => undefined) : undefined;
   }
 
-  get legendaryRole() {
-    return this.ids.legendaryRoleId ? this.guild.roles.cache.get(this.ids.legendaryRoleId) : undefined;
+  async getLegendaryRole() {
+    return this.ids.legendaryRoleId ? await this.guild.roles.fetch(this.ids.legendaryRoleId).catch(() => undefined) : undefined;
   }
 
-  get groundRole() {
-    return this.ids.groundRoleId ? this.guild.roles.cache.get(this.ids.groundRoleId) : undefined;
+  async getGroundRole() {
+    return this.ids.groundRoleId ? await this.guild.roles.fetch(this.ids.groundRoleId).catch(() => undefined) : undefined;
   }
 
-  // --- CHANNEL GETTERS ---
+  // --- CHANNEL GETTERS (Async) ---
+  // Channels might be cached if fetched recently, but safer to fetch if stateless.
+  // Actually ChannelManager wasn't strictly limited to 0 in my CustomClient update (I only did Message, Reaction, User, GuildMember, Presence, Thread).
+  // But typically getting from cache is fine if it's there. if not, `fetch`.
+  // `guild.channels.fetch(id)` is safe.
 
-  get adminChannel() {
-    return this.ids.adminChannelId ? this.guild.channels.cache.get(this.ids.adminChannelId) : undefined;
+  async getAdminChannel() {
+    return this.ids.adminChannelId ? await this.guild.channels.fetch(this.ids.adminChannelId).catch(() => undefined) : undefined;
   }
 
-  get adminsOnlyChannel() {
-    return this.ids.adminsOnlyId ? this.guild.channels.cache.get(this.ids.adminsOnlyId) : undefined;
+  async getAdminsOnlyChannel() {
+    return this.ids.adminsOnlyId ? await this.guild.channels.fetch(this.ids.adminsOnlyId).catch(() => undefined) : undefined;
   }
 
-  get modChannel() {
-    return this.ids.modChannelId ? this.guild.channels.cache.get(this.ids.modChannelId) : undefined;
+  async getModChannel() {
+    return this.ids.modChannelId ? await this.guild.channels.fetch(this.ids.modChannelId).catch(() => undefined) : undefined;
   }
 
-  get logsChannel() {
-    return this.ids.logsChannelId ? this.guild.channels.cache.get(this.ids.logsChannelId) : undefined;
+  async getLogsChannel() {
+    return this.ids.logsChannelId ? await this.guild.channels.fetch(this.ids.logsChannelId).catch(() => undefined) : undefined;
   }
 
-  get trueLogsChannel() {
-    return this.ids.trueLogsChannelId ? this.guild.channels.cache.get(this.ids.trueLogsChannelId) : undefined;
+  async getTrueLogsChannel() {
+    return this.ids.trueLogsChannelId ? await this.guild.channels.fetch(this.ids.trueLogsChannelId).catch(() => undefined) : undefined;
   }
 
-  get roleLogChannel() {
-    return this.ids.roleLogChannelId ? this.guild.channels.cache.get(this.ids.roleLogChannelId) : undefined;
+  async getRoleLogChannel() {
+    return this.ids.roleLogChannelId ? await this.guild.channels.fetch(this.ids.roleLogChannelId).catch(() => undefined) : undefined;
   }
 
-  get leaderboardChannel() {
-    return this.ids.leaderboardChannelId ? this.guild.channels.cache.get(this.ids.leaderboardChannelId) : undefined;
+  async getLeaderboardChannel() {
+    return this.ids.leaderboardChannelId ? await this.guild.channels.fetch(this.ids.leaderboardChannelId).catch(() => undefined) : undefined;
   }
 
-  get clanChannel() {
-    return this.ids.clanChannelId ? this.guild.channels.cache.get(this.ids.clanChannelId) : undefined;
+  async getClanChannel() {
+    return this.ids.clanChannelId ? await this.guild.channels.fetch(this.ids.clanChannelId).catch(() => undefined) : undefined;
   }
 
-  get clansChannel() {
-    return this.ids.clansChannelId ? this.guild.channels.cache.get(this.ids.clansChannelId) : undefined;
+  async getClansChannel() {
+    return this.ids.clansChannelId ? await this.guild.channels.fetch(this.ids.clansChannelId).catch(() => undefined) : undefined;
   }
 
-  get jailChannel() {
-    return this.ids.jailChannelId ? this.guild.channels.cache.get(this.ids.jailChannelId) : undefined;
+  async getJailChannel() {
+    return this.ids.jailChannelId ? await this.guild.channels.fetch(this.ids.jailChannelId).catch(() => undefined) : undefined;
   }
 
-  get messageSearchChannel() {
-    return this.ids.messageSearchChannelId ? this.guild.channels.cache.get(this.ids.messageSearchChannelId) : undefined;
+  async getMessageSearchChannel() {
+    return this.ids.messageSearchChannelId ? await this.guild.channels.fetch(this.ids.messageSearchChannelId).catch(() => undefined) : undefined;
   }
 
-  // --- PERMISSION HELPERS ---
+  // --- PERMISSION HELPERS (Async) ---
 
   /**
    * Check if user has admin role
    */
-  isAdmin(userId) {
-    const member = this.guild.members.cache.get(userId);
+  async isAdmin(userId) {
+    const member = await this.guild.members.fetch(userId).catch(() => null);
     if (!member || !this.ids.adminRoleId) return false;
     return member.roles.cache.has(this.ids.adminRoleId);
   }
@@ -150,8 +154,8 @@ class GuildHelper {
   /**
    * Check if user has moderator role
    */
-  isModerator(userId) {
-    const member = this.guild.members.cache.get(userId);
+  async isModerator(userId) {
+    const member = await this.guild.members.fetch(userId).catch(() => null);
     if (!member || !this.ids.modRoleId) return false;
     return member.roles.cache.has(this.ids.modRoleId);
   }
@@ -159,15 +163,23 @@ class GuildHelper {
   /**
    * Check if user has admin or mod role
    */
-  isStaff(userId) {
-    return this.isAdmin(userId) || this.isModerator(userId);
+  async isStaff(userId) {
+    return (await this.isAdmin(userId)) || (await this.isModerator(userId));
   }
 
   /**
    * Check if user is in a clan
    */
-  isInClan(userId) {
-    const member = this.guild.members.cache.get(userId);
+  async isInClan(userId) {
+    // Optimization: Check DB instead of fetching member?
+    // User instruction: "replace the cache check role calls with API calls"
+    // Fetching member IS an API call. Identifying clan via DB is safer/faster for stateless.
+    // "In resetservice... we will simply check in the database".
+    // Let's use DB here too if possible?
+    // But `GuildHelper` is often used for logic that *might* differ from DB (e.g. permission checks).
+    // For 'isInClan', checking roles or DB is similar if sync is working.
+    // Let's stick to checking roles via member fetch for consistency with other methods here.
+    const member = await this.guild.members.fetch(userId).catch(() => null);
     if (!member) return false;
 
     const ids = [this.ids.clanRole1Id, this.ids.clanRole2Id, this.ids.clanRole3Id, this.ids.clanRole4Id];
@@ -177,8 +189,8 @@ class GuildHelper {
   /**
    * Get clan ID for user (1, 2, 3, 4 or null)
    */
-  getClanId(userId) {
-    const member = this.guild.members.cache.get(userId);
+  async getClanId(userId) {
+    const member = await this.guild.members.fetch(userId).catch(() => null);
     if (!member) return null;
 
     if (this.ids.clanRole1Id && member.roles.cache.has(this.ids.clanRole1Id)) return 1;

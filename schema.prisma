@@ -13,10 +13,9 @@ model UserXp {
   userId    String
   guildId   String
   xp        Int      @default(0) // Lifetime XP
-  
-  // Breakthrough 1: Live Counters
   dailyXp   Int      @default(0)
   weeklyXp  Int      @default(0)
+  clanId    Int?     @default(0)
 
   updatedAt DateTime @updatedAt
 
@@ -24,15 +23,7 @@ model UserXp {
   @@index([guildId, dailyXp(sort: Desc)])
   @@index([guildId, weeklyXp(sort: Desc)])
   @@index([guildId, xp(sort: Desc)])
-}
-
-model ClanXp {
-  userId  String
-  guildId String
-  clanId  Int
-  xp      Int @default(0)
-
-  @@id([guildId, clanId, userId])
+  @@index([guildId, clanId])
 }
 
 model GuildConfig {

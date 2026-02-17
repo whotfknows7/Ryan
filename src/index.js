@@ -17,7 +17,7 @@ const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
 
-const { setRoleSkip } = require('./lib/cooldowns');
+
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
 const logger = require('./lib/logger');
 
@@ -267,13 +267,7 @@ async function main() {
       }
     });
 
-    client.on('guildMemberUpdate', async (oldMember, newMember) => {
-      try {
-        await XpService.checkRoleAnnouncements(oldMember, newMember);
-      } catch (error) {
-        logger.error('Role Announcement Error:', error);
-      }
-    });
+
 
     client.on('messageReactionAdd', async (reaction, user) => {
       if (user.bot) return;
@@ -297,8 +291,9 @@ async function main() {
       try {
         const wasJailed = await PunishmentService.handleMemberJoin(member);
         if (!wasJailed) {
-          const skipTimestamp = setRoleSkip(member.id);
-          logger.info(`Set role skip for ${member.user.tag} at ${skipTimestamp}`);
+          if (!wasJailed) {
+            // Role skip logic removed
+          }
         }
       } catch (error) {
         logger.error('Member Join Error:', error);

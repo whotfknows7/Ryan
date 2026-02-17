@@ -1,12 +1,24 @@
 const Redis = require('ioredis');
 const logger = require('../lib/logger');
 
+const fs = require('fs');
+
 // Unix Domain Socket path (set REDIS_SOCKET="none" to force TCP fallback)
 const REDIS_SOCKET = process.env.REDIS_SOCKET || '/run/redis/redis-server.sock';
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || null;
 
-// Prefer UDS for lower latency; fall back to TCP if explicitly disabled
-const useSocket = REDIS_SOCKET && REDIS_SOCKET !== 'none';
+// Prefer UDS for lower latency; fall back to TCP if explicitly disabled OR inaccessible
+let useSocket = REDIS_SOCKET && REDIS_SOCKET !== 'none';
+
+if (useSocket) {
+  try {
+    // Check if socket exists and is writable by current user
+    fs.accessSync(REDIS_SOCKET, fs.constants.F_OK | fs.constants.W_OK);
+  } catch (err) {
+    logger.warn(`⚠️ Cannot access Redis socket "${REDIS_SOCKET}" (${err.code}), falling back to TCP.`);
+    useSocket = false;
+  }
+}
 
 const redisConfig = useSocket
   ? {

@@ -82,9 +82,9 @@ class DatabaseService {
   static async getUserStats(guildId, userId) {
     const stats = await prisma.userXp.findUnique({
       where: { guildId_userId: { guildId, userId } },
-      select: { dailyXp: true, weeklyXp: true, xp: true },
+      select: { dailyXp: true, weeklyXp: true, xp: true, clanId: true },
     });
-    return stats || { dailyXp: 0, weeklyXp: 0, xp: 0 };
+    return stats || { dailyXp: 0, weeklyXp: 0, xp: 0, clanId: 0 };
   }
 
   /**
@@ -172,10 +172,7 @@ class DatabaseService {
   }
 
   static async deleteUserData(guildId, userId) {
-    await prisma.$transaction([
-      prisma.userXp.deleteMany({ where: { guildId, userId } }),
-      prisma.clanXp.deleteMany({ where: { guildId, userId } }),
-    ]);
+    await prisma.userXp.deleteMany({ where: { guildId, userId } });
   }
 
   static async resetUserXp(guildId) {
@@ -229,31 +226,53 @@ class DatabaseService {
   }
 
   /**
-   * [NEW] Syncs UserXP to ClanXP without deleting UserXP.
-   * This ensures ClanXP reflects the current UserXP state (replacing old values).
-   * This is used for all reset modules where UserXP accumulates.
+   * [NEW] Syncs User Roles to UserXp.clanId
+   * This ensures UserXp reflects the current Clan Roles.
    */
-  static async syncUserXpToClanXp(guildId, clanUpdates) {
+  static async syncUserClanRoles(guildId, clanUpdates) {
     if (clanUpdates.length === 0) return;
-    const userIds = clanUpdates.map((u) => u.userId);
 
-    // 1. Delete existing ClanXp entries for these users to prevent "Clan Hopping" exploits
-    //    or stale data from previous clans.
-    await prisma.clanXp.deleteMany({
-      where: {
-        guildId,
-        userId: { in: userIds },
-      },
+    // 1. Reset clanId for all users in the guild first (optional, but safer to ensure no stale clans)
+    // Or efficiently, just update the ones we know about. 
+    // Ideally, we want to set clanId = null for everyone, and then set it for the active ones.
+    // But since this runs frequently or on reset, let's just update the ones found.
+    // Actually, if a user leaves a clan, they won't be in clanUpdates.
+    // So we should probably set all clanId to 0 (or null) for the guild first? 
+    // Or we can just update the ones we have.
+    // "make sure that a user can have 1+ guilds and different clans in different guilds" -> schema handles this via composite key/guildId.
+
+    // Efficient approach:
+    // 1. Set clanId = 0 for all users in this guild (assuming 0 means no clan)
+    await prisma.userXp.updateMany({
+      where: { guildId },
+      data: { clanId: 0 }
     });
 
-    // 2. Create fresh entries matching current UserXp
-    await prisma.clanXp.createMany({
-      data: clanUpdates.map((u) => ({
-        guildId,
-        clanId: u.clanId,
-        userId: u.userId,
-        xp: u.xp,
-      })),
+    // 2. Bulk update is tricky in Prisma without raw query for different values.
+    // We can do it in a loop or transaction.
+    // Since clanUpdates might be large, we should batch it or usage Promise.all
+    // But since this is a background job usually, loop is fine for now or we can use a raw query case statement.
+
+    // Let's use a loop with parallel promises for now, or transaction.
+    const updates = clanUpdates.map(u =>
+      prisma.userXp.updateMany({
+        where: { guildId, userId: u.userId },
+        data: { clanId: u.clanId }
+      })
+    );
+
+    await prisma.$transaction(updates);
+    await prisma.$transaction(updates);
+  }
+
+  /**
+   * [NEW] Sets a specific user's clan ID in the database.
+   * Used for stateless reaction role switching.
+   */
+  static async setUserClan(guildId, userId, clanId) {
+    return await prisma.userXp.updateMany({
+      where: { guildId, userId },
+      data: { clanId }
     });
   }
 
@@ -359,7 +378,7 @@ class DatabaseService {
   // =================================================================
 
   static async getClanXp(guildId, clanId) {
-    const result = await prisma.clanXp.aggregate({
+    const result = await prisma.userXp.aggregate({
       where: { guildId, clanId },
       _sum: { xp: true },
     });
@@ -367,9 +386,12 @@ class DatabaseService {
   }
 
   static async getClanTotalXp(guildId) {
-    const results = await prisma.clanXp.groupBy({
+    const results = await prisma.userXp.groupBy({
       by: ['clanId'],
-      where: { guildId },
+      where: {
+        guildId,
+        clanId: { gt: 0 } // exclude no clan
+      },
       _sum: { xp: true },
     });
     const clanTotals = {};
@@ -379,17 +401,10 @@ class DatabaseService {
     return clanTotals;
   }
 
-  static async addClanXp(guildId, clanId, userId, xp) {
-    await prisma.clanXp.upsert({
-      where: { guildId_clanId_userId: { guildId, clanId, userId } },
-      create: { guildId, clanId, userId, xp },
-      update: { xp: { increment: xp } },
-    });
-  }
+  // addClanXp is no longer needed as we update UserXp directly.
+  // clearClanXp is no longer needed as we perform soft resets or clanId updates.
 
-  static async clearClanXp(guildId) {
-    await prisma.clanXp.deleteMany({ where: { guildId } });
-  }
+
 
   // =================================================================
   // 4. GUILD CONFIG & IDS

@@ -132,7 +132,7 @@ class ResetService {
       // 2. Update Clan War (Syncs current XP to Clan DB)
       // We removed the "Module 1" specific deletion logic. Now all modules behave consistently.
       const clanUpdates = await this.calculateClanUpdates(client, guildId);
-      await DatabaseService.syncUserXpToClanXp(guildId, clanUpdates);
+      await DatabaseService.syncUserClanRoles(guildId, clanUpdates);
 
       // 3. Reset ONLY the dailyXp column (The "Daily" part of the reset)
       await DatabaseService.resetDailyXp(guildId);
@@ -166,7 +166,7 @@ class ResetService {
 
       // 2. Final Clan War Sync
       const clanUpdates = await this.calculateClanUpdates(client, guildId);
-      await DatabaseService.syncUserXpToClanXp(guildId, clanUpdates);
+      await DatabaseService.syncUserClanRoles(guildId, clanUpdates);
 
       this.wipeAssetCache();
       const finalTotals = await DatabaseService.getClanTotalXp(guildId);
@@ -176,7 +176,12 @@ class ResetService {
       await DatabaseService.resetWeeklyXp(guildId);
 
       // 4. Reset ClanXP (New war starts next week)
-      await DatabaseService.clearClanXp(guildId);
+      // ClanXp table is removed. syncUserClanRoles keeps clanId updated.
+      // We might want to clear clanIds or just keep them? 
+      // If "New war starts next week", and clanId is just a property of the user, it persists.
+      // The "XP" relevant for the war is "weeklyXp", which we just reset.
+      // So no need to clear 'clanId' from users unless they left the clan.
+      // We already sync roles daily/weekly. So nothing to do here.
 
       logger.info(`Weekly reset completed for guild ${guildId}`);
 
@@ -194,42 +199,13 @@ class ResetService {
     } catch { /* best-effort wipe */ }
   }
 
+  /* 
+   * [REMOVED] calculateClanUpdates
+   * We no longer sync from Roles -> DB. The DB is now the source of truth for Clan IDs.
+   * ReactionHandler updates DB on every change.
+   */
   static async calculateClanUpdates(client, guildId) {
-    const allUsers = await DatabaseService.getAllUserXp(guildId);
-    if (allUsers.length === 0) return [];
-
-    const ids = await getIds(guildId);
-    const clanRoleMap = {};
-    if (ids.clanRole1Id) clanRoleMap[1] = ids.clanRole1Id;
-    if (ids.clanRole2Id) clanRoleMap[2] = ids.clanRole2Id;
-    if (ids.clanRole3Id) clanRoleMap[3] = ids.clanRole3Id;
-    if (ids.clanRole4Id) clanRoleMap[4] = ids.clanRole4Id;
-
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) return [];
-
-    const updates = [];
-    const chunkSize = 100;
-
-    for (let i = 0; i < allUsers.length; i += chunkSize) {
-      const chunk = allUsers.slice(i, i + chunkSize);
-      try {
-        const members = await guild.members.fetch({ user: chunk.map((u) => u.userId) });
-        for (const user of chunk) {
-          const member = members.get(user.userId);
-          if (!member) continue;
-          for (const [clanIdStr, roleId] of Object.entries(clanRoleMap)) {
-            if (roleId && member.roles.cache.has(roleId)) {
-              updates.push({ userId: user.userId, clanId: parseInt(clanIdStr), xp: user.xp });
-              break;
-            }
-          }
-        }
-      } catch (e) {
-        logger.error(`Member fetch failed: ${e.message}`);
-      }
-    }
-    return updates;
+    return [];
   }
 
   // =================================================================

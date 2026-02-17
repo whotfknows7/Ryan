@@ -2,47 +2,7 @@
 
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 
-// =========================================
-// ROLE ANNOUNCEMENT SKIP TRACKING
-// (Simple timer — not rate limiting, kept as-is)
-// =========================================
 
-const roleAnnouncementSkips = new Map();
-
-function setRoleSkip(memberId) {
-  const timestamp = Date.now();
-  roleAnnouncementSkips.set(memberId, timestamp);
-  return timestamp;
-}
-
-function checkRoleSkip(memberId, windowMs = 20000) {
-  const skipTime = roleAnnouncementSkips.get(memberId);
-
-  if (!skipTime) return null;
-
-  const elapsed = Date.now() - skipTime;
-
-  if (elapsed < windowMs) {
-    return windowMs - elapsed; // Time remaining
-  }
-
-  // Skip window expired, cleanup
-  roleAnnouncementSkips.delete(memberId);
-  return null;
-}
-
-function clearRoleSkip(memberId) {
-  roleAnnouncementSkips.delete(memberId);
-}
-
-function getActiveSkips() {
-  const now = Date.now();
-  return Array.from(roleAnnouncementSkips.entries()).map(([memberId, timestamp]) => ({
-    memberId,
-    timestamp,
-    age: now - timestamp,
-  }));
-}
 
 // =========================================
 // COMMAND COOLDOWNS — rate-limiter-flexible
@@ -115,12 +75,7 @@ async function clearAllCooldowns(userId) {
 }
 
 module.exports = {
-  // Role announcement skip exports
-  roleAnnouncementSkips,
-  setRoleSkip,
-  checkRoleSkip,
-  clearRoleSkip,
-  getActiveSkips,
+
 
   // Command cooldown exports
   checkCooldown,

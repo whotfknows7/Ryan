@@ -5,7 +5,6 @@ const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
 const { createGuildHelper, getIds } = require('../utils/GuildIdsHelper');
-const { checkRoleSkip } = require('../lib/cooldowns');
 const logger = require('../lib/logger');
 const emojiRegex = require('emoji-regex');
 const { EmbedBuilder } = require('discord.js');
@@ -17,9 +16,6 @@ const { EmbedBuilder } = require('discord.js');
 const URL_REGEX = /http[s]?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+/g;
 const EMOJI_REACTION_DELAY = 500;
 const ROLE_SKIP_CHECK_LOG_LEVEL = 'debug';
-
-// CACHE: Map<GuildId, SortedArray<Rewards>>
-const RoleRewardCache = new Map();
 
 // ============================================================================
 // XP Calculation Utilities
@@ -104,19 +100,24 @@ class KeywordReactionHandler {
 }
 
 // ============================================================================
-// Role Reward Cache Management
+// Role Reward Handler (Stateless)
 // ============================================================================
 
-class RoleRewardCacheManager {
+class RoleRewardHandler {
   /**
-   * Loads role rewards from database and caches them sorted by XP (descending)
-   * This allows for O(n) reward checking instead of database queries
+   * Checks and grants role rewards based on XP
+   * Stateless: Fetches config from DB (or simple service cache) each time
    */
-  static async loadRoleRewards(guildId) {
-    const config = await DatabaseService.getFullGuildConfig(guildId);
-    const rewardsMap = config?.config?.announcement_roles || {};
+  static async checkRoleRewards(guild, member, currentXp) {
+    if (!member) return;
 
-    // Sort Descending by XP for efficient checking
+    // 1. Fetch Rewards Config directly (Stateless)
+    // We expect ConfigService or DatabaseService to handle any necessary low-level caching
+    // purely for performance, but logically we treat it as "fetch from source".
+    const guildConfig = await DatabaseService.getFullGuildConfig(guild.id);
+    const rewardsMap = guildConfig?.config?.announcement_roles || {};
+
+    // Convert to array and sort by XP descending
     const rewards = Object.values(rewardsMap)
       .map((r) => ({
         roleId: r.roleId || r.id,
@@ -127,100 +128,27 @@ class RoleRewardCacheManager {
       .filter((r) => r.xp > 0)
       .sort((a, b) => b.xp - a.xp);
 
-    RoleRewardCache.set(guildId, rewards);
-    logger.debug(`Loaded ${rewards.length} role rewards for guild ${guildId}`);
-    return rewards;
-  }
-
-  /**
-   * Manually refreshes the cache for a specific guild
-   */
-  static async refreshRoleRewardCache(guildId) {
-    await this.loadRoleRewards(guildId);
-  }
-
-  /**
-   * Gets cached rewards or loads them if not cached
-   */
-  static async getCachedRewards(guildId) {
-    if (!RoleRewardCache.has(guildId)) {
-      await this.loadRoleRewards(guildId);
-    }
-    return RoleRewardCache.get(guildId) || [];
-  }
-
-  /**
-   * Clears cache for a specific guild or all guilds
-   */
-  static clearCache(guildId = null) {
-    if (guildId) {
-      RoleRewardCache.delete(guildId);
-      logger.debug(`Cleared role reward cache for guild ${guildId}`);
-    } else {
-      RoleRewardCache.clear();
-      logger.debug('Cleared all role reward caches');
-    }
-  }
-}
-
-// ============================================================================
-// Role Reward Handler (3-Phase System)
-// ============================================================================
-
-class RoleRewardHandler {
-  /**
-   * 3-PHASE REWARD CHECK SYSTEM
-   * Phase 1: RAM Check (nanoseconds) - Check cache against member's roles
-   * Phase 2: Verification (milliseconds) - Fetch fresh member data from API
-   * Phase 3: Execution (seconds) - Grant roles and send announcements
-   *
-   * @param {Guild} guild - Discord guild object
-   * @param {GuildMember} member - Guild member (may be stale)
-   * @param {number} currentXp - Current total XP of user
-   */
-  static async checkRoleRewards(guild, member, currentXp) {
-    if (!member) return;
-
-    // Phase 0: Ensure Cache exists
-    const rewards = await RoleRewardCacheManager.getCachedRewards(guild.id);
     if (rewards.length === 0) return;
 
-    // Phase 1: The RAM Check (Nanoseconds)
-    // Filter for rewards they qualify for BUT don't have in cache
-    const potentialRewards = rewards.filter(
-      (reward) => currentXp >= reward.xp && !member.roles.cache.has(reward.roleId)
-    );
+    // 2. Check & Grant
+    // We trust message.member.roles.cache as the snapshot of user's roles
+    for (const reward of rewards) {
+      // If user qualifies for this role
+      if (currentXp >= reward.xp) {
+        // Check if they already have it
+        if (!member.roles.cache.has(reward.roleId)) {
+          try {
+            await member.roles.add(reward.roleId, 'XP Role Reward');
+            logger.info(`Awarded Role ${reward.roleId} to ${member.user.tag} at ${currentXp} XP`);
 
-    if (potentialRewards.length === 0) return;
-
-    // Phase 2: The Double-Check (Verification)
-    // We only fetch the API if we strongly suspect a reward is needed
-    let freshMember;
-    try {
-      freshMember = await guild.members.fetch(member.id);
-    } catch (e) {
-      logger.warn(`Failed to fetch member ${member.id} for reward check:`, e);
-      return; // User left server
-    }
-
-    // Phase 3: Execution
-    for (const reward of potentialRewards) {
-      // Verify against fresh API data
-      if (freshMember.roles.cache.has(reward.roleId)) {
-        logger.debug(`User ${freshMember.user.tag} already has role ${reward.roleId}`);
-        continue;
-      }
-
-      try {
-        await freshMember.roles.add(reward.roleId);
-        logger.info(`Awarded Role ${reward.roleId} to ${freshMember.user.tag} at ${currentXp} XP`);
-
-        // Send announcement if configured
-        if (reward.message) {
-          await this.sendAnnouncement(guild, freshMember, reward, currentXp);
+            // Send announcement
+            if (reward.message) {
+              await this.sendAnnouncement(guild, member, reward, currentXp);
+            }
+          } catch (err) {
+            logger.error(`Failed to grant reward ${reward.roleId} to ${member.user.tag}:`, err);
+          }
         }
-      } catch (err) {
-        logger.error(`Failed to grant reward ${reward.roleId} to ${freshMember.user.tag}:`, err);
       }
     }
   }
@@ -234,19 +162,13 @@ class RoleRewardHandler {
       // Fetch announcement channel
       const ids = await getIds(guild.id);
       const channelId = ids.leaderboardChannelId;
-      if (!channelId) {
-        logger.debug(`No announcement channel configured for guild ${guild.id}`);
-        return;
-      }
+      if (!channelId) return;
 
       const channel = await guild.channels.fetch(channelId).catch(() => null);
-      if (!channel) {
-        logger.warn(`Could not fetch announcement channel ${channelId}`);
-        return;
-      }
+      if (!channel) return;
 
       // Get role information
-      const role = guild.roles.cache.get(reward.roleId);
+      const role = await guild.roles.fetch(reward.roleId).catch(() => null);
       const roleName = role ? role.name : 'Level Up';
       const roleColor = role ? role.color : 0xffffff;
 
@@ -287,97 +209,7 @@ class RoleRewardHandler {
   }
 }
 
-// ============================================================================
-// Manual Role Announcement Handler
-// ============================================================================
 
-class ManualRoleAnnouncementHandler {
-  /**
-   * Handles announcements for roles manually added by admins
-   * Triggered by guildMemberUpdate event
-   */
-  static async handle(oldMember, newMember) {
-    try {
-      if (this.shouldSkipAnnouncement(newMember)) return;
-
-      // Don't announce for jailed users
-      const jailLog = await ConfigService.getJailLog(newMember.guild.id, newMember.id);
-      if (jailLog && jailLog.status === 'jailed') return;
-
-      const channel = await this.getAnnouncementChannel(newMember.guild);
-      if (!channel) return;
-
-      const addedRoles = this.getAddedRoles(oldMember, newMember);
-      if (addedRoles.size === 0) return;
-
-      // Fetch announcement config
-      const guildConfig = await DatabaseService.getFullGuildConfig(newMember.guild.id);
-      const announcementRoles = guildConfig?.config?.announcement_roles || {};
-
-      await this.announceRoles(newMember, addedRoles, channel, announcementRoles);
-    } catch (error) {
-      logger.error('Error in ManualRoleAnnouncementHandler:', error);
-    }
-  }
-
-  /**
-   * Checks if announcement should be skipped due to cooldown
-   */
-  static shouldSkipAnnouncement(member) {
-    const remainingSkipTime = checkRoleSkip(member.id);
-    if (remainingSkipTime !== null) {
-      logger[ROLE_SKIP_CHECK_LOG_LEVEL](`Skipping role announcement for ${member.user.tag} (cooldown active)`);
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Gets the configured announcement channel
-   */
-  static async getAnnouncementChannel(guild) {
-    const ids = await getIds(guild.id);
-    const channelId = ids.leaderboardChannelId;
-    if (!channelId) return null;
-    return guild.channels.cache.get(channelId);
-  }
-
-  /**
-   * Determines which roles were added (difference between old and new)
-   */
-  static getAddedRoles(oldMember, newMember) {
-    const newRoles = newMember.roles.cache;
-    const oldRoles = oldMember.roles.cache;
-    return newRoles.filter((role) => !oldRoles.has(role.id));
-  }
-
-  /**
-   * Announces each added role that has a configured announcement
-   */
-  static async announceRoles(member, roles, channel, announcementConfig) {
-    for (const role of roles.values()) {
-      const reward = announcementConfig[role.id];
-
-      if (reward && reward.message) {
-        try {
-          const msgContent = reward.message.replace(/{user}/g, member.toString()).replace(/{role}/g, role.name);
-
-          const payload = { content: msgContent };
-
-          // Attach image if configured
-          if (reward.image) {
-            payload.files = [reward.image];
-          }
-
-          await channel.send(payload);
-          logger.info(`Manual role announcement sent for ${member.user.tag} - ${role.name}`);
-        } catch (error) {
-          logger.error(`Failed to announce role ${role.name}:`, error);
-        }
-      }
-    }
-  }
-}
 
 // ============================================================================
 // Permission Checker
@@ -391,7 +223,7 @@ class PermissionChecker {
   static async canUseAdminCommand(member) {
     try {
       const helper = await createGuildHelper(member.guild);
-      return helper.isAdmin(member.id) || member.permissions.has('Administrator');
+      return (await helper.isAdmin(member.id)) || member.permissions.has('Administrator');
     } catch (error) {
       logger.error('Error checking admin permission:', error);
       return false;
@@ -441,38 +273,6 @@ class XpService {
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }
-  }
-
-  // --- Manual Role Announcements ---
-
-  /**
-   * Handles announcements when roles are manually added by admins
-   */
-  static async checkRoleAnnouncements(oldMember, newMember) {
-    await ManualRoleAnnouncementHandler.handle(oldMember, newMember);
-  }
-
-  // --- Cache Management (Admin/Utility) ---
-
-  /**
-   * Loads role rewards into cache for a guild
-   */
-  static async loadRoleRewards(guildId) {
-    return RoleRewardCacheManager.loadRoleRewards(guildId);
-  }
-
-  /**
-   * Refreshes the role reward cache for a guild
-   */
-  static async refreshRoleRewardCache(guildId) {
-    await RoleRewardCacheManager.refreshRoleRewardCache(guildId);
-  }
-
-  /**
-   * Clears role reward cache
-   */
-  static clearRoleRewardCache(guildId = null) {
-    RoleRewardCacheManager.clearCache(guildId);
   }
 
   // --- Permissions & Utilities ---
