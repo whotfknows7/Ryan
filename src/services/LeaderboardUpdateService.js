@@ -305,11 +305,10 @@ class LeaderboardUpdateService {
     const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
 
     // 4. Build Embed
-    // 4. Build Embed
     const titles = {
-      daily: 'Yappers of the day!',
-      weekly: 'Yappers of the week!',
-      lifetime: 'All-time Yappers!',
+      daily: 'Daily leaderboard',
+      weekly: 'Weekly leaderboard',
+      lifetime: 'All-time leaderboard',
     };
 
     const embed = new EmbedBuilder()
@@ -317,8 +316,14 @@ class LeaderboardUpdateService {
       .setTitle(titles[type] || 'Leaderboard')
       .setDescription(`**Top 10** • Page ${page}/${totalPages}`)
       .setImage('attachment://leaderboard.png')
-      .setFooter({ text: `Page ${page} of ${totalPages} • Next update in 60s` })
       .setTimestamp();
+
+    // Add Legend to Footer (Only for Daily View where switchers are present)
+    if (showSwitchers) {
+      embed.setFooter({ text: `Page ${page} of ${totalPages} • 📅 Weekly • 📈 All-time` });
+    } else {
+      embed.setFooter({ text: `Page ${page} of ${totalPages}` });
+    }
 
     // 5. Build Buttons
     const row = new ActionRowBuilder();
@@ -335,8 +340,10 @@ class LeaderboardUpdateService {
     // VIEW SWITCHER (Context-aware)
     if (showSwitchers) {
       row.addComponents(
-        new ButtonBuilder().setCustomId('leaderboard_view:weekly').setLabel('Weekly').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('All-time').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('leaderboard_view:weekly').setLabel('📅').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('📈').setStyle(ButtonStyle.Primary),
+        // Add "Me" button to Daily view as well
+        new ButtonBuilder().setCustomId(`leaderboard_show_rank:${type}`).setLabel('Me').setStyle(ButtonStyle.Primary)
       );
     } else {
       // COMPACT BUTTON SET (Popup LBs / Pagination)

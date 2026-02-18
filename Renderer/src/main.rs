@@ -40,10 +40,10 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/render", post(handler::render_rank_card))
         .route("/metrics", get(move || {
-            println!("Metrics endpoint hit!");
+            // println!("Metrics endpoint hit!");
             metrics::counter!("renderer_metrics_requests").increment(1);
             let output = handle.render();
-            println!("Metrics output length: {}", output.len());
+           // println!("Metrics output length: {}", output.len());
             std::future::ready(output)
         }))
         .layer(TraceLayer::new_for_http())
