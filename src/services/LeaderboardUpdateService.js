@@ -137,7 +137,7 @@ class LeaderboardUpdateService {
           continue;
         }
 
-        logger.info(`Updating leaderboard for guild ${guildId}... (Data changed)`);
+        // logger.info(`Updating leaderboard for guild ${guildId}... (Data changed)`);
 
         // 2. Generate Payload
         // logger.info(`[${guildId}] Generating payload...`);
@@ -196,7 +196,7 @@ class LeaderboardUpdateService {
           }
         }
 
-        logger.info(`[${guildId}] Sending new leaderboard message...`);
+        // logger.info(`[${guildId}] Sending new leaderboard message...`);
 
         // Retry logic for unstable connections
         let newMessage;
