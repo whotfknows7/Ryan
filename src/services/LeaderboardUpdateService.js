@@ -34,8 +34,25 @@ function loadTempLeaderboards() {
     for (const entry of data) {
       const validTypes = ['weekly', 'lifetime'];
       if (!entry.guildId || !entry.messageId || !validTypes.includes(entry.type)) continue;
+
       const existing = tempLeaderboards.get(entry.guildId) || {};
-      existing[entry.type] = entry.messageId;
+
+      // Handle both legacy (string) and new (object) formats during migration
+      if (entry.expiresAt) {
+        existing[entry.type] = {
+          messageId: entry.messageId,
+          channelId: entry.channelId,
+          expiresAt: entry.expiresAt,
+        };
+      } else {
+        // Migrate legacy entries to expire in 5 mins from now
+        existing[entry.type] = {
+          messageId: entry.messageId,
+          channelId: entry.channelId || null, // Might be missing
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        };
+      }
+
       tempLeaderboards.set(entry.guildId, existing);
     }
     logger.info(`[TempLB] Loaded ${data.length} temp leaderboard(s) from disk.`);
@@ -51,8 +68,9 @@ function persistTempLeaderboards() {
   try {
     const entries = [];
     for (const [guildId, types] of tempLeaderboards) {
-      for (const [type, messageId] of Object.entries(types)) {
-        entries.push({ guildId, type, messageId });
+      for (const [type, data] of Object.entries(types)) {
+        // data = { messageId, channelId, expiresAt }
+        entries.push({ guildId, type, ...data });
       }
     }
     fs.writeFileSync(TEMP_LB_PATH, JSON.stringify(entries, null, 2));
@@ -64,11 +82,16 @@ function persistTempLeaderboards() {
 /**
  * Save a temp leaderboard entry (updates map + JSON).
  */
-function saveTempLeaderboard(guildId, type, messageId) {
+function saveTempLeaderboard(guildId, type, messageId, channelId) {
   const existing = tempLeaderboards.get(guildId) || {};
-  existing[type] = messageId;
+  existing[type] = {
+    messageId,
+    channelId,
+    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
+  };
   tempLeaderboards.set(guildId, existing);
   persistTempLeaderboards();
+  logger.info(`[TempLB] Saved ${type} LB for ${guildId} (expires in 5m)`);
 }
 
 /**
@@ -151,7 +174,8 @@ class LeaderboardUpdateService {
           const leaderboardTitles = ['Yappers of the day!', 'Yappers of the week!', 'All-time Yappers!'];
 
           const guildTemps = tempLeaderboards.get(guildId) || {};
-          const protectedTempIds = Object.values(guildTemps);
+          // Protect based on messageId (handle object structure)
+          const protectedTempIds = Object.values(guildTemps).map((v) => v.messageId || v);
           const currentMainId = ids.dailyLeaderboardMessageId;
 
           const messagesToDelete = messages.filter((msg) => {
@@ -174,7 +198,7 @@ class LeaderboardUpdateService {
             await channel.bulkDelete(messagesToDelete).catch((err) => {
               // Fallback if bulk delete fails (e.g. messages older than 14 days)
               logger.warn(`[${guildId}] Bulk delete failed: ${err.message}. Trying individual delete...`);
-              messagesToDelete.forEach((msg) => msg.delete().catch(() => { }));
+              messagesToDelete.forEach((msg) => msg.delete().catch(() => {}));
             });
           } else {
             logger.debug(`[${guildId}] No old leaderboard messages found to clean.`);
@@ -281,6 +305,7 @@ class LeaderboardUpdateService {
     const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
 
     // 4. Build Embed
+    // 4. Build Embed
     const titles = {
       daily: 'Yappers of the day!',
       weekly: 'Yappers of the week!',
@@ -288,17 +313,12 @@ class LeaderboardUpdateService {
     };
 
     const embed = new EmbedBuilder()
-      .setTitle(titles[type] || titles.daily)
-      .setDescription(`Leaderboard • Page ${page}/${totalPages}`)
-      .setColor('Gold')
-      .setThumbnail('https://media.discordapp.net/attachments/1301183910838796460/1333160889419038812/tenor.gif')
+      .setColor(0xffd700)
+      .setTitle(titles[type] || 'Leaderboard')
+      .setDescription(`**Top 10** • Page ${page}/${totalPages}`)
       .setImage('attachment://leaderboard.png')
-      .setFooter({ text: `Page ${page} of ${totalPages} • Updates Live` });
-
-    // Show legend only if switchers are active (Main LB)
-    if (showSwitchers) {
-      embed.setDescription(`Leaderboard • Page ${page}/${totalPages}\n` + `📅 **Weekly** | 🌎 **All-time**`);
-    }
+      .setFooter({ text: `Page ${page} of ${totalPages} • Next update in 60s` })
+      .setTimestamp();
 
     // 5. Build Buttons
     const row = new ActionRowBuilder();
@@ -309,15 +329,14 @@ class LeaderboardUpdateService {
         .setCustomId(`leaderboard_page:prev:${page - 1}:${type}`)
         .setLabel('◀')
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page <= 1)
+        .setDisabled(page === 1)
     );
 
+    // VIEW SWITCHER (Context-aware)
     if (showSwitchers) {
-      // FULL BUTTON SET (Main LB)
       row.addComponents(
-        new ButtonBuilder().setCustomId('leaderboard_view:weekly').setLabel('📅').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`leaderboard_show_rank:${type}`).setLabel('Me').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('🌎').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('leaderboard_view:weekly').setLabel('Weekly').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('All-time').setStyle(ButtonStyle.Primary)
       );
     } else {
       // COMPACT BUTTON SET (Popup LBs / Pagination)
@@ -337,6 +356,49 @@ class LeaderboardUpdateService {
 
     return { embeds: [embed], files: [attachment], components: [row], fetchReply: true };
   }
-}
 
+  static async cleanupExpiredTempLeaderboards(client) {
+    logger.debug('[TempLB] Checking for expired leaderboards...');
+    const now = Date.now();
+    let changed = false;
+
+    for (const [guildId, types] of tempLeaderboards) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) continue;
+
+      for (const [type, data] of Object.entries(types)) {
+        // data = { messageId, channelId, expiresAt }
+        if (!data.expiresAt || now >= data.expiresAt) {
+          logger.info(`[TempLB] Expired: ${type} LB in ${guildId}. Deleting...`);
+
+          // Delete from Discord
+          if (data.channelId) {
+            const channel = guild.channels.cache.get(data.channelId);
+            if (channel) {
+              try {
+                const msg = await channel.messages.fetch(data.messageId).catch(() => null);
+                if (msg) await msg.delete();
+              } catch (e) {
+                logger.warn(`[TempLB] Failed to delete message: ${e.message}`);
+              }
+            }
+          }
+
+          // Delete from Memory
+          delete types[type];
+          changed = true;
+        }
+      }
+
+      // If guild has no more temp LBs, remove from map
+      if (Object.keys(types).length === 0) {
+        tempLeaderboards.delete(guildId);
+      }
+    }
+
+    if (changed) {
+      persistTempLeaderboards();
+    }
+  }
+}
 module.exports = { LeaderboardUpdateService, tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard };

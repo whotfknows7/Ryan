@@ -231,39 +231,6 @@ class ConfigService {
     return log.votes;
   }
 
-  // ---------------------------------------------------------
-  // 3. Keywords
-  // ---------------------------------------------------------
-
-  static async getKeywords(guildId) {
-    const config = await getFullConfig(guildId);
-    return config?.keywords || {};
-  }
-
-  static async saveKeywords(guildId, keywords) {
-    await ConfigService.updateKey(guildId, 'keywords', keywords);
-    invalidate(guildId);
-  }
-
-  /**
-   * Atomically adds or updates a keyword mapping
-   */
-  static async addKeyword(guildId, keyword, emojis) {
-    const mergeData = {};
-    mergeData[keyword] = emojis;
-    await DatabaseService.atomicJsonMerge(guildId, 'keywords', JSON.stringify(mergeData));
-    invalidate(guildId);
-  }
-
-  /**
-   * Atomically removes a keyword mapping
-   */
-  static async removeKeyword(guildId, keyword) {
-    await DatabaseService.atomicJsonDeleteKey(guildId, 'keywords', keyword);
-    invalidate(guildId);
-  }
-
-  // ---------------------------------------------------------
   // 4. Punishment IDs
   // ---------------------------------------------------------
 

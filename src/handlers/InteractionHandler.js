@@ -62,7 +62,6 @@ const handleInteraction = async (interaction) => {
     // Cleanup after 3s to keep map small
     setTimeout(() => global.buttonCooldowns.delete(user.id), 3000);
 
-
     try {
       // --- "ME" BUTTON (SHOW MY RANK & HIGHLIGHT) ---
       if (customId.startsWith('leaderboard_show_rank')) {
@@ -100,9 +99,14 @@ const handleInteraction = async (interaction) => {
       if (customId.startsWith('leaderboard_view:')) {
         const type = customId.split(':')[1]; // 'weekly' or 'lifetime'
 
-        const { tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard } = require('../services/LeaderboardUpdateService');
+        const {
+          tempLeaderboards,
+          saveTempLeaderboard,
+          removeTempLeaderboard,
+        } = require('../services/LeaderboardUpdateService');
         const guildTemps = tempLeaderboards.get(guildId) || {};
-        const prevTempId = guildTemps[type]; // Only same type
+        const prevTempEntry = guildTemps[type]; // Now an object: { messageId, channelId, expiresAt }
+        const prevTempId = prevTempEntry ? prevTempEntry.messageId : null;
 
         let useFallback = false;
         try {
@@ -139,7 +143,7 @@ const handleInteraction = async (interaction) => {
         }
 
         // Persist new temp ID by type (map + JSON)
-        saveTempLeaderboard(guildId, type, msg.id);
+        saveTempLeaderboard(guildId, type, msg.id, interaction.channel.id);
 
         return;
       }
@@ -269,8 +273,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
-      else await interaction.reply(errorMsg).catch(() => { });
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
+      else await interaction.reply(errorMsg).catch(() => {});
     }
   }
 };

@@ -9,4 +9,4 @@ chrome/
 role template/
 tests/
 my_response.md
-events/CurrentLbs.json
+src/events/CurrentLbs.json

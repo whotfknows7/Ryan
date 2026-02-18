@@ -23,7 +23,7 @@ class DatabaseService {
     // Fetch everyone in the guild with > 0 XP
     const allUsers = await prisma.userXp.findMany({
       where: { guildId, [column]: { gt: 0 } },
-      select: { userId: true, [column]: true }
+      select: { userId: true, [column]: true },
     });
 
     if (allUsers.length === 0) return;
@@ -217,7 +217,7 @@ class DatabaseService {
     for (let i = 0; i < rawList.length; i += 2) {
       topUsers.push({
         userId: rawList[i],
-        [type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp']: parseInt(rawList[i + 1], 10)
+        [type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp']: parseInt(rawList[i + 1], 10),
       });
     }
 

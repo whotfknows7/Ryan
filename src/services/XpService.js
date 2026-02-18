@@ -8,14 +8,8 @@ const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
 const { getIds, getFullConfig } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
-const emojiRegex = require('emoji-regex');
 const { EmbedBuilder } = require('discord.js');
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-const URL_REGEX = /http[s]?:\/\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+/g;
 const EMOJI_REACTION_DELAY = 500;
 
 // ============================================================================
@@ -33,14 +27,16 @@ class XpCalculator {
       const charCode = content.charCodeAt(i);
 
       // Skip URLs (http:// or https://) instantly
-      if (charCode === 104 && content.startsWith('http', i)) { // 'h'
+      if (charCode === 104 && content.startsWith('http', i)) {
+        // 'h'
         const spaceIdx = content.indexOf(' ', i);
         i = spaceIdx === -1 ? len : spaceIdx + 1;
         continue;
       }
 
       // Check for Custom Discord Emojis <:name:id> or <a:name:id>
-      if (charCode === 60) { // '<'
+      if (charCode === 60) {
+        // '<'
         const nextChar = content.charCodeAt(i + 1);
         if (nextChar === 58 || (nextChar === 97 && content.charCodeAt(i + 2) === 58)) {
           const closeIdx = content.indexOf('>', i);
@@ -61,9 +57,9 @@ class XpCalculator {
 
       // Unicode Emoji Detection (Surrogate Pairs & BMP Symbols)
       // Detects ranges like ⚡, ⚽, or complex surrogate pair emojis
-      if ((charCode >= 0x2600 && charCode <= 0x27BF) || (charCode >= 0xD800 && charCode <= 0xDBFF)) {
+      if ((charCode >= 0x2600 && charCode <= 0x27bf) || (charCode >= 0xd800 && charCode <= 0xdbff)) {
         emojiXp += 2;
-        i += (charCode >= 0xD800) ? 2 : 1; // Skip low surrogate if it's a pair
+        i += charCode >= 0xd800 ? 2 : 1; // Skip low surrogate if it's a pair
         continue;
       }
 
@@ -101,7 +97,7 @@ class XpPipeline {
         pipeline.zincrby(`lb:${guildId}:weekly`, xpToAdd, userId);
       }
 
-      await pipeline.exec().catch(err => logger.error('Redis Pipeline Error:', err));
+      await pipeline.exec().catch((err) => logger.error('Redis Pipeline Error:', err));
     }, 1000);
   }
 
@@ -347,12 +343,11 @@ class XpService {
       // 3. Check for role rewards using Live XP
       const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
 
-      // Because we just added the XP to the local buffer, not Redis directly, 
+      // Because we just added the XP to the local buffer, not Redis directly,
       // we must ensure the role checker knows about the un-flushed XP.
       const trueLiveXp = liveStats.xp + (XpPipeline.buffer.get(`${message.guild.id}:${message.author.id}`) || 0);
 
       await RoleRewardHandler.checkRoleRewards(message.guild, message.member, trueLiveXp);
-
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }

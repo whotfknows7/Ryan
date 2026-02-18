@@ -18,11 +18,11 @@ const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
-const { LeaderboardCleanupService } = require('./services/LeaderboardCleanupService');
+
 const logger = require('./lib/logger');
 
 const client = new CustomClient();
-
+const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateService');
 // =================================================================
 // STARTUP CLEANUP — Kill zombies from previous sessions
 // =================================================================
@@ -337,8 +337,8 @@ async function main() {
     QueueService.initialize(client);
 
     // Leaderboard Cleanup (Startup + Interval)
-    await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
-    setInterval(() => LeaderboardCleanupService.cleanupExpiredLeaderboards(client), 60 * 1000);
+    await LeaderboardUpdateService.cleanupExpiredTempLeaderboards(client);
+    setInterval(() => LeaderboardUpdateService.cleanupExpiredTempLeaderboards(client), 60 * 1000);
 
     // =================================================================
     // CONFIG SYNC (Redis Pub/Sub)
@@ -359,7 +359,7 @@ async function main() {
     subRedis.on('message', (channel, message) => {
       if (channel === 'config_update') {
         const guildId = message; // Message is just the guildId
-        // logger.debug(`🔄 Received config_update for ${guildId}, invalidating cache.`); 
+        // logger.debug(`🔄 Received config_update for ${guildId}, invalidating cache.`);
         // ^ Debug log optional, keep it clean
         GuildIdsHelper.invalidate(guildId);
       }
