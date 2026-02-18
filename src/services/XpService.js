@@ -6,7 +6,6 @@ const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
-const { ConfigService } = require('./ConfigService');
 const { getIds, getFullConfig } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 const emojiRegex = require('emoji-regex');
@@ -24,23 +23,96 @@ const EMOJI_REACTION_DELAY = 500;
 // ============================================================================
 
 class XpCalculator {
-  /**
-   * Calculates XP from message content
-   * - 1 XP per alphabetic character
-   * - 2 XP per emoji (custom or unicode)
-   * - URLs are excluded from calculation
-   */
   static calculateMessageXp(content) {
-    const cleanContent = content.replace(URL_REGEX, '');
-    const alphaChars = cleanContent.replace(/[^a-zA-Z]/g, '').length;
+    let alphaChars = 0;
+    let emojiXp = 0;
+    let i = 0;
+    const len = content.length;
 
-    const customEmojiCount = (cleanContent.match(/<a?:\w+:\d+>/g) || []).length;
-    const unicodeEmojiCount = (cleanContent.match(emojiRegex()) || []).length;
-    const emojiXp = (customEmojiCount + unicodeEmojiCount) * 2;
+    while (i < len) {
+      const charCode = content.charCodeAt(i);
+
+      // Skip URLs (http:// or https://) instantly
+      if (charCode === 104 && content.startsWith('http', i)) { // 'h'
+        const spaceIdx = content.indexOf(' ', i);
+        i = spaceIdx === -1 ? len : spaceIdx + 1;
+        continue;
+      }
+
+      // Check for Custom Discord Emojis <:name:id> or <a:name:id>
+      if (charCode === 60) { // '<'
+        const nextChar = content.charCodeAt(i + 1);
+        if (nextChar === 58 || (nextChar === 97 && content.charCodeAt(i + 2) === 58)) {
+          const closeIdx = content.indexOf('>', i);
+          if (closeIdx !== -1) {
+            emojiXp += 2;
+            i = closeIdx + 1;
+            continue;
+          }
+        }
+      }
+
+      // Count Alphabetic Characters (A-Z, a-z)
+      if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
+        alphaChars += 1;
+        i++;
+        continue;
+      }
+
+      // Unicode Emoji Detection (Surrogate Pairs & BMP Symbols)
+      // Detects ranges like ⚡, ⚽, or complex surrogate pair emojis
+      if ((charCode >= 0x2600 && charCode <= 0x27BF) || (charCode >= 0xD800 && charCode <= 0xDBFF)) {
+        emojiXp += 2;
+        i += (charCode >= 0xD800) ? 2 : 1; // Skip low surrogate if it's a pair
+        continue;
+      }
+
+      i++;
+    }
 
     return alphaChars + emojiXp;
   }
 }
+
+// ============================================================================
+// #6: MICRO-BATCHING THE EVENT LOOP
+// ============================================================================
+class XpPipeline {
+  static buffer = new Map();
+
+  static init() {
+    // Flush the pipeline every 1,000 milliseconds (1 second)
+    setInterval(async () => {
+      if (this.buffer.size === 0) return;
+
+      const pipeline = defaultRedis.pipeline();
+      const currentBatch = this.buffer;
+      this.buffer = new Map(); // Clear instantly to accept new incoming XP
+
+      for (const [key, xpToAdd] of currentBatch.entries()) {
+        const [guildId, userId] = key.split(':');
+
+        // 1. Buffer for the Postgres sync
+        pipeline.hincrby(`xp_buffer:${guildId}`, userId, xpToAdd);
+
+        // 2. Instantly update the 3 Live Leaderboards
+        pipeline.zincrby(`lb:${guildId}:lifetime`, xpToAdd, userId);
+        pipeline.zincrby(`lb:${guildId}:daily`, xpToAdd, userId);
+        pipeline.zincrby(`lb:${guildId}:weekly`, xpToAdd, userId);
+      }
+
+      await pipeline.exec().catch(err => logger.error('Redis Pipeline Error:', err));
+    }, 1000);
+  }
+
+  static push(guildId, userId, xp) {
+    const key = `${guildId}:${userId}`;
+    const currentXp = this.buffer.get(key) || 0;
+    this.buffer.set(key, currentXp + xp);
+  }
+}
+// Initialize the 1-second batch loop
+XpPipeline.init();
 
 // ============================================================================
 // Keyword Reaction Handler
@@ -262,25 +334,25 @@ class XpService {
     if (message.author.bot || !message.guild) return;
 
     try {
-      // Don't award XP to jailed users
       const jailLog = await ConfigService.getJailLog(message.guild.id, message.author.id);
       if (jailLog && jailLog.status === 'jailed') return;
 
-      // Calculate XP
+      // 1. O(N) Phantom Calculation
       const xpToAdd = XpCalculator.calculateMessageXp(message.content);
       if (xpToAdd <= 0) return;
 
-      // 1. Write to Redis (Write-Behind)
-      await defaultRedis.hincrby(`xp_buffer:${message.guild.id}`, message.author.id, xpToAdd);
-
-      // 2. Fetch Live Stats for Role Rewards
-      // We need the *new* total to check if they leveled up.
-      // Optimally, we could just get `db + old_delta + xpToAdd`, but `getLiveUserStats` does `db + curr_delta`
-      // Since we just incremented, `curr_delta` includes `xpToAdd`.
-      const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
+      // 2. Push to Micro-Batch (Zero Network Latency)
+      XpPipeline.push(message.guild.id, message.author.id, xpToAdd);
 
       // 3. Check for role rewards using Live XP
-      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, liveStats.xp);
+      const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
+
+      // Because we just added the XP to the local buffer, not Redis directly, 
+      // we must ensure the role checker knows about the un-flushed XP.
+      const trueLiveXp = liveStats.xp + (XpPipeline.buffer.get(`${message.guild.id}:${message.author.id}`) || 0);
+
+      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, trueLiveXp);
+
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }

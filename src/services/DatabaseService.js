@@ -10,6 +10,36 @@ class DatabaseService {
   // 1. ATOMIC XP OPERATIONS (UPDATED FOR DAILY/WEEKLY)
   // =================================================================
 
+  // =================================================================
+  // REWRITTEN: O(1) REDIS LEADERBOARDS
+  // =================================================================
+
+  /**
+   * Cold Start: Populates Redis if the ZSET is empty (e.g., after a Redis restart)
+   */
+  static async populateRedisLeaderboard(guildId, type) {
+    const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
+
+    // Fetch everyone in the guild with > 0 XP
+    const allUsers = await prisma.userXp.findMany({
+      where: { guildId, [column]: { gt: 0 } },
+      select: { userId: true, [column]: true }
+    });
+
+    if (allUsers.length === 0) return;
+
+    const pipeline = defaultRedis.pipeline();
+    const key = `lb:${guildId}:${type}`;
+
+    for (const user of allUsers) {
+      pipeline.zadd(key, user[column], user.userId);
+    }
+
+    // Set a 24-hour expiry so inactive servers naturally drop out of RAM
+    pipeline.expire(key, 86400);
+    await pipeline.exec();
+  }
+
   /**
    * [UPDATED] Increment all 3 counters simultaneously (lifetime, daily, weekly)
    */
@@ -169,55 +199,29 @@ class DatabaseService {
   }
 
   /**
-   * [NEW] Fetch Live Top Users (DB + Redis Merge)
-   * This ensures the leaderboard reflects the absolute latest data from the 30s buffer.
+   * O(log N) Live Leaderboard Fetching (Replaces the complex merge logic)
    */
-  static async getLiveTopUsers(guildId, limit = 10, type = 'daily') {
-    // 1. Fetch DB Top (fetch a bit more to allow for re-ordering)
-    const dbTop = await this.fetchTopUsers(guildId, limit + 20, type);
+  static async getLiveTopUsers(guildId, limit = 10, type = 'daily', skip = 0) {
+    const key = `lb:${guildId}:${type}`;
 
-    // 2. Fetch Redis Buffer
-    const buffer = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
-
-    if (!buffer || Object.keys(buffer).length === 0) {
-      return dbTop.slice(0, limit);
+    // Check if it exists; if not, cold start
+    if (!(await defaultRedis.exists(key))) {
+      await this.populateRedisLeaderboard(guildId, type);
     }
 
-    // 3. Merge Strategies
-    const mergedMap = new Map();
+    // ZREVRANGE fetches the exact slice of the sorted array instantly
+    const rawList = await defaultRedis.zrevrange(key, skip, skip + limit - 1, 'WITHSCORES');
 
-    // Initialize with DB data
-    for (const user of dbTop) {
-      mergedMap.set(user.userId, { ...user });
+    const topUsers = [];
+    // Redis returns flat arrays: ['user1', '500', 'user2', '450']
+    for (let i = 0; i < rawList.length; i += 2) {
+      topUsers.push({
+        userId: rawList[i],
+        [type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp']: parseInt(rawList[i + 1], 10)
+      });
     }
 
-    // Apply Redis updates
-    for (const [userId, xpStr] of Object.entries(buffer)) {
-      const delta = parseInt(xpStr, 10);
-
-      if (mergedMap.has(userId)) {
-        const user = mergedMap.get(userId);
-        user.xp = (user.xp || 0) + delta;
-        user.dailyXp = (user.dailyXp || 0) + delta;
-        user.weeklyXp = (user.weeklyXp || 0) + delta;
-      } else {
-        // User not in top DB list, might have jumped up.
-        // We'd strictly need to fetch them from DB to know their base.
-        // For performance, we can skip or try to fetch them if needed.
-        // OR, we just assume they are not in top 10 unless they were already close.
-        // Correct approach: We should technically fetch the user from DB to get Base.
-        // But doing N fetches is bad.
-        // Compromise: We only merge delta for users ALREADY in top list.
-        // Users climbing from rank 100 to 1 won't show until 30s flush, but users in top 10 shuffling positions will show.
-        // This is a good trade-off.
-      }
-    }
-
-    // 4. Sort and Slice
-    const field = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
-    const sorted = Array.from(mergedMap.values()).sort((a, b) => b[field] - a[field]);
-
-    return sorted.slice(0, limit);
+    return topUsers;
   }
 
   /**
@@ -234,29 +238,25 @@ class DatabaseService {
   }
 
   /**
-   * [UPDATED] Calculate rank via DB index (supports lifetime, daily, weekly)
-   * Type: 'lifetime' | 'daily' | 'weekly'
+   * O(1) Exact Rank Fetching
    */
   static async getUserRank(guildId, userId, type = 'lifetime') {
-    // 1. Get user's score
-    const user = await prisma.userXp.findUnique({
-      where: { guildId_userId: { guildId, userId } },
-    });
+    const key = `lb:${guildId}:${type}`;
 
-    if (!user) return null;
+    // O(1) Redis lookup
+    let rank = await defaultRedis.zrevrank(key, userId);
 
-    // 2. Map type to column name
-    const column = type === 'weekly' ? 'weeklyXp' : type === 'daily' ? 'dailyXp' : 'xp';
+    if (rank === null) {
+      // COLD START: Redis missed. Populate it and try exactly once more.
+      const exists = await defaultRedis.exists(key);
+      if (!exists) {
+        await this.populateRedisLeaderboard(guildId, type);
+        rank = await defaultRedis.zrevrank(key, userId);
+      }
+    }
 
-    // 3. Count how many people have MORE score than them
-    const count = await prisma.userXp.count({
-      where: {
-        guildId,
-        [column]: { gt: user[column] },
-      },
-    });
-
-    return count + 1;
+    // ZREVRANK is 0-indexed (1st place is 0). Add 1 for human reading.
+    return rank !== null ? rank + 1 : 0;
   }
 
   /**

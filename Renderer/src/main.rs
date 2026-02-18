@@ -1,5 +1,3 @@
-
-mod browser;
 mod handler;
 mod models;
 mod template;
@@ -9,22 +7,13 @@ use axum::{
     Router,
 };
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::signal;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-
 // Use jemalloc to prevent memory fragmentation in long-running service
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
-use crate::browser::BrowserManager;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub browser_manager: Arc<BrowserManager>,
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -36,21 +25,14 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting Renderer Microservice...");
+    tracing::info!("Starting Renderer Microservice (SVG Edition)...");
     tracing::info!("Using jemalloc for memory management");
-    tracing::info!("Initializing Browser Manager...");
-
-    // Initialize browser manager
-    let browser_manager = Arc::new(BrowserManager::new().await?);
-    let state = AppState { browser_manager };
 
     // Build router with middleware
     let app = Router::new()
         .route("/render", post(handler::render_rank_card))
-        .route("/health", get(handler::health_handler))
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
-        .with_state(state);
+        .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Renderer listening on {}", addr);
