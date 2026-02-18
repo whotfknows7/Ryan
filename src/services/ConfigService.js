@@ -3,6 +3,7 @@
 const { prisma } = require('../lib/prisma');
 const { Prisma } = require('@prisma/client');
 const { DatabaseService } = require('./DatabaseService');
+const { getFullConfig, invalidate } = require('../utils/GuildIdsHelper');
 
 class ConfigService {
   /**
@@ -35,7 +36,7 @@ class ConfigService {
   }
 
   static async getReactionRoles(guildId) {
-    const config = await DatabaseService.getFullGuildConfig(guildId);
+    const config = await getFullConfig(guildId);
     const rawRoles = config?.reactionRoles || {};
 
     const normalizedRoles = {};
@@ -48,6 +49,46 @@ class ConfigService {
 
   static async saveReactionRoles(guildId, roles) {
     await DatabaseService.updateGuildConfig(guildId, { reactionRoles: roles });
+    invalidate(guildId);
+  }
+
+  // ---------------------------------------------------------
+  // 2. Jail Logs
+  // ---------------------------------------------------------
+  // ... (start line 54)
+
+  // ...
+
+  // ---------------------------------------------------------
+  // 3. Keywords
+  // ---------------------------------------------------------
+
+  static async getKeywords(guildId) {
+    const config = await getFullConfig(guildId);
+    return config?.keywords || {};
+  }
+
+  static async saveKeywords(guildId, keywords) {
+    await ConfigService.updateKey(guildId, 'keywords', keywords);
+    invalidate(guildId);
+  }
+
+  /**
+   * Atomically adds or updates a keyword mapping
+   */
+  static async addKeyword(guildId, keyword, emojis) {
+    const mergeData = {};
+    mergeData[keyword] = emojis;
+    await DatabaseService.atomicJsonMerge(guildId, 'keywords', JSON.stringify(mergeData));
+    invalidate(guildId);
+  }
+
+  /**
+   * Atomically removes a keyword mapping
+   */
+  static async removeKeyword(guildId, keyword) {
+    await DatabaseService.atomicJsonDeleteKey(guildId, 'keywords', keyword);
+    invalidate(guildId);
   }
 
   // ---------------------------------------------------------
@@ -195,12 +236,13 @@ class ConfigService {
   // ---------------------------------------------------------
 
   static async getKeywords(guildId) {
-    const config = await DatabaseService.getFullGuildConfig(guildId);
+    const config = await getFullConfig(guildId);
     return config?.keywords || {};
   }
 
   static async saveKeywords(guildId, keywords) {
     await ConfigService.updateKey(guildId, 'keywords', keywords);
+    invalidate(guildId);
   }
 
   /**
@@ -210,6 +252,7 @@ class ConfigService {
     const mergeData = {};
     mergeData[keyword] = emojis;
     await DatabaseService.atomicJsonMerge(guildId, 'keywords', JSON.stringify(mergeData));
+    invalidate(guildId);
   }
 
   /**
@@ -217,6 +260,7 @@ class ConfigService {
    */
   static async removeKeyword(guildId, keyword) {
     await DatabaseService.atomicJsonDeleteKey(guildId, 'keywords', keyword);
+    invalidate(guildId);
   }
 
   // ---------------------------------------------------------

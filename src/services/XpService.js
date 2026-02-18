@@ -6,7 +6,8 @@ const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
-const { getIds } = require('../utils/GuildIdsHelper');
+const { ConfigService } = require('./ConfigService');
+const { getIds, getFullConfig } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 const emojiRegex = require('emoji-regex');
 const { EmbedBuilder } = require('discord.js');
@@ -115,7 +116,7 @@ class RoleRewardHandler {
     // 1. Fetch Rewards Config directly (Stateless)
     // We expect ConfigService or DatabaseService to handle any necessary low-level caching
     // purely for performance, but logically we treat it as "fetch from source".
-    const guildConfig = await DatabaseService.getFullGuildConfig(guild.id);
+    const guildConfig = await getFullConfig(guild.id);
     const rewardsMap = guildConfig?.config?.announcement_roles || {};
 
     // Convert to array and sort by XP descending

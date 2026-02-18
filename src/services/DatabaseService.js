@@ -540,6 +540,24 @@ class DatabaseService {
     });
   }
 
+  /**
+   * [NEW] Fetch multiple guild configs in one query
+   */
+  static async getManyGuildConfigs(guildIds) {
+    return prisma.guildConfig.findMany({
+      where: {
+        guildId: { in: guildIds },
+      },
+      select: {
+        guildId: true,
+        ids: true,
+        config: true,
+        keywords: true,
+        reactionRoles: true,
+      },
+    });
+  }
+
   static async getGuildIds(guildId) {
     const res = await prisma.guildConfig.findUnique({
       where: { guildId },

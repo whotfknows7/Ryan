@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
-const { clearCache } = require('../../utils/GuildIdsHelper');
+const { invalidate } = require('../../utils/GuildIdsHelper');
+const { defaultRedis } = require('../../config/redis');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -147,7 +148,11 @@ module.exports = {
         await DatabaseService.updateGuildConfig(guildId, { clans: currentClans });
       }
 
-      clearCache(guildId);
+      // 1. Invalidate Local Cache
+      invalidate(guildId);
+
+      // 2. Publish Global Invalidation
+      await defaultRedis.publish('config_update', guildId);
 
       if (summary.length === 1) {
         summary.push('_No changes were made. Please select options to configure._');

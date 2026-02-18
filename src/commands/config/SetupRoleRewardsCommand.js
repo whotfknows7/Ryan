@@ -13,7 +13,10 @@ const {
 const { DatabaseService } = require('../../services/DatabaseService');
 const { ImageService } = require('../../services/ImageService');
 const { AssetService } = require('../../services/AssetService');
+const { AssetService } = require('../../services/AssetService');
 const { XpService } = require('../../services/XpService');
+const { invalidate } = require('../../utils/GuildIdsHelper');
+const { defaultRedis } = require('../../config/redis');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -209,7 +212,8 @@ module.exports = {
           await DatabaseService.updateGuildConfig(guildId, updatePayload);
 
           // --- 3. Update RAM Cache Immediately ---
-          await XpService.refreshRoleRewardCache(guildId);
+          invalidate(guildId);
+          await defaultRedis.publish('config_update', guildId);
 
           // Move to next role
           currentIndex++;

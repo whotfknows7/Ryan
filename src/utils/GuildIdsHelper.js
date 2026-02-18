@@ -4,39 +4,130 @@
 
 const { DatabaseService } = require('../services/DatabaseService');
 
-/**
- * Cache for guild IDs to reduce database queries
- * Cache expires after 5 minutes
- */
-const idsCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const { LRUCache } = require('lru-cache');
 
 /**
- * Get guild IDs with caching
+ * Smart RAM Cache with LRU eviction
+ * TTL: 20 minutes (safety net)
+ * Max: 1000 guilds (prevent RAM overflow)
  */
-async function getIds(guildId) {
-  // Check cache first
-  const cached = idsCache.get(guildId);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.ids;
+const idsCache = new LRUCache({
+  max: 1000,
+  ttl: 20 * 60 * 1000,
+});
+
+/**
+ * BATCHING ENGINE STATE
+ */
+const pendingRequests = new Map(); // guildId -> Promise
+let batchQueue = []; // Array of guildIds waiting for fetch
+let batchTimer = null; // Timer reference
+
+/**
+ * Execute the batch fetch
+ */
+async function processBatch() {
+  const localQueue = [...new Set(batchQueue)]; // Dedup just in case
+  batchQueue = [];
+  batchTimer = null;
+
+  if (localQueue.length === 0) return;
+
+  try {
+    // 1. Bulk Fetch from DB
+    const results = await DatabaseService.getManyGuildConfigs(localQueue);
+
+    // 2. Map results by ID for O(1) lookup
+    const resultMap = new Map();
+    results.forEach((row) => {
+      // Store in LRU Cache immediately
+      idsCache.set(row.guildId, row);
+      resultMap.set(row.guildId, row);
+    });
+
+    // 3. Resolve all pending promises
+    localQueue.forEach((guildId) => {
+      const promiseCallbacks = pendingRequests.get(guildId);
+      if (promiseCallbacks) {
+        // Did we find it? If not, return empty object (DB miss)
+        const data = resultMap.get(guildId) || { ids: {} };
+        // If miss, we should still cache the default object
+        if (!process.env.DISABLE_EMPTY_CACHE && !resultMap.has(guildId)) {
+          idsCache.set(guildId, { ids: {}, config: {}, keywords: {}, reactionRoles: {} });
+        }
+
+        promiseCallbacks.resolve(data);
+        pendingRequests.delete(guildId);
+      }
+    });
+  } catch (error) {
+    console.error('❌ Batch Fetch Failed:', error);
+    // Reject all waiting promises so they don't hang forever
+    localQueue.forEach((guildId) => {
+      const promiseCallbacks = pendingRequests.get(guildId);
+      if (promiseCallbacks) {
+        promiseCallbacks.reject(error);
+        pendingRequests.delete(guildId);
+      }
+    });
   }
-
-  // Fetch from database
-  const ids = await DatabaseService.getGuildIds(guildId);
-
-  // Update cache
-  idsCache.set(guildId, {
-    ids,
-    timestamp: Date.now(),
-  });
-
-  return ids;
 }
 
 /**
- * Clear cache for a specific guild (call this after updating config)
+ * Get generic config object (internal helper)
  */
-function clearCache(guildId) {
+async function getCachedConfig(guildId) {
+  if (!guildId) return {};
+
+  // 1. Check LRU Cache (Instant RAM hit)
+  if (idsCache.has(guildId)) {
+    return idsCache.get(guildId);
+  }
+
+  // 2. Request Collapsing (Join existing promise)
+  if (pendingRequests.has(guildId)) {
+    return pendingRequests.get(guildId).promise;
+  }
+
+  // 3. Queue for Batching
+  batchQueue.push(guildId);
+
+  // Create a new promise for this request
+  let resolve, reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  pendingRequests.set(guildId, { promise, resolve, reject });
+
+  // 4. Schedule Batch (Debounce 50ms)
+  if (!batchTimer) {
+    batchTimer = setTimeout(processBatch, 50);
+  }
+
+  return promise;
+}
+
+/**
+ * Get guild IDs with Caching
+ */
+async function getIds(guildId) {
+  const data = await getCachedConfig(guildId);
+  return data.ids || {};
+}
+
+/**
+ * Get Full Guild Config with Caching
+ */
+async function getFullConfig(guildId) {
+  return await getCachedConfig(guildId);
+}
+
+/**
+ * Invalidate cache for a specific guild (called via Redis Pub/Sub)
+ */
+function invalidate(guildId) {
   idsCache.delete(guildId);
 }
 
@@ -237,7 +328,8 @@ async function getGuildConfigValue(guildId, key) {
 
 module.exports = {
   getIds,
-  clearCache,
+  getFullConfig,
+  invalidate,
   clearAllCache,
   GuildHelper,
   createGuildHelper,

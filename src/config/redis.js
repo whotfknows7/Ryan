@@ -22,18 +22,18 @@ if (useSocket) {
 
 const redisConfig = useSocket
   ? {
-      path: REDIS_SOCKET,
-      password: REDIS_PASSWORD,
-      maxRetriesPerRequest: null, // Required by BullMQ
-      enableReadyCheck: false,
-    }
+    path: REDIS_SOCKET,
+    password: REDIS_PASSWORD,
+    maxRetriesPerRequest: null, // Required by BullMQ
+    enableReadyCheck: false,
+  }
   : {
-      host: process.env.REDIS_HOST || '127.0.0.1',
-      port: process.env.REDIS_PORT || 6379,
-      password: REDIS_PASSWORD,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    };
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: process.env.REDIS_PORT || 6379,
+    password: REDIS_PASSWORD,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  };
 
 // Use this connection for standard bot operations (cache, rate limits)
 const defaultRedis = new Redis(redisConfig);
@@ -48,7 +48,20 @@ defaultRedis.on('error', (err) => {
   logger.error('❌ Redis Connection Error:', err);
 });
 
+// Use this connection for Pub/Sub (Subscriber)
+// Duplicate the connection because a subscriber cannot issue other commands
+const subRedis = new Redis(redisConfig);
+
+subRedis.on('connect', () => {
+  logger.info(`✅ Redis Subscriber connected via ${connLabel}`);
+});
+
+subRedis.on('error', (err) => {
+  logger.error('❌ Redis Subscriber Connection Error:', err);
+});
+
 module.exports = {
   defaultRedis,
+  subRedis,
   redisConfig,
 };

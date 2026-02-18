@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { ConfigService } = require('../../services/ConfigService');
 const emojiRegex = require('emoji-regex');
+const { defaultRedis } = require('../../config/redis');
 
 const KeywordCommand = {
   data: new SlashCommandBuilder()
@@ -46,6 +47,7 @@ const KeywordCommand = {
 
       try {
         await ConfigService.addKeyword(guildId, keyword, emojiList);
+        await defaultRedis.publish('config_update', guildId);
         return interaction.reply({
           content: `✅ Mapped \`${keyword}\` → ${emojiList.join(' ')}`,
           flags: MessageFlags.Ephemeral,
@@ -58,6 +60,7 @@ const KeywordCommand = {
       const keyword = interaction.options.getString('keyword', true).toLowerCase().trim();
       try {
         await ConfigService.removeKeyword(guildId, keyword);
+        await defaultRedis.publish('config_update', guildId);
         return interaction.reply({
           content: `🗑️ Removed mapping for \`${keyword}\`.`,
           flags: MessageFlags.Ephemeral,

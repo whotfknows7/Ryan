@@ -339,6 +339,31 @@ async function main() {
     await LeaderboardCleanupService.cleanupExpiredLeaderboards(client);
     setInterval(() => LeaderboardCleanupService.cleanupExpiredLeaderboards(client), 60 * 1000);
 
+    // =================================================================
+    // CONFIG SYNC (Redis Pub/Sub)
+    // =================================================================
+    const { subRedis } = require('./config/redis');
+    const GuildIdsHelper = require('./utils/GuildIdsHelper');
+
+    // Subscribe to config updates
+    subRedis.subscribe('config_update', (err, count) => {
+      if (err) {
+        logger.error('❌ Failed to subscribe to config_update channel:', err);
+      } else {
+        logger.info(`✅ Subscribed to config_update channel. count=${count}`);
+      }
+    });
+
+    // Handle messages
+    subRedis.on('message', (channel, message) => {
+      if (channel === 'config_update') {
+        const guildId = message; // Message is just the guildId
+        // logger.debug(`🔄 Received config_update for ${guildId}, invalidating cache.`); 
+        // ^ Debug log optional, keep it clean
+        GuildIdsHelper.invalidate(guildId);
+      }
+    });
+
     logger.info('✅ All background services started.');
   } catch (error) {
     logger.error('Failed to start bot:', error);
