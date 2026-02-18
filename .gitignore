@@ -1,7 +1,7 @@
 .env
 node_modules/
 package-lock.json
-CurrentLbs.json
+src/events/CurrentLbs.json
 assets/
 target/
 Cargo.lock
