@@ -12,6 +12,7 @@ const { PunishmentService } = require('./services/PunishmentService');
 
 const { XpService } = require('./services/XpService');
 const ImageService = require('./services/ImageService');
+const MetricsService = require('./services/MetricsService');
 
 const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
@@ -365,7 +366,8 @@ async function main() {
       }
     });
 
-    logger.info('✅ All background services started.');
+    // 7. Start Metrics Server
+    MetricsService.startServer();
   } catch (error) {
     logger.error('Failed to start bot:', error);
     process.exit(1);

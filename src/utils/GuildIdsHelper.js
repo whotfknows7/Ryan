@@ -3,6 +3,7 @@
 // ============================================================================
 
 const { DatabaseService } = require('../services/DatabaseService');
+const MetricsService = require('../services/MetricsService');
 
 const { LRUCache } = require('lru-cache');
 
@@ -81,8 +82,11 @@ async function getCachedConfig(guildId) {
 
   // 1. Check LRU Cache (Instant RAM hit)
   if (idsCache.has(guildId)) {
+    MetricsService.cacheHits.inc();
     return idsCache.get(guildId);
   }
+
+  MetricsService.cacheMisses.inc();
 
   // 2. Request Collapsing (Join existing promise)
   if (pendingRequests.has(guildId)) {

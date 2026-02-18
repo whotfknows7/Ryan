@@ -10,6 +10,8 @@ use std::net::SocketAddr;
 use tokio::signal;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use metrics_exporter_prometheus::PrometheusBuilder;
+
 
 // Use jemalloc to prevent memory fragmentation in long-running service
 #[global_allocator]
@@ -28,9 +30,22 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting Renderer Microservice (SVG Edition)...");
     tracing::info!("Using jemalloc for memory management");
 
+    // Initialize Prometheus recorder
+    let builder = PrometheusBuilder::new();
+    let handle = builder
+        .install_recorder()
+        .expect("failed to install Prometheus recorder");
+
     // Build router with middleware
     let app = Router::new()
         .route("/render", post(handler::render_rank_card))
+        .route("/metrics", get(move || {
+            println!("Metrics endpoint hit!");
+            metrics::counter!("renderer_metrics_requests").increment(1);
+            let output = handle.render();
+            println!("Metrics output length: {}", output.len());
+            std::future::ready(output)
+        }))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive());
 

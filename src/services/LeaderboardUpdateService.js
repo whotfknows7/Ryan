@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getIds, clearCache } = require('../utils/GuildIdsHelper');
+const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
 const ImageService = require('./ImageService');
 const logger = require('../lib/logger');
@@ -244,7 +244,7 @@ class LeaderboardUpdateService {
         previousTopUsersJSON.set(guildId, currentJSON);
         lastUpdateTimes.set(guildId, Date.now());
         await DatabaseService.updateGuildIds(guildId, { dailyLeaderboardMessageId: newMessage.id });
-        clearCache(guildId);
+        invalidate(guildId);
       } catch (e) {
         logger.error(`Failed to update leaderboard for guild ${guildId}: ${e.message}`, e);
         if (e.name === 'AbortError' || e.code === 'UND_ERR_SOCKET') {

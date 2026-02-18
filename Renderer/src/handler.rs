@@ -3,14 +3,18 @@ use reqwest::Client;
 use base64::{engine::general_purpose, Engine as _};
 use usvg::{fontdb, Options, Tree, TreeParsing, TreePostProc};
 use tiny_skia::Pixmap;
-use std::sync::Arc;
+
 use crate::models::RankCardRequest;
 use crate::template::RankCardTemplate;
 use askama::Template;
+use std::time::Instant;
+
 
 pub async fn render_rank_card(
     Json(payload): Json<RankCardRequest>,
 ) -> Response {
+    let start = Instant::now();
+
     // 1. Fetch Discord Avatar & Convert to Base64
     let client = Client::new();
     let avatar_bytes = match client.get(&payload.avatar_url).send().await {
@@ -47,7 +51,8 @@ pub async fn render_rank_card(
     opt.font_family = "TT Fors Trial Bold".to_string();
 
     let mut fontdb = fontdb::Database::new();
-    // Load your custom font
+    // Load your custom font - ensuring we use the correct path relative to the binary or source
+    // The previous code used include_bytes!, which embeds it at compile time.
     let font_data = include_bytes!("../../assets/fonts/TT Fors Trial Bold.ttf");
     fontdb.load_font_data(font_data.to_vec());
 
@@ -71,6 +76,10 @@ pub async fn render_rank_card(
         Ok(bytes) => bytes,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
     };
+
+    // Record Metrics
+    let duration = start.elapsed().as_secs_f64();
+    metrics::histogram!("renderer_render_duration_seconds").record(duration);
 
     // Return the raw PNG bytes to Node.js
     (

@@ -7,7 +7,7 @@ const { DatabaseService } = require('./DatabaseService');
 const { PunishmentService } = require('./PunishmentService');
 const { ResetService } = require('./ResetService');
 const { LeaderboardUpdateService } = require('./LeaderboardUpdateService');
-const { LeaderboardCleanupService } = require('./LeaderboardCleanupService');
+
 const { WeeklyRoleService } = require('./WeeklyRoleService');
 const { cleanExpiredResetRoles } = require('../commands/admin/ResetRoleCommands');
 const { XpSyncService } = require('./XpSyncService');
@@ -46,9 +46,7 @@ class QueueService {
             case 'leaderboard-update':
               await LeaderboardUpdateService.updateLiveLeaderboard(this.client);
               break;
-            case 'leaderboard-cleanup':
-              await LeaderboardCleanupService.cleanupExpiredLeaderboards(this.client);
-              break;
+
             case 'weekly-role-check':
               await this.runPerGuild((guildId) => WeeklyRoleService.checkWeeklyRole(this.client, guildId));
               break;
@@ -119,9 +117,6 @@ class QueueService {
 
     // Leaderboard Updater - every 20 seconds
     await addJob('leaderboard-update', null, 20000); // 20000ms = 20s
-
-    // Leaderboard Cleanup - every 1 min
-    await addJob('leaderboard-cleanup', '* * * * *');
 
     // Weekly Role Check - every 5 mins
     await addJob('weekly-role-check', '*/5 * * * *');

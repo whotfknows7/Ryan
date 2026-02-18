@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'ryan-bot'
+    static_configs:
+      - targets: ['host.docker.internal:9400']
+        labels:
+          service: 'ryan-bot'
+
+  - job_name: 'ryan-renderer'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+        labels:
+          service: 'ryan-renderer'

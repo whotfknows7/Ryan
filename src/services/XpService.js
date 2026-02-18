@@ -7,6 +7,7 @@ const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
 const { getIds, getFullConfig } = require('../utils/GuildIdsHelper');
+const MetricsService = require('./MetricsService');
 const logger = require('../lib/logger');
 const { EmbedBuilder } = require('discord.js');
 
@@ -81,9 +82,14 @@ class XpPipeline {
     setInterval(async () => {
       if (this.buffer.size === 0) return;
 
+      const batchSize = this.buffer.size;
+      MetricsService.redisPipelineSize.observe(batchSize);
+
       const pipeline = defaultRedis.pipeline();
       const currentBatch = this.buffer;
       this.buffer = new Map(); // Clear instantly to accept new incoming XP
+
+      const timer = MetricsService.redisPipelineLatency.startTimer();
 
       for (const [key, xpToAdd] of currentBatch.entries()) {
         const [guildId, userId] = key.split(':');
@@ -98,6 +104,7 @@ class XpPipeline {
       }
 
       await pipeline.exec().catch((err) => logger.error('Redis Pipeline Error:', err));
+      timer();
     }, 1000);
   }
 

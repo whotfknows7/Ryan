@@ -5,6 +5,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
 const fs = require('fs');
 const opentype = require('opentype.js');
+const MetricsService = require('./MetricsService');
 
 // Constants
 const ASSETS_DIR = path.join(process.cwd(), 'assets');
@@ -63,12 +64,14 @@ class ImageService {
 
       // 3. Call Rust Renderer
       // [FIX] Added timeout and better error logging
+      const timer = MetricsService.rendererRequestDuration.startTimer();
       const response = await fetch(this.rendererUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(5000),
       });
+      timer();
 
       if (!response.ok) throw new Error(`Renderer HTTP error! status: ${response.status}`);
 
