@@ -1,6 +1,7 @@
 .env
 node_modules/
 package-lock.json
+CurrentLbs.json
 assets/
 target/
 Cargo.lock
@@ -9,4 +10,4 @@ chrome/
 role template/
 tests/
 my_response.md
-src/events/CurrentLbs.json
+
