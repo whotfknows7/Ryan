@@ -51,19 +51,14 @@ class ImageService {
 
   async generateRankCard(data) {
     try {
-      // 1. Convert external resources to Base64
-      const avatarBase64 = await this.urlToBase64(data.avatarUrl);
-
       // 2. Construct Payload
       const payload = {
         username: data.username,
-        avatar_base64: avatarBase64,
+        avatar_url: data.avatarUrl,
         current_xp: data.currentXp,
-        required_xp: data.requiredXp,
+        next_xp: data.requiredXp,
         rank: data.rank,
-        level: data.level,
-        hex_color: data.hexColor,
-        badge_urls: data.badgeUrls || [],
+        clan_color: data.hexColor,
       };
 
       // 3. Call Rust Renderer

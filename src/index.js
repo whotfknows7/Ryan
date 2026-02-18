@@ -234,7 +234,8 @@ async function main() {
   }
 
   // 2. START THE RENDERER
-  startRenderer();
+  // [DISABLED] Using separate PM2 process for renderer management as requested
+  // startRenderer();
 
   // 3. Database Health Check
   logger.info('Checking database connection...');
