@@ -13,7 +13,7 @@ const logger = winston.createLogger({
       format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
     }),
     // Optional: Save errors to a file
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    // new winston.transports.File({ filename: 'error.log', level: 'error' }),
   ],
 });
 

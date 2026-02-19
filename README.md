@@ -97,7 +97,6 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 
 ### The Torture Chamber (Moderation)
 - **8-Tier Strike System:** Progressive punishment from a 30-minute mute to a permanent server ban.
-- **Mugshot Generation:** Automatically creates "Caught" GIFs using the user's avatar.
 - **Community Redemption:** Allows members to **Vote to Release** prisoners, shortening their sentences.
 
 ---
