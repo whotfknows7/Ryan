@@ -79,6 +79,7 @@ pub async fn render_rank_card(
 
     // Record Metrics
     let duration = start.elapsed().as_secs_f64();
+    tracing::debug!("Recording render duration: {}s", duration);
     metrics::histogram!("renderer_render_duration_seconds").record(duration);
 
     // Return the raw PNG bytes to Node.js

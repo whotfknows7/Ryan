@@ -4,5 +4,6 @@ datasources:
   - name: Prometheus
     type: prometheus
     url: http://prometheus:9090
+    uid: prometheus_ds
     isDefault: true
     editable: false

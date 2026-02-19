@@ -25,7 +25,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "P1809F7CD0C75ACF3"
+                "uid": "prometheus_ds"
             },
             "fieldConfig": {
                 "defaults": {
@@ -102,7 +102,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "rate(ryan_cache_hits_total[5m])",
@@ -113,7 +113,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "rate(ryan_cache_misses_total[5m])",
@@ -128,7 +128,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "P1809F7CD0C75ACF3"
+                "uid": "prometheus_ds"
             },
             "fieldConfig": {
                 "defaults": {
@@ -205,7 +205,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "rate(ryan_redis_pipeline_latency_seconds_sum[5m]) / rate(ryan_redis_pipeline_latency_seconds_count[5m])",
@@ -220,7 +220,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "P1809F7CD0C75ACF3"
+                "uid": "prometheus_ds"
             },
             "fieldConfig": {
                 "defaults": {
@@ -297,7 +297,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "rate(renderer_render_duration_seconds_sum[5m]) / rate(renderer_render_duration_seconds_count[5m])",
@@ -308,7 +308,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "rate(ryan_renderer_request_duration_seconds_sum[5m]) / rate(ryan_renderer_request_duration_seconds_count[5m])",
@@ -323,7 +323,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "P1809F7CD0C75ACF3"
+                "uid": "prometheus_ds"
             },
             "fieldConfig": {
                 "defaults": {
@@ -364,7 +364,7 @@
                 {
                     "datasource": {
                         "type": "prometheus",
-                        "uid": "P1809F7CD0C75ACF3"
+                        "uid": "prometheus_ds"
                     },
                     "editorMode": "code",
                     "expr": "histogram_quantile(0.95, sum(rate(ryan_redis_pipeline_size_bucket[5m])) by (le))",
