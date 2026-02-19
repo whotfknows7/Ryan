@@ -164,7 +164,8 @@ class LeaderboardUpdateService {
 
         // 2. Generate Payload
         // logger.info(`[${guildId}] Generating payload...`);
-        const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true);
+        // Pass topUsers as prefetchedData
+        const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true, topUsers);
         // logger.info(`[${guildId}] Payload generated.`);
 
         // 3. Scan & Clean Old Leaderboards (Fix for Glitch/Restarts)
@@ -198,7 +199,7 @@ class LeaderboardUpdateService {
             await channel.bulkDelete(messagesToDelete).catch((err) => {
               // Fallback if bulk delete fails (e.g. messages older than 14 days)
               logger.warn(`[${guildId}] Bulk delete failed: ${err.message}. Trying individual delete...`);
-              messagesToDelete.forEach((msg) => msg.delete().catch(() => {}));
+              messagesToDelete.forEach((msg) => msg.delete().catch(() => { }));
             });
           } else {
             logger.debug(`[${guildId}] No old leaderboard messages found to clean.`);
@@ -263,13 +264,21 @@ class LeaderboardUpdateService {
    * @param {number} page - Page number (1-based)
    * @param {string|null} highlightUserId - ID of user to highlight (for "Me" button)
    * @param {boolean} showSwitchers - Whether to include Weekly/All-time buttons
+   * @param {Array|null} prefetchedData - Optional: Array of user objects to avoid re-fetching
    */
-  static async generateLeaderboardPayload(guild, type, page, highlightUserId = null, showSwitchers = false) {
+  static async generateLeaderboardPayload(guild, type, page, highlightUserId = null, showSwitchers = false, prefetchedData = null) {
     const limit = 10;
     const skip = (page - 1) * limit;
 
-    // 1. Fetch Data
-    const topUsers = await DatabaseService.fetchTopUsers(guild.id, limit, type, skip);
+    // 1. Fetch Data (or use prefetched)
+    let topUsers;
+    if (prefetchedData && page === 1 && type === 'daily') {
+      // Only use prefetched data if it matches the current request context (page 1, daily)
+      // The caller (updateLiveLeaderboard) provides 'daily' top 10.
+      topUsers = prefetchedData;
+    } else {
+      topUsers = await DatabaseService.fetchTopUsers(guild.id, limit, type, skip);
+    }
     const totalCount = await DatabaseService.getUserCount(guild.id, type);
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
@@ -368,6 +377,8 @@ class LeaderboardUpdateService {
     const now = Date.now();
     let changed = false;
 
+    const toDelete = [];
+
     for (const [guildId, types] of tempLeaderboards) {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) continue;
@@ -396,10 +407,15 @@ class LeaderboardUpdateService {
         }
       }
 
-      // If guild has no more temp LBs, remove from map
+      // If guild has no more temp LBs, mark for removal
       if (Object.keys(types).length === 0) {
-        tempLeaderboards.delete(guildId);
+        toDelete.push(guildId);
       }
+    }
+
+    // Safely remove empty guilds after iteration
+    for (const guildId of toDelete) {
+      tempLeaderboards.delete(guildId);
     }
 
     if (changed) {
