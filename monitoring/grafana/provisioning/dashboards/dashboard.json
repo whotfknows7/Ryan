@@ -1,397 +1,452 @@
 {
-    "annotations": {
-        "list": [
-            {
-                "builtIn": 1,
-                "datasource": {
-                    "type": "grafana",
-                    "uid": "-- Grafana --"
-                },
-                "enable": true,
-                "hide": true,
-                "iconColor": "rgba(0, 211, 255, 1)",
-                "name": "Annotations & Alerts",
-                "type": "dashboard"
-            }
-        ]
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "System Metrics (Host)",
+      "type": "row",
+      "collapsed": false,
+      "panels": []
     },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 0,
-    "id": null,
-    "links": [],
-    "liveNow": false,
-    "panels": [
+    {
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
         {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus_ds"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "axisCenteredZero": false,
-                        "axisColorMode": "text",
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 0,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
-                        "showPoints": "auto",
-                        "spanNulls": false,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
-                        }
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    }
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 0
-            },
-            "id": 1,
-            "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                }
-            },
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "rate(ryan_cache_hits_total[5m])",
-                    "legendFormat": "Cache Hits / sec",
-                    "range": true,
-                    "refId": "A"
-                },
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "rate(ryan_cache_misses_total[5m])",
-                    "legendFormat": "Cache Misses / sec",
-                    "range": true,
-                    "refId": "B"
-                }
-            ],
-            "title": "Cache Performance",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus_ds"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "axisCenteredZero": false,
-                        "axisColorMode": "text",
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 0,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
-                        "showPoints": "auto",
-                        "spanNulls": false,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
-                        }
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    }
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 0
-            },
-            "id": 2,
-            "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                }
-            },
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "rate(ryan_redis_pipeline_latency_seconds_sum[5m]) / rate(ryan_redis_pipeline_latency_seconds_count[5m])",
-                    "legendFormat": "Avg Redis Pipeline Latency",
-                    "range": true,
-                    "refId": "A"
-                }
-            ],
-            "title": "Redis Pipeline Latency (Avg)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus_ds"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "axisCenteredZero": false,
-                        "axisColorMode": "text",
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 0,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
-                        "showPoints": "auto",
-                        "spanNulls": false,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
-                        }
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    }
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 8
-            },
-            "id": 3,
-            "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                }
-            },
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "rate(renderer_render_duration_seconds_sum[5m]) / rate(renderer_render_duration_seconds_count[5m])",
-                    "legendFormat": "Avg Render Duration (Rust)",
-                    "range": true,
-                    "refId": "A"
-                },
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "rate(ryan_renderer_request_duration_seconds_sum[5m]) / rate(ryan_renderer_request_duration_seconds_count[5m])",
-                    "legendFormat": "Avg Render Duration (Node.js View)",
-                    "range": true,
-                    "refId": "B"
-                }
-            ],
-            "title": "Renderer Performance",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus_ds"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        }
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 8
-            },
-            "id": 4,
-            "options": {
-                "legend": {
-                    "calcs": [],
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                }
-            },
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus_ds"
-                    },
-                    "editorMode": "code",
-                    "expr": "histogram_quantile(0.95, sum(rate(ryan_redis_pipeline_size_bucket[5m])) by (le))",
-                    "legendFormat": "95th Percentile Batch Size",
-                    "range": true,
-                    "refId": "A"
-                }
-            ],
-            "title": "Redis Pipeline Batch Size (p95)",
-            "type": "timeseries"
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU Usage %",
+          "refId": "A"
         }
-    ],
-    "refresh": "",
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [],
-    "templating": {
-        "list": []
+      ]
     },
-    "time": {
-        "from": "now-1h",
-        "to": "now"
+    {
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+          "legendFormat": "Memory Used %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      }
     },
-    "timepicker": {},
-    "timezone": "",
-    "title": "Ryan Bot Metrics",
-    "uid": "cdkvv9r320t4wb",
-    "version": 1,
-    "weekStart": ""
+    {
+      "title": "Disk IOPS",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "rate(node_disk_reads_completed_total[5m])",
+          "legendFormat": "Reads/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_writes_completed_total[5m])",
+          "legendFormat": "Writes/s",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 200,
+      "title": "Task Manager (Top Processes)",
+      "type": "row",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "title": "Top Processes by CPU",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(topk(10, sum by (groupname) (rate(namedprocess_namegroup_cpu_seconds_total[1m])) * 100))",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "CPU %",
+              "groupname": "Process"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "Top Processes by Memory",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(topk(10, sum by (groupname) (namedprocess_namegroup_memory_bytes{memtype=\"resident\"})))",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Memory",
+              "groupname": "Process"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "Value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 101,
+      "title": "Application Metrics (Ryan Bot)",
+      "type": "row",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "title": "Discord Gateway Ping",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "ryan_discord_ping",
+          "legendFormat": "Ping",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "title": "Guild Count",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "ryan_guild_count",
+          "legendFormat": "Guilds",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "User Count",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "ryan_user_count",
+          "legendFormat": "Users",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Event Loop Lag",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "ryan_node_nodejs_eventloop_lag_seconds",
+          "legendFormat": "Lag",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cache Performance",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "rate(ryan_cache_hits_total[5m])",
+          "legendFormat": "Hits/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(ryan_cache_misses_total[5m])",
+          "legendFormat": "Misses/s",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Renderer Performance",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "rate(renderer_render_duration_seconds_sum[5m]) / rate(renderer_render_duration_seconds_count[5m])",
+          "legendFormat": "Rust Avg Duration",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(ryan_renderer_request_duration_seconds_sum[5m]) / rate(ryan_renderer_request_duration_seconds_count[5m])",
+          "legendFormat": "Node View Duration",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 102,
+      "title": "Redis Metrics",
+      "type": "row",
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "title": "Redis Pipeline Batch Size (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ryan_redis_pipeline_size_bucket[5m])) by (le))",
+          "legendFormat": "Batch Size (p95)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Redis Pipeline Latency (Avg)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus_ds"
+      },
+      "targets": [
+        {
+          "expr": "rate(ryan_redis_pipeline_latency_seconds_sum[5m]) / rate(ryan_redis_pipeline_latency_seconds_count[5m])",
+          "legendFormat": "Avg Latency (s)",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Ryan Bot Overview",
+  "uid": "ryan-bot-overview",
+  "version": 4,
+  "weekStart": ""
 }

@@ -368,6 +368,7 @@ async function main() {
 
     // 7. Start Metrics Server
     MetricsService.startServer();
+    MetricsService.startCollection(client);
   } catch (error) {
     logger.error('Failed to start bot:', error);
     process.exit(1);

@@ -50,6 +50,44 @@ class MetricsService {
       buckets: [0.1, 0.5, 1, 2, 5, 10],
       registers: [this.registry],
     });
+
+    // --- Discord Metrics ---
+    this.discordPing = new client.Gauge({
+      name: 'ryan_discord_ping',
+      help: 'Discord Gateway Websocket Ping',
+      registers: [this.registry],
+    });
+
+    this.guildCount = new client.Gauge({
+      name: 'ryan_guild_count',
+      help: 'Number of guilds the bot is in',
+      registers: [this.registry],
+    });
+
+    this.userCount = new client.Gauge({
+      name: 'ryan_user_count',
+      help: 'Approximate number of users across all guilds',
+      registers: [this.registry],
+    });
+  }
+
+  /**
+   * Starts collecting Discord metrics periodically
+   * @param {import('discord.js').Client} discordClient
+   */
+  startCollection(discordClient) {
+    // Update metrics every 15 seconds
+    setInterval(() => {
+      if (discordClient.ws) {
+        this.discordPing.set(discordClient.ws.ping);
+      }
+      if (discordClient.guilds) {
+        this.guildCount.set(discordClient.guilds.cache.size);
+        this.userCount.set(
+          discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)
+        );
+      }
+    }, 15000);
   }
 
   startServer() {

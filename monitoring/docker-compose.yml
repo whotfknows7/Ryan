@@ -22,5 +22,32 @@ services:
     depends_on:
       - prometheus
 
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: ryan_node_exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  process-exporter:
+    image: ncabatoff/process-exporter:latest
+    container_name: ryan_process_exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - ./process-exporter.yml:/config/process-exporter.yml:ro
+    ports:
+      - "9256:9256"
+    command:
+      - '-procfs=/host/proc'
+      - '-threads=false'
+      - '-config.path=/config/process-exporter.yml'
+
 volumes:
   grafana_data:
