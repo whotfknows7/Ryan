@@ -268,6 +268,34 @@ const JailCommand = {
                 `* __Punishments:__\n` +
                 `\`\`\`1st sin: 30 minutes\n2nd sin: 1 hour\n3rd sin: 12 hours\n4th sin: 36 hours\n5th sin: 7 days\n6th sin: 2 weeks\n7th sin: 4 weeks\n8th sin: Ban\`\`\`*Calling mods won't help you, You can cry them a River, Build a Bridge, and get the fuck over it!*`
             );
+
+            // --- 3c. Generate and Send Mugshot (Caught GIF) ---
+            try {
+              const avatarUrl = member.user.displayAvatarURL({ format: 'png', size: 256 });
+              const mugshotBuffer = await PunishmentService.generateMugshot(
+                avatarUrl,
+                member.user.username,
+                '#8B0000'
+              );
+
+              if (mugshotBuffer) {
+                const mugshotAttachment = {
+                  files: [
+                    {
+                      attachment: mugshotBuffer,
+                      name: `caught_${userId}_${Date.now()}.png`,
+                    },
+                  ],
+                };
+                await jailChannel.send({
+                  content: `📸 **CAUGHT!** ${member.toString()} has been photographed for the records!`,
+                  ...mugshotAttachment,
+                });
+                logger.info(`Mugshot generated for user ${userId} in guild ${guildId}`);
+              }
+            } catch (mugshotError) {
+              logger.error('Failed to generate mugshot:', mugshotError);
+            }
           }
         }
 

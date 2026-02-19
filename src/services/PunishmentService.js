@@ -4,8 +4,36 @@ const { EmbedBuilder } = require('discord.js');
 const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 const { prisma } = require('../lib/prisma');
+const ImageService = require('./ImageService');
 
 class PunishmentService {
+  static async generateMugshot(avatarUrl, username, hexColor = '#FF0000') {
+    try {
+      const mugshotPayload = {
+        username: username,
+        avatar_url: avatarUrl,
+        type: 'mugshot',
+        background_color: hexColor,
+      };
+
+      const response = await fetch(process.env.RENDERER_URL || 'http://127.0.0.1:3000/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mugshotPayload),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Renderer HTTP error! status: ${response.status}`);
+      }
+
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      logger.error('Mugshot generation failed:', error.message);
+      return null;
+    }
+  }
+
   static getDurationMs(offences) {
     switch (offences) {
       case 1:

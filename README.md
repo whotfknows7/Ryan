@@ -86,7 +86,11 @@ A replacement for boring bans, creating an immersive "Prison" experience.
 | **8th Sin** | **Permanent** | Server Ban |
 
 ### 🎭 Prisoner Immersion
-*   **Mugshot Generation**: Automatically creates "Caught" GIFs using the user's avatar.
+*   **Mugshot Generation**: Automatically creates "Caught" images using the user's avatar when they are jailed.
+    - **When**: Triggered immediately when `/jail punish` is executed for new punishments
+    - **Where**: Sent to the configured jail channel as an attachment
+    - **Visual**: Dark atmospheric background with "CAUGHT!" banner and user avatar
+    - **Fallback**: If mugshot generation fails, the jail system continues normally without it
 *   **Torture Chamber Channel**: A restricted channel where jailed users are taunted by the bot's "Flavor Text."
 *   **Community Redemption**: Mods can enable **Vote to Release**, allowing server members to contribute votes to shorten a prisoner's sentence.
 

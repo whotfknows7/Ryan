@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="400" fill="{{ background_color }}"/>
+  
+  <!-- Dark overlay for atmosphere -->
+  <rect width="400" height="400" fill="rgba(0,0,0,0.3)"/>
+  
+  <!-- Wanted text at top -->
+  <text x="200" y="60" text-anchor="middle" font-family="Arial Black, sans-serif" font-size="48" font-weight="bold" fill="#FFD700" stroke="#000" stroke-width="2">CAUGHT!</text>
+  
+  <!-- Mugshot frame border -->
+  <rect x="50" y="90" width="300" height="220" fill="#1a1a1a" stroke="#FFD700" stroke-width="4" rx="10"/>
+  
+  <!-- Avatar circle mask -->
+  <defs>
+    <clipPath id="avatarClip">
+      <circle cx="200" cy="200" r="90"/>
+    </clipPath>
+  </defs>
+  
+  <!-- Avatar background -->
+  <circle cx="200" cy="200" r="95" fill="#333"/>
+  
+  <!-- Avatar placeholder - will be replaced with actual avatar -->
+  <image x="110" y="110" width="180" height="180" href="data:image/png;base64,{{ avatar_b64 }}" clip-path="url(#avatarClip)"/>
+  
+  <!-- Frame corner decorations -->
+  <rect x="45" y="85" width="20" height="20" fill="#FFD700"/>
+  <rect x="335" y="85" width="20" height="20" fill="#FFD700"/>
+  <rect x="45" y="295" width="20" height="20" fill="#FFD700"/>
+  <rect x="335" y="295" width="20" height="20" fill="#FFD700"/>
+  
+  <!-- Username -->
+  <text x="200" y="350" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#FFF" stroke="#000" stroke-width="1">{{ username }}</text>
+  
+  <!-- Date stamp -->
+  <text x="200" y="380" text-anchor="middle" font-family="Courier New, monospace" font-size="14" fill="#AAA">OFFENDER ID: {{ username }}</text>
+</svg>
