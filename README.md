@@ -6,134 +6,165 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 
 ---
 
-## 🏛️ Technical Architecture
+## 🏛️ System Architecture
 
-### Hybrid System Design
-**Two-Process Architecture** running concurrently:
-- **Discord Bot Core (Node.js 20+, discord.js v14):** Handles Discord events, commands, background jobs, and database interactions.
-- **Rust Rendering Engine (Axum + resvg):** High-performance SVG-to-PNG conversion via a native Rust pipeline (offloading CPU-intensive work from the Node.js event loop).
+Ryan is built for speed and reliability, separating logic from heavy visual processing.
 
-### Performance Optimizations
-- **RAM Disk I/O:** Uses `/dev/shm` (Linux RAM Disk) for temporary file processing (GIF frames, icons), offering nanosecond latency vs standard SSD writes.
-- **3-Phase Role Reward Validation:** High-speed RAM cache check → Member verification → Execution to handle chat floods efficiently without hitting Discord API limits.
-- **Worker Thread Isolation:** GIF generation is isolated to dedicated worker threads to prevent bot latency during heavy rendering jobs.
-- **Self-Healing Architecture:** Automatic zombie process cleanup (Chrome/Renderer/Ports) on startup and graceful shutdown handling.
+```mermaid
+graph TD
+    User([User Interactive]) -- Slash Commands/Reactions --> Discord[Discord API]
+    Discord -- Gateway Events --> NodeCore[Node.js Bot Core]
+    NodeCore -- Prisma ORM --> DB[(PostgreSQL)]
+    NodeCore -- HTTP API --> RustRenderer[Rust Visual Engine]
+    RustRenderer -- Headless Chrome --> Canvas[[High Fidelity Render]]
+    Canvas -- "PNG/GIF" --> NodeCore
+    NodeCore -- Webhooks --> Discord
+    
+    subgraph "Internal Infrastructure"
+    NodeCore -- Worker Threads --> GifWorker["Gif Gen Worker"]
+    NodeCore -- RAM Disk --> Shm["/dev/shm"]
+    GifWorker -- "FFmpeg/Gifsicle" --> Shm
+    end
+```
 
----
-
-## 🚀 Core Technology Stack
-
-### Bot Technologies (Node.js)
-- **Runtime:** Node.js 20+ with strict engine requirements.
-- **Framework:** `discord.js v14.25.1` for Discord API integration.
-- **Database:** PostgreSQL with **Prisma ORM (v7.4.0)** for type-safe database operations.
-- **Caching & State:** **Redis (v5.9.3)** for live leaderboards, XP buffering, and cross-process Pub/Sub.
-- **Image Processing:** `@napi-rs/canvas` (0.1.88) for real-time image generation (leaderboards).
-- **Additional Libraries:** `sharp` (0.34.5), `gifencoder`, `gifsicle`, `opentype.js` (font rendering).
-- **Queue Management:** `BullMQ` (5.69.2) for reliable scheduled background jobs.
-- **Validation & Safety:** `Zod` (4.3.6) for environment variables; `rate-limiter-flexible` for API protection.
-- **Monitoring:** `prom-client` (15.1.3) for Prometheus performance metrics.
-
-### Rust Rendering Service
-- **Framework:** `Axum` web server for high-concurrency HTTP API.
-- **Engine:** `resvg` / `usvg` / `tiny-skia` for lightning-fast SVG-to-PNG transformation.
-- **Memory:** `tikv-jemallocator` for long-running stability and fragmentation prevention.
-- **Template Engine:** `Askama` for type-safe SVG template rendering with dynamic data injection.
+### 🚅 Technical Achievements
+*   **Hybrid Engine**: Uses `axum` (Rust) to handle heavy headless browser rendering for rank cards, offloading CPU-intensive work from the Node.js event loop.
+*   **RAM Disk I/O**: Temporary files (GIF frames, icons) are processed in `/dev/shm` (Linux RAM Disk), offering nanosecond latency compared to standard SSD writes.
+*   **3-Phase Validation**: A high-speed caching layer ensures that even during chat floods, role rewards are verified in RAM before every hitting the Discord API.
+*   **Worker Thread Isolation**: GIF generation is handled by dedicated worker threads to prevent bot latency during heavy rendering jobs.
 
 ---
 
-## 📊 Database Schema (Prisma)
+## 📈 The XP Engagement Core
 
-### Core Models
-- **UserXp:** Tracks user experience points with lifetime, daily, weekly counters, and clan associations.
-- **GuildConfig:** Multi-guild configuration storage (reaction roles, keywords, clans, role rewards, IDs).
-- **JailLog:** Prison system with strike tracking and a vote-based release system.
-- **ResetCycle:** Configurable reset scheduling (daily/weekly/lifetime modules).
-- **LeaderboardState:** Persistent leaderboard message state management.
-- **GifTemplate / ClanAsset:** Dynamic clan GIF generation templates and cached role icons.
-- **GifCache:** Hash-based GIF caching system to skip redundant renders.
+Ryan's XP system is engineered to prioritize quality engagement and prevent bot-farming.
 
-### Indexing Strategy
-- **Compound Indexes:** Optimized for `[guildId, xp/dailyXp/weeklyXp]` to ensure instant leaderboard queries.
-- **Faction Indexing:** Indexing on `clanId` for rapid faction-based aggregations.
-- **Uniqueness:** Strict unique constraints for `guild-user` combinations and role-based assets.
+### 🧠 Smart Scoring Logic
+| Content Type | XP Reward | Rationale |
+| :--- | :--- | :--- |
+| **Alpha Characters** | 1 XP Each | Rewards text depth, ignores numbers/punctuation spam. |
+| **Emojis (Any)** | 2 XP Each | Encourages expressive reactions and custom server emoji use. |
+| **URLs** | 0 XP | Negates link spam and automated bot activity. |
 
----
-
-## ⚙️ Service Architecture
-
-### Core Services (`src/services/`)
-- **XpService.js:** Main XP processing, scoring logic, and keyword reaction handling.
-- **DatabaseService.js:** Prisma client management, atomic JSON updates, and Redis ZSET interactions.
-- **XpSyncService.js:** "Write-Behind" synchronization from Redis buffers to PostgreSQL.
-- **LeaderboardUpdateService.js:** Real-time leaderboard generation and Discord message integration.
-- **ImageService.js:** Orchestrates rank card generation via the Rust microservice.
-- **GifService.js:** Clan warfare GIF generation pipeline with animated background processing.
-- **PunishmentService.js:** 8-tier strike system with progressive jail management.
-- **QueueService.js:** BullMQ initialization and scheduling for all recurring background tasks.
-- **ConfigService.js:** Abstracted management of guild-specific JSON configurations.
-- **ResetService.js:** Multi-module reset logic (daily/weekly/lifetime) driven by cron jobs.
-- **MetricsService.js:** Prometheus collection (latency, cache hits, queue sizes).
-
-### Event Handling & Commands
-- **Interactions:** `InteractionHandler.js` routes slash commands and validates parameters.
-- **Messages:** `MessageIntentHandler.js` calculates XP and awards logic for chat events.
-- **Reactions:** `ReactionHandler.js` handles emoji-based interaction flows and clan role switching.
-- **Maintenance:** `EmergencyService.js` handles zombie process cleanup and self-healing.
+### 🛠️ XP Management Systems
+*   **Reset Modules**: Configurable via `/setup`.
+    *   **Module 1 (Default)**: Daily XP resets every 24 hours. Ideal for highly active "Day Winner" competitions.
+    *   **Module 2 (Weekly)**: Daily XP is persistent, with a full wipe once a week (Syncing to Clan Wars).
+    *   **Module 3 (Lifetime)**: Total XP accumulation with no resets.
+*   **3-Phase Role Rewards**:
+    1.  **Phase 1 (RAM)**: Check incoming message user against a cached reward map.
+    2.  **Phase 2 (Verification)**: If a milestone is hit, fetch fresh member data to prevent duplicate awards.
+    3.  **Phase 3 (Execution)**: Grant role and send a rich announcement with a custom-generated level-up card.
 
 ---
 
-## ⚔️ Key Systems & Features
+## ⚔️ Clan Wars Conquest
 
-### XP Engagement Core
-- **Smart Scoring:** Alpha characters (**1 XP**), Emojis (**2 XP**), URLs (**0 XP**) to prioritize quality engagement.
-- **3-Phase Verification:** RAM cache check → Member refetch → Execution with rich announcements and Level-Up cards.
-- **Multi-Module Resets:** Configurable per guild (Daily/Weekly/Lifetime) to suit different community styles.
+A fully automated, 4-faction competitive system.
 
-### Clan Wars Conquest
-- **4-Faction Competition:** Dynamic visuals combining customized icons with high-octane backgrounds.
-- **Automated Sync:** User XP is automatically "poured" into clan pools daily.
-- **GIF Pipeline:** Uses message-link hashing; if a state hasn't changed, retrieves the pre-generated GIF instead of re-rendering.
-
-### The Torture Chamber (Moderation)
-- **8-Tier Strike System:** Progressive punishment from a 30-minute mute to a permanent server ban.
-- **Mugshot Generation:** Automatically creates "Caught" GIFs using the user's avatar.
-- **Community Redemption:** Allows members to **Vote to Release** prisoners, shortening their sentences.
+*   **Dynamic Visuals (`/clans`)**: Generates a real-time GIF combining server-customized clan icons with high-octane animated backgrounds.
+*   **Automated Sync**: Every day, user XP is "poured" into their clan's total pool.
+*   **Destruction Metrics**: Progress bars calculate "Destruction Inflicted" as a percentage of the total server engagement.
+*   **Persistent GIF Pipeline**: Uses a message-link hashing system. If a leaderboard state hasn't changed, Ryan fetches the pre-generated GIF from a secure asset channel rather than re-rendering, saving CPU cycles.
 
 ---
 
-## 🛠️ Development & Operations
+## ⛓️ The Torture Chamber (Moderation)
 
-### Build System
-- `npm run setup`: Automated dependency install and Rust renderer compilation.
-- `npm run dev`: Concurrent execution of both Node.js (with watch mode) and Rust services.
-- `Prisma Workflow`: Automated schema pushing (`db push`) and client generation.
+A replacement for boring bans, creating an immersive "Prison" experience.
 
-### Performance & Health
-- **Database Heartbeat:** 5-minute integrity checks with detailed latency logging.
-- **Graceful Shutdown:** Proper cleanup of DB pools, Redis connections, and child process groups on `SIGTERM`.
-- **Zod Validation:** Strict validation of all environment variables (TOKEN, DATABASE_URL, REDIS_URL) on startup.
+### 🔨 The Strike Table
+| Strike | Duration | Effect |
+| :--- | :--- | :--- |
+| **1st Sin** | 30 Minutes | Silent Mute |
+| **2nd Sin** | 1 Hour | Added to Prisoners Role |
+| **3rd Sin** | 12 Hours | Prisoners Role + Jail Channel Access |
+| **4th Sin** | 36 Hours | Isolation |
+| **5th Sin** | 7 Days | Extended Isolation |
+| **6th Sin** | 2 Weeks | - |
+| **7th Sin** | 4 Weeks | Final Warning |
+| **8th Sin** | **Permanent** | Server Ban |
+
+### 🎭 Prisoner Immersion
+*   **Mugshot Generation**: Automatically creates "Caught" images using the user's avatar when they are jailed.
+    - **When**: Triggered immediately when `/jail punish` is executed for new punishments
+    - **Where**: Sent to the configured jail channel as an attachment
+    - **Visual**: Dark atmospheric background with "CAUGHT!" banner and user avatar
+    - **Fallback**: If mugshot generation fails, the jail system continues normally without it
+*   **Torture Chamber Channel**: A restricted channel where jailed users are taunted by the bot's "Flavor Text."
+*   **Community Redemption**: Mods can enable **Vote to Release**, allowing server members to contribute votes to shorten a prisoner's sentence.
 
 ---
 
-## 📂 File Organization
+## 📜 Full Command Reference
+
+### Admin & Owner (Config)
+| Command | Sub-Command | Description |
+| :--- | :--- | :--- |
+| `/setup` | - | Configure Channels (Mod Log, Leaderboard) and Roles (Admin, Mod, Jail, Clans). |
+| `/setup_role_rewards` | - | Interactive Wizard to map XP milestones to roles, messages, and icons. |
+| `/keyword` | `set` \| `remove` \| `list` | Map chat triggers to automatic emoji reactions. |
+| `/setup-clan-icon` | - | Upload custom emojis or images for Clan representation. |
+| `/resetrole_system` | `reset` \| `readd` \| `list` | Advanced role-stripper for server events/resets (w/ 15m restore window). |
+| `/skip_cycle` | - | Force the XP reset clock forward (Owner only). |
+
+### General & Social
+| Command | Description |
+| :--- | :--- |
+| `/rank` | Fetch your high-resolution PNG rank card showing daily/weekly/lifetime stats. |
+| `/live` | View the top 10 "Yappers" list now. Includes "Show My Rank" button highlight. |
+| `/clans` | Open the Clan Wars dashboard with the dynamic GIF state. |
+| `/custom_role` | `request`: Request a custom color and name (requires eligibility role). |
+| `/hi` | Advanced system heartbeat (Latency, DB Health, Shard Info, Uptime). |
+| `/help` | Detailed interactive help menu. |
+| `/reconnect` | Emergency force-restart of the Rust Visual Engine. |
+
+---
+
+## 🛠️ Developer Guide
+
+### Project Structure
 ```text
 Ryan/
 ├── src/
-│   ├── commands/         # Admin, Config, General, Moderation, Owner
-│   ├── services/         # Core business logic layer
-│   ├── handlers/         # Event and interaction routing
-│   ├── structures/       # Custom Discord Client & Sharding extensions
-│   ├── workers/          # Heavy GIF/FFmpeg processing threads
-│   ├── utils/            # Shared helpers (GuildIdsHelper, etc.)
-│   ├── lib/              # Logger, Prisma, Redis clients
-│   └── index.js          # Startup, Cleanup, and Cron management
-├── Renderer/             # RUST: High-performance visual engine
-│   ├── src/              # Axum handlers, SVG templates, Models
-│   └── templates/        # Askama SVG source templates
-├── assets/               # Fonts, Icons, and MP4/PNG Templates
-├── monitoring/           # Prometheus/Grafana configs & dashboards
-└── schema.prisma         # Postgres Source of Truth
+│   ├── commands/     # Slash command logic (Admin/Config/Gen)
+│   ├── services/     # Business logic (XP, Jail, Reset, Image Gen)
+│   ├── handlers/     # Interaction, Reaction, and Message routing
+│   ├── structures/   # Custom Discord Client extensions
+│   ├── workers/      # Heavy processing (FFmpeg Gif Threads)
+│   └── index.js      # Main entry & Cron Scheduler
+├── Renderer/         # RUST: High-performance visual engine
+│   └── src/          # Axum + Playwright/Chromiumoxide logic
+├── assets/           # Templates, Fonts, and Local Icons
+└── schema.prisma     # Postgres Database Schema
 ```
 
+### Self-Healing & Maintenance
+*   **Zombie Killer**: On startup, Ryan scans for and kills any orphaned Headless Chrome or Renderer instances from previous crashes.
+*   **Graceful Exit**: On `SIGTERM` or `SIGINT`, Ryan properly closes DB connections and terminates the Rust process group to prevent port locks.
+*   **DB Heartbeat**: Ryan performs an integrity check every 5 minutes and logs any latency spikes in PostgreSQL.
+
+---
+
+## 🚦 Getting Started
+
+### 1. Environment Config
+Rename `.env.example` to `.env` and fill:
+*   `TOKEN`: Discord Bot Token
+*   `CLIENT_ID`: Bot Application ID
+*   `DATABASE_URL`: PostgreSQL Connection String
+
+### 2. Deployment
+```bash
+# Install Node Deps
+npm install
+
+# Build the Rust Engine (Requires Rust/Cargo)
+npm run setup
+
+# Launch (Prisma syncs automatically)
+npm start
+```
+
+---
 *Created with ❤️ for the world's best communities. Powered by Node.js, Prisma, and the speed of Rust.*

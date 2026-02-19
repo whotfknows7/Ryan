@@ -306,15 +306,15 @@ class LeaderboardUpdateService {
 
     // 4. Build Embed
     const titles = {
-      daily: 'Yappers of the day!',
-      weekly: 'Yappers of the week!',
-      lifetime: 'Yappers of All-time',
+      daily: 'Daily leaderboard',
+      weekly: 'Weekly leaderboard',
+      lifetime: 'All-time leaderboard',
     };
 
     const embed = new EmbedBuilder()
       .setColor(0xffd700)
       .setTitle(titles[type] || 'Leaderboard')
-      .setDescription(`${titles[type] || 'Leaderboard'} • Page ${page}/${totalPages}`)
+      .setDescription(`**Top 10** • Page ${page}/${totalPages}`)
       .setImage('attachment://leaderboard.png')
       .setTimestamp();
 
@@ -341,8 +341,9 @@ class LeaderboardUpdateService {
     if (showSwitchers) {
       row.addComponents(
         new ButtonBuilder().setCustomId('leaderboard_view:weekly').setLabel('📅').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`leaderboard_show_rank:${type}`).setLabel('Me').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('📈').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('leaderboard_view:lifetime').setLabel('📈').setStyle(ButtonStyle.Primary),
+        // Add "Me" button to Daily view as well
+        new ButtonBuilder().setCustomId(`leaderboard_show_rank:${type}`).setLabel('Me').setStyle(ButtonStyle.Primary)
       );
     } else {
       // COMPACT BUTTON SET (Popup LBs / Pagination)
