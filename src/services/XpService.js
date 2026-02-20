@@ -241,7 +241,8 @@ class RoleRewardHandler {
       const channelId = ids.leaderboardChannelId;
       if (!channelId) return;
 
-      const channel = await guild.channels.fetch(channelId).catch(() => null);
+      let channel = guild.channels.cache.get(channelId);
+      if (!channel) channel = await guild.channels.fetch(channelId).catch(() => null);
       if (!channel) return;
 
       // Get role information (Use Cache - Roles are always in RAM)

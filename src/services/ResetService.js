@@ -334,8 +334,7 @@ class ResetService {
 
       if (ids.clanLeaderboardMessageId) {
         try {
-          const oldMsg = await channel.messages.fetch(ids.clanLeaderboardMessageId).catch(() => null);
-          if (oldMsg) await oldMsg.delete();
+          await channel.messages.delete(ids.clanLeaderboardMessageId);
         } catch {
           /* best-effort delete old msg */
         }
@@ -356,7 +355,8 @@ class ResetService {
       const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
       if (!match) return null;
       const [, _gId, cId, mId] = match;
-      const ch = await client.channels.fetch(cId);
+      let ch = client.channels.cache.get(cId);
+      if (!ch) ch = await client.channels.fetch(cId);
       return await ch.messages.fetch(mId);
     } catch {
       return null;

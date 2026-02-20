@@ -172,11 +172,8 @@ class LeaderboardUpdateService {
         // 3. Double-Check DB ID (In case it wasn't in the last 50 messages)
         if (ids.dailyLeaderboardMessageId) {
           try {
-            const oldMsg = await channel.messages.fetch(ids.dailyLeaderboardMessageId).catch(() => null);
-            if (oldMsg) {
-              logger.debug(`[${guildId}] Deleting tracked old message (DB ID)...`);
-              await oldMsg.delete();
-            }
+            logger.debug(`[${guildId}] Deleting tracked old message (DB ID)...`);
+            await channel.messages.delete(ids.dailyLeaderboardMessageId);
           } catch {
             // Ignore valid errors like "Unknown Message"
           }
@@ -462,8 +459,7 @@ class LeaderboardUpdateService {
             const channel = guild.channels.cache.get(data.channelId);
             if (channel) {
               try {
-                const msg = await channel.messages.fetch(data.messageId).catch(() => null);
-                if (msg) await msg.delete();
+                await channel.messages.delete(data.messageId);
               } catch (e) {
                 logger.warn(`[TempLB] Failed to delete message: ${e.message}`);
               }

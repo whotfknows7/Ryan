@@ -6,6 +6,8 @@ const CONSTANTS = require('../lib/constants');
 // Regex to parse: https://discord.com/channels/{guildId}/{channelId}/{messageId}
 const MESSAGE_LINK_REGEX = /channels\/(\d+)\/(\d+)\/(\d+)/;
 
+let globalDevChannelCache = null;
+
 class AssetService {
   /**
    * Uploads a file (Buffer or Stream) to the Dev Channel.
@@ -17,7 +19,14 @@ class AssetService {
       if (!channelId) throw new Error('ASSET_CHANNEL_ID not set in constants.');
 
       // Direct Channel Fetch (Cached if possible)
-      const channel = await client.channels.fetch(channelId).catch(() => null);
+      if (!globalDevChannelCache) {
+        globalDevChannelCache = client.channels.cache.get(channelId);
+        if (!globalDevChannelCache) {
+          globalDevChannelCache = await client.channels.fetch(channelId).catch(() => null);
+        }
+      }
+
+      const channel = globalDevChannelCache;
       if (!channel) throw new Error(`Asset Channel ${channelId} not found/accessible.`);
 
       const message = await channel.send({
@@ -43,7 +52,10 @@ class AssetService {
 
       const [, _guildId, channelId, messageId] = match;
 
-      const channel = await client.channels.fetch(channelId);
+      let channel = client.channels.cache.get(channelId);
+      if (!channel) {
+        channel = await client.channels.fetch(channelId);
+      }
       const message = await channel.messages.fetch(messageId);
 
       if (!message || message.attachments.size === 0) {

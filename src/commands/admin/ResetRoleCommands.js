@@ -62,13 +62,17 @@ const ResetRoleCommand = {
         });
       }
 
-      await interaction.reply({ content: `🔄 Fetching members and removing ${role}...` });
+      await interaction.reply({ content: `🔄 Fetching members targeting ${role}...` });
 
       const guild = interaction.guild;
-      await guild.members.fetch();
 
-      const membersWithRole = guild.members.cache.filter((m) => m.roles.cache.has(role.id));
+      // Targeted role fetching breakthrough
+      const membersWithRole = await guild.members.fetch({ force: true, role: role.id });
       const memberIds = membersWithRole.map((m) => m.id);
+
+      if (memberIds.length === 0) {
+        return interaction.editReply(`⚠️ Found 0 members with ${role}.`);
+      }
 
       const newData = {
         members: memberIds,
@@ -83,18 +87,15 @@ const ResetRoleCommand = {
         })
       );
 
-      let removedCount = 0;
-      for (const [_, member] of membersWithRole) {
-        try {
-          await member.roles.remove(role);
-          removedCount++;
-        } catch {
-          console.error(`Failed to remove role from ${member.user.tag}`);
-        }
-      }
+      const QueueService = require('../../services/QueueService');
+      await QueueService.queues.tasks.add('mass-role-removal', {
+        guildId,
+        roleId: role.id,
+        memberIds,
+      });
 
       await interaction.editReply(
-        `✅ Removed ${role} from ${removedCount} members. Use \`/resetrole_system readd\` within 15 mins to restore.`
+        `✅ Identified ${memberIds.length} members with ${role}. Processing started in the background. Use \`/resetrole_system readd\` within 15 mins to restore.`
       );
     }
 
@@ -151,5 +152,22 @@ async function cleanExpiredResetRoles(guildId) {
   }
 }
 
+async function processMassRoleRemoval(client, guildId, roleId, memberIds) {
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return;
+
+  for (const userId of memberIds) {
+    try {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (member && member.roles.cache.has(roleId)) {
+        await member.roles.remove(roleId);
+      }
+    } catch {
+      console.error(`Failed to background remove role ${roleId} from user ${userId}`);
+    }
+  }
+}
+
 module.exports = ResetRoleCommand;
 module.exports.cleanExpiredResetRoles = cleanExpiredResetRoles;
+module.exports.processMassRoleRemoval = processMassRoleRemoval;

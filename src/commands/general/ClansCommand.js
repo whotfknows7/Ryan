@@ -173,7 +173,8 @@ async function fetchMessageFromLink(client, link) {
     const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
     if (!match) return null;
     const [, _gId, cId, mId] = match;
-    const ch = await client.channels.fetch(cId);
+    let ch = client.channels.cache.get(cId);
+    if (!ch) ch = await client.channels.fetch(cId);
     return await ch.messages.fetch(mId);
   } catch {
     return null;

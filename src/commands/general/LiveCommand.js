@@ -10,6 +10,7 @@ const {
   ComponentType,
 } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
+const { defaultRedis } = require('../../config/redis');
 // [FIX] Import the instance directly (No curly braces)
 const ImageService = require('../../services/ImageService');
 
@@ -29,21 +30,90 @@ const LiveCommand = {
       const allUsers = await DatabaseService.getAllUserXp(guildId);
       const totalPages = Math.max(1, Math.ceil(allUsers.length / 10));
 
-      // 2. Prepare Image
-      // Group user IDs to perform a single bulk fetch from Discord instead of up to 10
-      const userIds = topUsers.map((u) => u.userId);
-      let members = new Map();
-      if (userIds.length > 0) {
-        members = await guild.members.fetch({ user: userIds }).catch(() => new Map());
+      // 2. Prepare Image (Using Redis HASH Cache)
+      const cacheKey = `member_cache:${guildId}`;
+      const dbUserIds = topUsers.map((u) => u.userId);
+
+      let profiles = [];
+      let missingUserIds = [];
+      let missingIndices = [];
+
+      if (dbUserIds.length > 0) {
+        try {
+          // Fetch multiple users from the Redis hash
+          const cachedData = await defaultRedis.hmget(cacheKey, ...dbUserIds);
+
+          for (let i = 0; i < dbUserIds.length; i++) {
+            if (cachedData[i]) {
+              // Cache hit
+              const parsed = JSON.parse(cachedData[i]);
+              profiles.push({
+                userId: dbUserIds[i],
+                displayName: parsed.displayName,
+                avatarUrl: parsed.avatarUrl,
+              });
+            } else {
+              // Cache miss
+              profiles.push(null);
+              missingUserIds.push(dbUserIds[i]);
+              missingIndices.push(i);
+            }
+          }
+        } catch (err) {
+          console.error(`[LiveCommandCache] Failed to fetch hash cache for ${guildId}: ${err.message}`);
+          missingUserIds = dbUserIds;
+          missingIndices = dbUserIds.map((_, i) => i);
+        }
+
+        if (missingUserIds.length > 0) {
+          // Fetch ONLY the missing members from Discord
+          let fetchedMembers = new Map();
+          try {
+            fetchedMembers = await guild.members.fetch({ user: missingUserIds }).catch(() => new Map());
+          } catch (err) {
+            console.error(`[LiveCommandCache] Failed to fetch missing members for ${guildId}: ${err.message}`);
+          }
+
+          const pipeline = defaultRedis.pipeline();
+          let updates = 0;
+
+          for (let j = 0; j < missingUserIds.length; j++) {
+            const uId = missingUserIds[j];
+            const pIndex = missingIndices[j];
+            const member = fetchedMembers.get(uId);
+
+            const profileBase = {
+              displayName: member ? member.nickname || member.user.username : 'Unknown',
+              avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+            };
+
+            profiles[pIndex] = {
+              userId: uId,
+              ...profileBase,
+            };
+
+            // Pipeline HSET
+            pipeline.hset(cacheKey, uId, JSON.stringify(profileBase));
+            updates++;
+          }
+
+          if (updates > 0) {
+            pipeline
+              .exec()
+              .catch((e) =>
+                console.error(`[LiveCommandCache] Failed to save hash pipeline for ${guildId}: ${e.message}`)
+              );
+          }
+        }
       }
 
       const usersForImage = topUsers.map((u, index) => {
-        const member = members.get(u.userId);
+        const profile = profiles[index];
         return {
           rank: index + 1,
           userId: u.userId,
-          username: member ? member.nickname || member.user.username : 'Unknown',
-          avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+          username: profile ? profile.displayName : 'Unknown',
+          avatarUrl: profile ? profile.avatarUrl : null,
           xp: u.dailyXp || u.xp, // Show Daily XP for Live, or Total if preferred
         };
       });

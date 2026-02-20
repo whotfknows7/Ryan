@@ -23,6 +23,7 @@ class QueueService {
 
     // 1. Create Queues
     this.queues.cron = new Queue('cron-jobs', { connection: redisConfig });
+    this.queues.tasks = new Queue('tasks', { connection: redisConfig });
 
     // 2. Define Workers
     this.workers.cron = new Worker(
@@ -65,6 +66,25 @@ class QueueService {
     );
 
     this.workers.cron.on('error', (err) => logger.error('❌ Cron Worker Error:', err));
+
+    this.workers.tasks = new Worker(
+      'tasks',
+      async (job) => {
+        try {
+          if (job.name === 'mass-role-removal') {
+            const { guildId, roleId, memberIds } = job.data;
+            const { processMassRoleRemoval } = require('../commands/admin/ResetRoleCommands');
+            await processMassRoleRemoval(this.client, guildId, roleId, memberIds);
+            logger.info(`✅ mass-role-removal job completed for guild ${guildId} and role ${roleId}`);
+          }
+        } catch (error) {
+          logger.error(`❌ Tasks worker failed for job '${job.name}':`, error);
+          throw error;
+        }
+      },
+      { connection: redisConfig }
+    );
+    this.workers.tasks.on('error', (err) => logger.error('❌ Tasks Worker Error:', err));
 
     logger.info('✅ QueueService initialized. Workers started.');
 

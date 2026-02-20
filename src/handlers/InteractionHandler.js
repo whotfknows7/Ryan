@@ -123,8 +123,11 @@ const handleInteraction = async (interaction) => {
         // Delete previous temp leaderboard of the SAME TYPE only
         if (prevTempId) {
           try {
-            const previousMsg = await interaction.channel.messages.fetch(prevTempId).catch(() => null);
-            if (previousMsg) await previousMsg.delete();
+            if (interaction.message && interaction.message.id === prevTempId) {
+              await interaction.message.delete();
+            } else {
+              await interaction.channel.messages.delete(prevTempId);
+            }
           } catch (e) {
             logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
           }
@@ -273,8 +276,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
-      else await interaction.reply(errorMsg).catch(() => {});
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
+      else await interaction.reply(errorMsg).catch(() => { });
     }
   }
 };
