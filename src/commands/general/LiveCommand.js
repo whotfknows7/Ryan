@@ -30,18 +30,23 @@ const LiveCommand = {
       const totalPages = Math.max(1, Math.ceil(allUsers.length / 10));
 
       // 2. Prepare Image
-      const usersForImage = await Promise.all(
-        topUsers.map(async (u, index) => {
-          const member = await guild.members.fetch(u.userId).catch(() => null);
-          return {
-            rank: index + 1,
-            userId: u.userId,
-            username: member ? member.nickname || member.user.username : 'Unknown',
-            avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
-            xp: u.dailyXp || u.xp, // Show Daily XP for Live, or Total if preferred
-          };
-        })
-      );
+      // Group user IDs to perform a single bulk fetch from Discord instead of up to 10
+      const userIds = topUsers.map((u) => u.userId);
+      let members = new Map();
+      if (userIds.length > 0) {
+        members = await guild.members.fetch({ user: userIds }).catch(() => new Map());
+      }
+
+      const usersForImage = topUsers.map((u, index) => {
+        const member = members.get(u.userId);
+        return {
+          rank: index + 1,
+          userId: u.userId,
+          username: member ? member.nickname || member.user.username : 'Unknown',
+          avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+          xp: u.dailyXp || u.xp, // Show Daily XP for Live, or Total if preferred
+        };
+      });
 
       const imageBuffer = await ImageService.generateLeaderboard(usersForImage);
       const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });

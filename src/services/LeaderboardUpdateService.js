@@ -124,7 +124,7 @@ class LeaderboardUpdateService {
 
       // THROTTLE: Don't update more than once every 15 seconds per guild
       const lastUpdate = lastUpdateTimes.get(guildId) || 0;
-      if (Date.now() - lastUpdate < 15000) {
+      if (Date.now() - lastUpdate < 20000) {
         // logger.debug(`[${guildId}] Throttled.`);
         continue;
       }
@@ -146,8 +146,8 @@ class LeaderboardUpdateService {
           continue;
         }
 
-        // 1. Fetch Top 10 for display (Fast)
-        const topUsers = await DatabaseService.fetchTopUsers(guildId, 10, 'daily');
+        // 1. Fetch Top 10 for display (Fast - uses Redis ZSETs)
+        const topUsers = await DatabaseService.getLiveTopUsers(guildId, 10, 'daily');
 
         // Optimization: Skip if the data hasn't changed
         const currentJSON = JSON.stringify(topUsers);
@@ -168,47 +168,7 @@ class LeaderboardUpdateService {
         const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true, topUsers);
         // logger.info(`[${guildId}] Payload generated.`);
 
-        // 3. Scan & Clean Old Leaderboards (Fix for Glitch/Restarts)
-        try {
-          // Fetch last 5 messages to find any previous leaderboards sent by me
-          const messages = await channel.messages.fetch({ limit: 5 });
-          const leaderboardTitles = ['Yappers of the day!', 'Yappers of the week!', 'All-time Yappers!'];
-
-          const guildTemps = tempLeaderboards.get(guildId) || {};
-          // Protect based on messageId (handle object structure)
-          const protectedTempIds = Object.values(guildTemps).map((v) => v.messageId || v);
-          const currentMainId = ids.dailyLeaderboardMessageId;
-
-          const messagesToDelete = messages.filter((msg) => {
-            // Must be sent by me
-            if (msg.author.id !== client.user.id) return false;
-
-            // PROTECT: Do not delete ANY active Temporary Leaderboards (Weekly/Lifetime)
-            if (protectedTempIds.includes(msg.id)) return false;
-
-            // PROTECT: Do not delete the active Main Leaderboard (Daily) - We handle this explicitly below
-            if (currentMainId && msg.id === currentMainId) return false;
-
-            // Must have an embed with a matching title
-            if (msg.embeds.length > 0 && leaderboardTitles.includes(msg.embeds[0].title)) return true;
-            return false;
-          });
-
-          if (messagesToDelete.size > 0) {
-            logger.info(`[${guildId}] Found ${messagesToDelete.size} old leaderboard messages. Cleaning up...`);
-            await channel.bulkDelete(messagesToDelete).catch((err) => {
-              // Fallback if bulk delete fails (e.g. messages older than 14 days)
-              logger.warn(`[${guildId}] Bulk delete failed: ${err.message}. Trying individual delete...`);
-              messagesToDelete.forEach((msg) => msg.delete().catch(() => { }));
-            });
-          } else {
-            logger.debug(`[${guildId}] No old leaderboard messages found to clean.`);
-          }
-        } catch (e) {
-          logger.warn(`[${guildId}] Failed to cleanup old leaderboards: ${e.message}`);
-        }
-
-        // 4. Double-Check DB ID (In case it wasn't in the last 50 messages)
+        // 3. Double-Check DB ID (In case it wasn't in the last 50 messages)
         if (ids.dailyLeaderboardMessageId) {
           try {
             const oldMsg = await channel.messages.fetch(ids.dailyLeaderboardMessageId).catch(() => null);
@@ -266,7 +226,14 @@ class LeaderboardUpdateService {
    * @param {boolean} showSwitchers - Whether to include Weekly/All-time buttons
    * @param {Array|null} prefetchedData - Optional: Array of user objects to avoid re-fetching
    */
-  static async generateLeaderboardPayload(guild, type, page, highlightUserId = null, showSwitchers = false, prefetchedData = null) {
+  static async generateLeaderboardPayload(
+    guild,
+    type,
+    page,
+    highlightUserId = null,
+    showSwitchers = false,
+    prefetchedData = null
+  ) {
     const limit = 10;
     const skip = (page - 1) * limit;
 

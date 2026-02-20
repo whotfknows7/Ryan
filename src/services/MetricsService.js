@@ -83,9 +83,7 @@ class MetricsService {
       }
       if (discordClient.guilds) {
         this.guildCount.set(discordClient.guilds.cache.size);
-        this.userCount.set(
-          discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0)
-        );
+        this.userCount.set(discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0));
       }
     }, 15000);
   }

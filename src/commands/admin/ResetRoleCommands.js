@@ -114,8 +114,14 @@ const ResetRoleCommand = {
       const guild = interaction.guild;
       let addedCount = 0;
 
+      // Group user IDs to perform a single bulk fetch from Discord instead of querying one by one
+      let members = new Map();
+      if (data.members && data.members.length > 0) {
+        members = await guild.members.fetch({ user: data.members }).catch(() => new Map());
+      }
+
       for (const userId of data.members) {
-        const member = await guild.members.fetch(userId).catch(() => null);
+        const member = members.get(userId);
         if (member) {
           try {
             await member.roles.add(role);
