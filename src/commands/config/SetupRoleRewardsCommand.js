@@ -194,6 +194,8 @@ module.exports = {
             message: message || null, // Null = Silent
             assetMessageLink: assetMessageId,
             roleId: role.id,
+            roleName: role.name,
+            roleColor: role.color,
           };
 
           configData.announcement_roles = announcementRoles;

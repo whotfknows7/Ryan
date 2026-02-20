@@ -14,7 +14,6 @@ const { XpService } = require('./services/XpService');
 const ImageService = require('./services/ImageService');
 const MetricsService = require('./services/MetricsService');
 
-const { ReactionHandler } = require('./handlers/ReactionHandler');
 const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
@@ -296,7 +295,27 @@ async function main() {
     client.on('messageReactionAdd', async (reaction, user) => {
       if (user.bot) return;
       try {
-        await ReactionHandler.handleReactionAdd(reaction, user);
+        const payload = {
+          guildId: reaction.message.guildId,
+          channelId: reaction.message.channelId,
+          messageId: reaction.message.id,
+          userId: user.id,
+          emojiName: reaction.emoji.name,
+          emojiId: reaction.emoji.id,
+          emojiString: reaction.emoji.toString(),
+        };
+
+        await QueueService.queues.reactions.add(
+          'reaction-add',
+          {
+            action: 'add',
+            payload,
+          },
+          {
+            removeOnComplete: true,
+            removeOnFail: 100,
+          }
+        );
       } catch (error) {
         logger.error('Reaction Add Error:', error);
       }
@@ -305,7 +324,27 @@ async function main() {
     client.on('messageReactionRemove', async (reaction, user) => {
       if (user.bot) return;
       try {
-        await ReactionHandler.handleReactionRemove(reaction, user);
+        const payload = {
+          guildId: reaction.message.guildId,
+          channelId: reaction.message.channelId,
+          messageId: reaction.message.id,
+          userId: user.id,
+          emojiName: reaction.emoji.name,
+          emojiId: reaction.emoji.id,
+          emojiString: reaction.emoji.toString(),
+        };
+
+        await QueueService.queues.reactions.add(
+          'reaction-remove',
+          {
+            action: 'remove',
+            payload,
+          },
+          {
+            removeOnComplete: true,
+            removeOnFail: 100,
+          }
+        );
       } catch (error) {
         logger.error('Reaction Remove Error:', error);
       }

@@ -50,19 +50,35 @@ class CustomRoleService {
     }
 
     if (anchorRole) {
-      // Fetch the bot member and its roles explicitly to calculate highest position
+      // Fetch the bot member
       const botMember = await guild.members.fetch(guild.client.user.id).catch(() => null);
 
-      // Safety check: ensure we can resolve the bot's highest role
-      if (botMember && botMember.roles.highest.position > anchorRole.position) {
-        try {
-          await newRole.setPosition(anchorRole.position);
-          logger.info(`Positioned role ${newRole.name} at anchor position`);
-        } catch (e) {
-          logger.warn(`Could not position role ${newRole.name}: ${e}`);
+      if (botMember) {
+        // 1. Get the bot's raw role IDs (stateless bypass)
+        const botRoleIds = botMember._roles || Array.from(botMember.roles.cache.keys());
+
+        // 2. Map those IDs to our freshly fetched allRoles snapshot to find the highest position
+        const botHighestPosition = Math.max(
+          ...botRoleIds.map((id) => {
+            const role = allRoles.get(id);
+            return role ? role.position : 0;
+          }),
+          0 // Fallback to 0
+        );
+
+        // 3. Compare positions statelessly
+        if (botHighestPosition > anchorRole.position) {
+          try {
+            await newRole.setPosition(anchorRole.position);
+            logger.info(`Positioned role ${newRole.name} at anchor position`);
+          } catch (e) {
+            logger.warn(`Could not position role ${newRole.name}: ${e}`);
+          }
+        } else {
+          logger.warn(
+            `Cannot position role ${newRole.name} near ${anchorRole.name}. Bot's highest role (${botHighestPosition}) is lower than anchor (${anchorRole.position}).`
+          );
         }
-      } else {
-        logger.warn(`Cannot position role ${newRole.name} near ${anchorRole.name}. Bot's highest role is too low.`);
       }
     } else {
       logger.warn(`Anchor role not configured or found. New role created at default position.`);

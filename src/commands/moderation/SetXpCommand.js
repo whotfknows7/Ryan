@@ -56,7 +56,7 @@ const SetXpCommand = {
       const logChannelId = ids.trueLogsChannelId || ids.logsChannelId;
 
       if (logChannelId) {
-        const logChannel = interaction.guild?.channels.cache.get(logChannelId);
+        const logChannel = await interaction.guild?.channels.fetch(logChannelId).catch(() => null);
         if (logChannel?.isTextBased()) {
           const embed = new EmbedBuilder()
             .setTitle('⚙️ XP Change Log')

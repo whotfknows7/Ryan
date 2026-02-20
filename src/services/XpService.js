@@ -201,6 +201,8 @@ class RoleRewardHandler {
         xp: parseInt(r.xp || 0),
         message: r.message,
         assetMessageLink: r.assetMessageLink,
+        roleName: r.roleName,
+        roleColor: r.roleColor,
       }))
       .filter((r) => r.xp > 0)
       .sort((a, b) => b.xp - a.xp);
@@ -241,10 +243,15 @@ class RoleRewardHandler {
       const channelId = ids.leaderboardChannelId;
       if (!channelId) return;
 
-      // Stateless Fetch: Get the specific role from Discord API
-      const role = await guild.roles.fetch(reward.roleId).catch(() => null);
-      const roleName = role ? role.name : 'Level Up';
-      const roleColor = role ? role.color : 0xffffff;
+      // Stateless Fetch: Use cached data or fallback to API for older configs
+      let roleName = reward.roleName;
+      let roleColor = reward.roleColor;
+
+      if (!roleName || roleColor == null) {
+        const role = await guild.roles.fetch(reward.roleId).catch(() => null);
+        roleName = role ? role.name : 'Level Up';
+        roleColor = role ? role.color : 0xffffff;
+      }
 
       // Parse message template
       const description = reward.message

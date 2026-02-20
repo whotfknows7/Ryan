@@ -108,8 +108,8 @@ class EmergencyService {
       return;
     }
 
-    const targetRole = guild.roles.cache.get(targetRoleId);
-    const logChannel = guild.channels.cache.get(logsChannelId);
+    const targetRole = await guild.roles.fetch(targetRoleId).catch(() => null);
+    const logChannel = await guild.channels.fetch(logsChannelId).catch(() => null);
 
     if (!targetRole || !logChannel) {
       const errorEmbed = new EmbedBuilder()

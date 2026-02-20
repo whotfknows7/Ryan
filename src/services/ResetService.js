@@ -355,8 +355,7 @@ class ResetService {
       const match = link.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
       if (!match) return null;
       const [, _gId, cId, mId] = match;
-      let ch = client.channels.cache.get(cId);
-      if (!ch) ch = await client.channels.fetch(cId);
+      const ch = await client.channels.fetch(cId);
       return await ch.messages.fetch(mId);
     } catch {
       return null;
@@ -367,7 +366,7 @@ class ResetService {
     const ids = await getIds(guildId);
     if (!ids.leaderboardChannelId) return null;
     const guild = client.guilds.cache.get(guildId);
-    return guild?.channels.cache.get(ids.leaderboardChannelId) || null;
+    return guild ? await guild.channels.fetch(ids.leaderboardChannelId).catch(() => null) : null;
   }
 
   static async getClanMentions(guildId) {

@@ -24,6 +24,7 @@ class QueueService {
     // 1. Create Queues
     this.queues.cron = new Queue('cron-jobs', { connection: redisConfig });
     this.queues.tasks = new Queue('tasks', { connection: redisConfig });
+    this.queues.reactions = new Queue('reactions', { connection: redisConfig });
 
     // 2. Define Workers
     this.workers.cron = new Worker(
@@ -76,6 +77,10 @@ class QueueService {
             const { processMassRoleRemoval } = require('../commands/admin/ResetRoleCommands');
             await processMassRoleRemoval(this.client, guildId, roleId, memberIds);
             logger.info(`✅ mass-role-removal job completed for guild ${guildId} and role ${roleId}`);
+          } else if (job.name === 'member-release') {
+            const { guildId, userId, log } = job.data;
+            const { PunishmentService } = require('./PunishmentService');
+            await PunishmentService.releaseMember(this.client, guildId, userId, log);
           }
         } catch (error) {
           logger.error(`❌ Tasks worker failed for job '${job.name}':`, error);
@@ -85,6 +90,33 @@ class QueueService {
       { connection: redisConfig }
     );
     this.workers.tasks.on('error', (err) => logger.error('❌ Tasks Worker Error:', err));
+
+    this.workers.reactions = new Worker(
+      'reactions',
+      async (job) => {
+        try {
+          const { action, payload } = job.data;
+          const { ReactionHandler } = require('../handlers/ReactionHandler');
+
+          if (action === 'add') {
+            await ReactionHandler.handleReactionAdd(this.client, payload);
+          } else if (action === 'remove') {
+            await ReactionHandler.handleReactionRemove(this.client, payload);
+          }
+        } catch (error) {
+          logger.error(`❌ Reactions worker failed for job '${job.id}':`, error);
+          throw error; // Let BullMQ retry
+        }
+      },
+      {
+        connection: redisConfig,
+        limiter: {
+          max: 15,
+          duration: 1000, // 15 jobs per 1 second globally
+        },
+      }
+    );
+    this.workers.reactions.on('error', (err) => logger.error('❌ Reactions Worker Error:', err));
 
     logger.info('✅ QueueService initialized. Workers started.');
 

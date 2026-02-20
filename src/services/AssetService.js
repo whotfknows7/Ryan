@@ -21,10 +21,7 @@ class AssetService {
 
       // Direct Channel Fetch (Cached if possible)
       if (!globalDevChannelCache) {
-        globalDevChannelCache = client.channels.cache.get(channelId);
-        if (!globalDevChannelCache) {
-          globalDevChannelCache = await client.channels.fetch(channelId).catch(() => null);
-        }
+        globalDevChannelCache = await client.channels.fetch(channelId).catch(() => null);
       }
 
       const channel = globalDevChannelCache;
@@ -53,10 +50,7 @@ class AssetService {
 
       const [, _guildId, channelId, messageId] = match;
 
-      let channel = client.channels.cache.get(channelId);
-      if (!channel) {
-        channel = await client.channels.fetch(channelId);
-      }
+      const channel = await client.channels.fetch(channelId);
       const message = await channel.messages.fetch(messageId);
 
       if (!message || message.attachments.size === 0) {

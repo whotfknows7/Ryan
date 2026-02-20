@@ -52,7 +52,7 @@ class PunishmentService {
     return new Date(Date.now() + this.getDurationMs(offences));
   }
 
-  static async checkExpiredPunishments(client) {
+  static async checkExpiredPunishments(_client) {
     try {
       const expiredLogs = await prisma.jailLog.findMany({
         where: {
@@ -64,9 +64,16 @@ class PunishmentService {
         },
       });
 
-      for (const log of expiredLogs) {
-        await this.releaseMember(client, log.guildId, log.userId, log);
-      }
+      const QueueService = require('./QueueService');
+      const delayMs = 250;
+
+      expiredLogs.forEach((log, index) => {
+        QueueService.queues.tasks.add(
+          'member-release',
+          { guildId: log.guildId, userId: log.userId, log },
+          { delay: index * delayMs }
+        );
+      });
     } catch (error) {
       logger.error('Error checking expired punishments:', error);
     }

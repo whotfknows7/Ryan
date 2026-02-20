@@ -244,12 +244,11 @@ class GuildHelper {
       return this._channelMemo.get(channelId);
     }
 
-    let channel = this.guild.channels.cache.get(channelId);
-    if (!channel) {
-      channel = await this.guild.channels.fetch(channelId).catch(() => undefined);
-    }
+    const channel = await this.guild.channels.fetch(channelId).catch(() => undefined);
 
-    this._channelMemo.set(channelId, channel);
+    if (channel) {
+      this._channelMemo.set(channelId, channel);
+    }
     return channel;
   }
 

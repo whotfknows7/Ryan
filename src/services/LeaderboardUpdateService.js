@@ -141,7 +141,7 @@ class LeaderboardUpdateService {
           continue;
         }
 
-        const channel = guild.channels.cache.get(channelId);
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
         if (!channel?.isTextBased()) {
           logger.debug(`[${guildId}] Leaderboard channel not found or not text-based.`);
           continue;
@@ -462,7 +462,7 @@ class LeaderboardUpdateService {
 
           // Delete from Discord
           if (data.channelId) {
-            const channel = guild.channels.cache.get(data.channelId);
+            const channel = await guild.channels.fetch(data.channelId).catch(() => null);
             if (channel) {
               try {
                 await channel.messages.delete(data.messageId);

@@ -135,7 +135,7 @@ const JailCommand = {
             });
 
             if (logsChannelId) {
-              const logChannel = guild.channels.cache.get(logsChannelId);
+              const logChannel = await guild.channels.fetch(logsChannelId).catch(() => null);
               if (logChannel) {
                 const embed = new EmbedBuilder()
                   .setTitle('🔨 Member Banned')
@@ -293,7 +293,7 @@ const JailCommand = {
 
         // Send Log
         if (logsChannelId) {
-          const logChannel = guild.channels.cache.get(logsChannelId);
+          const logChannel = await guild.channels.fetch(logsChannelId).catch(() => null);
           if (logChannel) {
             const embed = new EmbedBuilder()
               .setTitle('⛓️ Member Jailed')
@@ -369,7 +369,7 @@ const JailCommand = {
         });
 
         if (logsChannelId) {
-          const logChannel = guild.channels.cache.get(logsChannelId);
+          const logChannel = await guild.channels.fetch(logsChannelId).catch(() => null);
           if (logChannel) {
             const embed = new EmbedBuilder()
               .setTitle('🔓 Member Released')
@@ -501,7 +501,7 @@ const JailCommand = {
         }
 
         if (logsChannelId) {
-          const logChannel = guild.channels.cache.get(logsChannelId);
+          const logChannel = await guild.channels.fetch(logsChannelId).catch(() => null);
           if (logChannel) {
             const embed = new EmbedBuilder()
               .setTitle('📉 Punishment Reduced')
