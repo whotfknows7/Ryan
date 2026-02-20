@@ -7,6 +7,7 @@ const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
 const ImageService = require('./ImageService');
 const logger = require('../lib/logger');
+const { defaultRedis } = require('../config/redis');
 
 // =================================================================
 // CRITICAL: This variable must be defined HERE (Top Level Scope)
@@ -249,31 +250,130 @@ class LeaderboardUpdateService {
     const totalCount = await DatabaseService.getUserCount(guild.id, type);
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
-    // 2. Map Data for Image
-    let members = new Map();
+    // 2. Fetch Members (Using Redis JSON Cache for Top 10)
+    let usersForImage = [];
     try {
-      const userIds = topUsers.map((u) => u.userId);
-      if (userIds.length > 0) {
-        members = await guild.members.fetch({ user: userIds });
+      if (page === 1) {
+        // --- TOP 10 CACHE LOGIC (REDIS HASH) ---
+        const cacheKey = `member_cache:${guild.id}`;
+        const dbUserIds = topUsers.map((u) => u.userId);
+
+        let profiles = [];
+        let missingUserIds = [];
+        let missingIndices = [];
+
+        if (dbUserIds.length > 0) {
+          try {
+            // Fetch multiple users from the Redis hash
+            const cachedData = await defaultRedis.hmget(cacheKey, ...dbUserIds);
+
+            for (let i = 0; i < dbUserIds.length; i++) {
+              if (cachedData[i]) {
+                // Cache hit
+                const parsed = JSON.parse(cachedData[i]);
+                profiles.push({
+                  userId: dbUserIds[i],
+                  displayName: parsed.displayName,
+                  avatarUrl: parsed.avatarUrl,
+                });
+              } else {
+                // Cache miss
+                profiles.push(null); // Placeholder
+                missingUserIds.push(dbUserIds[i]);
+                missingIndices.push(i);
+              }
+            }
+          } catch (err) {
+            logger.warn(`[LeaderboardCache] Failed to fetch hash cache for ${guild.id}: ${err.message}`);
+            // Fallback: treat all as missing
+            missingUserIds = dbUserIds;
+            missingIndices = dbUserIds.map((_, i) => i);
+          }
+
+          if (missingUserIds.length > 0) {
+            // Fetch ONLY the missing members from Discord
+            let fetchedMembers = new Map();
+            try {
+              fetchedMembers = await guild.members.fetch({ user: missingUserIds }).catch(() => new Map());
+            } catch (err) {
+              logger.warn(`[LeaderboardCache] Failed to fetch missing members for ${guild.id}: ${err.message}`);
+            }
+
+            const pipeline = defaultRedis.pipeline();
+            let updates = 0;
+
+            for (let j = 0; j < missingUserIds.length; j++) {
+              const uId = missingUserIds[j];
+              const pIndex = missingIndices[j];
+              const member = fetchedMembers.get(uId);
+
+              const profileBase = {
+                displayName: member ? member.displayName : 'Unknown',
+                avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+              };
+
+              profiles[pIndex] = {
+                userId: uId,
+                ...profileBase
+              };
+
+              // Pipeline HSET
+              pipeline.hset(cacheKey, uId, JSON.stringify(profileBase));
+              updates++;
+            }
+
+            if (updates > 0) {
+              pipeline.exec().catch(e =>
+                logger.error(`[LeaderboardCache] Failed to save hash pipeline for ${guild.id}: ${e.message}`)
+              );
+            }
+          }
+        }
+
+        // Map the profiles to the final image format
+        usersForImage = topUsers.map((u, index) => {
+          const profile = profiles[index];
+          const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
+          return {
+            rank: skip + index + 1,
+            userId: profile.userId,
+            username: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+            xp: xpVal,
+          };
+        });
+
+      } else {
+        // --- PAGE 2+ LOGIC (No Cache) ---
+        let members = new Map();
+        const userIds = topUsers.map((u) => u.userId);
+        if (userIds.length > 0) {
+          members = await guild.members.fetch({ user: userIds }).catch(() => new Map());
+        }
+
+        usersForImage = topUsers.map((u, index) => {
+          const member = members.get(u.userId);
+          const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
+          return {
+            rank: skip + index + 1,
+            userId: u.userId,
+            username: member ? member.displayName : 'Unknown',
+            avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+            xp: xpVal,
+          };
+        });
       }
     } catch (e) {
-      logger.error(`Failed to bulk fetch members for leaderboard:`, e);
-    }
-
-    const usersForImage = topUsers.map((u, index) => {
-      const member = members.get(u.userId);
-
-      // Determine which XP value to display
-      const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
-
-      return {
+      logger.error(`Failed to generate member data for leaderboard:`, e);
+      // Fallback empty array to prevent complete failure
+      if (usersForImage.length === 0) usersForImage = topUsers.map((u, index) => ({
         rank: skip + index + 1,
         userId: u.userId,
-        username: member ? member.displayName : 'Unknown',
-        avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
-        xp: xpVal,
-      };
-    });
+        username: 'Unknown',
+        avatarUrl: null,
+        xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp
+      }));
+    }
 
     // 3. Generate Image (with highlight support)
     const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
