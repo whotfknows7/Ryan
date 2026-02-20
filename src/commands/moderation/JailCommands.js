@@ -169,7 +169,7 @@ const JailCommand = {
           const newEnd = PunishmentService.getPunishmentDuration(newOffences);
 
           if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
-            await member.roles.add(groundRoleId).catch(() => { });
+            await member.roles.add(groundRoleId).catch(() => {});
           }
 
           await ConfigService.createOrUpdateJailLog({
@@ -220,7 +220,7 @@ const JailCommand = {
 
         // 3. NEW PUNISHMENT
         if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
-          await member.roles.add(groundRoleId).catch(() => { });
+          await member.roles.add(groundRoleId).catch(() => {});
         }
 
         const punishmentEnd = PunishmentService.getPunishmentDuration(newOffences);
@@ -268,10 +268,10 @@ const JailCommand = {
           if (jailChannel) {
             await jailChannel.send(
               `## ${member.toString()}, Oh no, It looks like someone Cheeky got locked up in The Torture Chamber for violating the <#1228738698292625570>! (Sin #${newOffences})\n` +
-              `### Don't worry, we'll take good care of you… by making you suffer in the most boring way possible.\n` +
-              `**The only thing you'll hear is the echoes of your sins.**\n` +
-              `* __Punishments:__\n` +
-              `\`\`\`1st sin: 30 minutes\n2nd sin: 1 hour\n3rd sin: 12 hours\n4th sin: 36 hours\n5th sin: 7 days\n6th sin: 2 weeks\n7th sin: 4 weeks\n8th sin: Ban\`\`\`*Calling mods won't help you, You can cry them a River, Build a Bridge, and get the fuck over it!*`
+                `### Don't worry, we'll take good care of you… by making you suffer in the most boring way possible.\n` +
+                `**The only thing you'll hear is the echoes of your sins.**\n` +
+                `* __Punishments:__\n` +
+                `\`\`\`1st sin: 30 minutes\n2nd sin: 1 hour\n3rd sin: 12 hours\n4th sin: 36 hours\n5th sin: 7 days\n6th sin: 2 weeks\n7th sin: 4 weeks\n8th sin: Ban\`\`\`*Calling mods won't help you, You can cry them a River, Build a Bridge, and get the fuck over it!*`
             );
           }
         }

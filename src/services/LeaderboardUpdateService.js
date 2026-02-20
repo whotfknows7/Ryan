@@ -314,7 +314,7 @@ class LeaderboardUpdateService {
 
               profiles[pIndex] = {
                 userId: uId,
-                ...profileBase
+                ...profileBase,
               };
 
               // Pipeline HSET
@@ -323,9 +323,11 @@ class LeaderboardUpdateService {
             }
 
             if (updates > 0) {
-              pipeline.exec().catch(e =>
-                logger.error(`[LeaderboardCache] Failed to save hash pipeline for ${guild.id}: ${e.message}`)
-              );
+              pipeline
+                .exec()
+                .catch((e) =>
+                  logger.error(`[LeaderboardCache] Failed to save hash pipeline for ${guild.id}: ${e.message}`)
+                );
             }
           }
         }
@@ -342,7 +344,6 @@ class LeaderboardUpdateService {
             xp: xpVal,
           };
         });
-
       } else {
         // --- PAGE 2+ LOGIC (No Cache) ---
         let members = new Map();
@@ -366,13 +367,14 @@ class LeaderboardUpdateService {
     } catch (e) {
       logger.error(`Failed to generate member data for leaderboard:`, e);
       // Fallback empty array to prevent complete failure
-      if (usersForImage.length === 0) usersForImage = topUsers.map((u, index) => ({
-        rank: skip + index + 1,
-        userId: u.userId,
-        username: 'Unknown',
-        avatarUrl: null,
-        xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp
-      }));
+      if (usersForImage.length === 0)
+        usersForImage = topUsers.map((u, index) => ({
+          rank: skip + index + 1,
+          userId: u.userId,
+          username: 'Unknown',
+          avatarUrl: null,
+          xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp,
+        }));
     }
 
     // 3. Generate Image (with highlight support)
