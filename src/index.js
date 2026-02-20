@@ -9,6 +9,7 @@ const { MessageFlags } = require('discord.js');
 const { CustomClient } = require('./structures/CustomClient');
 const { DatabaseService } = require('./services/DatabaseService');
 const { PunishmentService } = require('./services/PunishmentService');
+const { ConfigService } = require('./services/ConfigService');
 
 const { XpService } = require('./services/XpService');
 const ImageService = require('./services/ImageService');
@@ -387,6 +388,90 @@ async function main() {
         await DatabaseService.cleanDeletedChannel(channel.guild.id, channel.id);
       } catch (error) {
         logger.error('Channel Delete Error:', error);
+      }
+    });
+
+    client.on('emojiUpdate', async (oldEmoji, newEmoji) => {
+      try {
+        const oldString = oldEmoji.toString();
+        const newString = newEmoji.toString();
+
+        if (oldString === newString) return;
+
+        const guildId = newEmoji.guild.id;
+        const keywords = await ConfigService.getKeywords(guildId);
+        if (!keywords || Object.keys(keywords).length === 0) return;
+
+        let changed = false;
+
+        for (const [keyword, emojis] of Object.entries(keywords)) {
+          const updatedEmojis = emojis.map((e) => (e === oldString ? newString : e));
+
+          if (JSON.stringify(emojis) !== JSON.stringify(updatedEmojis)) {
+            keywords[keyword] = updatedEmojis;
+            changed = true;
+            logger.info(`Updated emoji ${oldString} -> ${newString} for keyword "${keyword}" in guild ${guildId}`);
+          }
+        }
+
+        if (changed) {
+          await ConfigService.saveKeywords(guildId, keywords);
+        }
+      } catch (error) {
+        logger.error('Emoji Update Error:', error);
+      }
+    });
+
+    client.on('emojiDelete', async (emoji) => {
+      try {
+        const emojiString = emoji.toString();
+        const guildId = emoji.guild.id;
+        const keywords = await ConfigService.getKeywords(guildId);
+
+        if (!keywords || Object.keys(keywords).length === 0) return;
+
+        let changed = false;
+
+        for (const [keyword, emojis] of Object.entries(keywords)) {
+          const filteredEmojis = emojis.filter((e) => e !== emojiString);
+
+          if (filteredEmojis.length !== emojis.length) {
+            if (filteredEmojis.length === 0) {
+              delete keywords[keyword];
+              logger.info(`Removed keyword "${keyword}" in guild ${guildId} because its only emoji was deleted.`);
+            } else {
+              keywords[keyword] = filteredEmojis;
+              logger.info(`Removed deleted emoji ${emojiString} from keyword "${keyword}" in guild ${guildId}`);
+            }
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          await ConfigService.saveKeywords(guildId, keywords);
+        }
+      } catch (error) {
+        logger.error('Emoji Delete Error:', error);
+      }
+    });
+
+    client.on('stickerUpdate', async (oldSticker, newSticker) => {
+      try {
+        if (oldSticker.name !== newSticker.name) {
+          logger.info(
+            `Sticker updated: ${oldSticker.name} -> ${newSticker.name} (${newSticker.id}) in guild ${newSticker.guildId}`
+          );
+        }
+      } catch (error) {
+        logger.error('Sticker Update Error:', error);
+      }
+    });
+
+    client.on('stickerDelete', async (sticker) => {
+      try {
+        logger.info(`Sticker deleted: ${sticker.name} (${sticker.id}) in guild ${sticker.guildId}`);
+      } catch (error) {
+        logger.error('Sticker Delete Error:', error);
       }
     });
 

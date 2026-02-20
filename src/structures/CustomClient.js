@@ -13,6 +13,7 @@ class CustomClient extends Client {
         GatewayIntentBits.MessageContent, // Crucial for XP/Chatbot
         GatewayIntentBits.GuildMembers, // Crucial for Roles/Jail
         GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.GuildEmojisAndStickers,
       ],
       partials: [
         Partials.Message,

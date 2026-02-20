@@ -347,7 +347,17 @@ class XpService {
       if (jailLog && jailLog.status === 'jailed') return;
 
       // 1. O(N) Phantom Calculation
-      const xpToAdd = XpCalculator.calculateMessageXp(message.content);
+      let xpToAdd = 0;
+      if (message.content) {
+        xpToAdd += XpCalculator.calculateMessageXp(message.content);
+      }
+
+      const hasStickers =
+        message.stickers?.size > 0 || message.stickers?.length > 0 || message.sticker_items?.length > 0;
+      if (hasStickers) {
+        xpToAdd += 2;
+      }
+
       if (xpToAdd <= 0) return;
 
       // 2. Push to Micro-Batch (Zero Network Latency)
