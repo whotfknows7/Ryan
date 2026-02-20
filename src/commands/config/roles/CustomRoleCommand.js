@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { CustomRoleService } = require('../../../services/CustomRoleService');
-const { getIds } = require('../../../utils/GuildIdsHelper');
+const { getIds, hasRole } = require('../../../utils/GuildIdsHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -35,7 +35,7 @@ module.exports = {
       const eligibilityRoleId = ids.customRoleEligibilityId;
 
       if (eligibilityRoleId) {
-        if (!interaction.member.roles.cache.has(eligibilityRoleId)) {
+        if (!hasRole(interaction.member, eligibilityRoleId)) {
           return interaction.editReply({
             content: `❌ You do not have the required role (<@&${eligibilityRoleId}>) to request a custom role.`,
           });

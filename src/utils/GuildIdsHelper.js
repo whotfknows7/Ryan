@@ -143,6 +143,40 @@ function clearAllCache() {
 }
 
 /**
+ * Utility to check roles safely (handles both Discord.js managers and raw API arrays)
+ */
+function hasRole(member, roleId) {
+  if (!member || !roleId) return false;
+  const roles = member.roles;
+  if (Array.isArray(roles)) return roles.includes(roleId);
+  return roles.cache?.has(roleId) || false;
+}
+
+/**
+ * Utility to check permissions safely (handles both Discord.js managers and raw API bitfields)
+ */
+function hasPermission(member, permission) {
+  if (!member) return false;
+  const permissions = member.permissions;
+
+  // Discord.js PermissionsManager
+  if (permissions && typeof permissions.has === 'function') {
+    return permissions.has(permission);
+  }
+
+  // Raw API Bitfield String
+  if (typeof permissions === 'string' || typeof permissions === 'bigint') {
+    const bitfield = BigInt(permissions);
+    const ADMINISTRATOR = 8n;
+    if (permission === 'Administrator') return (bitfield & ADMINISTRATOR) === ADMINISTRATOR;
+
+    // Add other permissions if needed, for now focusing on Administrator as requested
+  }
+
+  return false;
+}
+
+/**
  * Type-safe helper to get specific role/channel from guild
  */
 class GuildHelper {
@@ -248,22 +282,14 @@ class GuildHelper {
 
   // --- PERMISSION HELPERS (Async) ---
 
-  /**
-   * Check if user has admin role (Synchronous, Stateless)
-   * @param {GuildMember} member
-   */
   isAdmin(member) {
     if (!member || !this.ids.adminRoleId) return false;
-    return member.roles.cache.has(this.ids.adminRoleId);
+    return hasRole(member, this.ids.adminRoleId);
   }
 
-  /**
-   * Check if user has moderator role (Synchronous, Stateless)
-   * @param {GuildMember} member
-   */
   isModerator(member) {
     if (!member || !this.ids.modRoleId) return false;
-    return member.roles.cache.has(this.ids.modRoleId);
+    return hasRole(member, this.ids.modRoleId);
   }
 
   /**
@@ -290,10 +316,10 @@ class GuildHelper {
     const member = await this.guild.members.fetch(userId).catch(() => null);
     if (!member) return null;
 
-    if (this.ids.clanRole1Id && member.roles.cache.has(this.ids.clanRole1Id)) return 1;
-    if (this.ids.clanRole2Id && member.roles.cache.has(this.ids.clanRole2Id)) return 2;
-    if (this.ids.clanRole3Id && member.roles.cache.has(this.ids.clanRole3Id)) return 3;
-    if (this.ids.clanRole4Id && member.roles.cache.has(this.ids.clanRole4Id)) return 4;
+    if (this.ids.clanRole1Id && hasRole(member, this.ids.clanRole1Id)) return 1;
+    if (this.ids.clanRole2Id && hasRole(member, this.ids.clanRole2Id)) return 2;
+    if (this.ids.clanRole3Id && hasRole(member, this.ids.clanRole3Id)) return 3;
+    if (this.ids.clanRole4Id && hasRole(member, this.ids.clanRole4Id)) return 4;
 
     return null;
   }
@@ -323,4 +349,6 @@ module.exports = {
   GuildHelper,
   createGuildHelper,
   getGuildConfigValue,
+  hasRole,
+  hasPermission,
 };

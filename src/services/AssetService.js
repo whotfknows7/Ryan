@@ -2,6 +2,7 @@
 
 const logger = require('../lib/logger');
 const CONSTANTS = require('../lib/constants');
+const { Routes } = require('discord.js');
 
 // Regex to parse: https://discord.com/channels/{guildId}/{channelId}/{messageId}
 const MESSAGE_LINK_REGEX = /channels\/(\d+)\/(\d+)\/(\d+)/;
@@ -29,12 +30,12 @@ class AssetService {
       const channel = globalDevChannelCache;
       if (!channel) throw new Error(`Asset Channel ${channelId} not found/accessible.`);
 
-      const message = await channel.send({
-        content: `**[Asset Storage]** ${contextText} (${filename})`,
+      const rawMessage = await client.rest.post(Routes.channelMessages(channelId), {
+        body: { content: `**[Asset Storage]** ${contextText} (${filename})` },
         files: [{ attachment: fileData, name: filename }],
       });
 
-      return message.url;
+      return `https://discord.com/channels/${channel.guild?.id || '@me'}/${channelId}/${rawMessage.id}`;
     } catch (error) {
       logger.error(`[AssetService] Failed to store asset: ${error.message}`);
       // Don't throw, return null so the bot can fallback gracefully

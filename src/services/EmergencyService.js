@@ -1,4 +1,4 @@
-const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, Routes } = require('discord.js');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const { getIds } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
@@ -48,26 +48,25 @@ class EmergencyService {
         )
         .setFooter({ text: 'Stay safe and keep calm.', iconURL: guild.iconURL() });
 
-      await channel.send({ embeds: [cooldownEmbed] });
+      await guild.client.rest.post(Routes.channelMessages(channel.id), { body: { embeds: [cooldownEmbed.toJSON()] } });
 
       // Silent Logging (rate-limited to 1 per 10s)
       if (logsChannelId) {
-        const logChannel = guild.channels.cache.get(logsChannelId);
-        if (logChannel) {
-          try {
-            await silentLogLimiter.consume(guild.id);
-            const silentLogEmbed = new EmbedBuilder()
-              .setColor('#FFA500')
-              .setTitle('⚠️ Emergency Cooldown Attempt')
-              .setDescription(
-                `**User:** ${member.toString()}\n**Channel:** ${channel.toString()}\n**Note:** User attempted to call 911 during cooldown.`
-              )
-              .setTimestamp();
+        try {
+          await silentLogLimiter.consume(guild.id);
+          const silentLogEmbed = new EmbedBuilder()
+            .setColor('#FFA500')
+            .setTitle('⚠️ Emergency Cooldown Attempt')
+            .setDescription(
+              `**User:** ${member.toString()}\n**Channel:** ${channel.toString()}\n**Note:** User attempted to call 911 during cooldown.`
+            )
+            .setTimestamp();
 
-            logChannel.send({ embeds: [silentLogEmbed] }).catch((e) => logger.error('Failed to send silent log:', e));
-          } catch {
-            // Silent log on cooldown, skip
-          }
+          guild.client.rest
+            .post(Routes.channelMessages(logsChannelId), { body: { embeds: [silentLogEmbed.toJSON()] } })
+            .catch((e) => logger.error('Failed to send silent log:', e));
+        } catch {
+          // Silent log on cooldown, skip
         }
       }
       return;
@@ -82,7 +81,9 @@ class EmergencyService {
       .setThumbnail('https://cdn.discordapp.com/emojis/1049286377778941973.webp?size=96&quality=lossless');
 
     try {
-      replyMessage = await channel.send({ embeds: [dialingEmbed] });
+      replyMessage = await guild.client.rest.post(Routes.channelMessages(channel.id), {
+        body: { embeds: [dialingEmbed.toJSON()] },
+      });
     } catch (error) {
       logger.error('Failed to send dialing message:', error);
       return;
@@ -100,7 +101,9 @@ class EmergencyService {
         );
 
       if (replyMessage) {
-        await replyMessage.edit({ embeds: [errorEmbed] });
+        await guild.client.rest.patch(Routes.channelMessage(channel.id, replyMessage.id), {
+          body: { embeds: [errorEmbed.toJSON()] },
+        });
       }
       return;
     }
@@ -115,7 +118,9 @@ class EmergencyService {
         .setDescription('Could not reach the staff team (Role/Channel missing).');
 
       if (replyMessage) {
-        await replyMessage.edit({ embeds: [errorEmbed] });
+        await guild.client.rest.patch(Routes.channelMessage(channel.id, replyMessage.id), {
+          body: { embeds: [errorEmbed.toJSON()] },
+        });
       }
       return;
     }
@@ -154,10 +159,12 @@ class EmergencyService {
         new ButtonBuilder().setLabel('View Incident').setStyle(ButtonStyle.Link).setURL(jumpLink)
       );
 
-      await logChannel.send({
-        content: `${targetRole.toString()} **EMERGENCY REPORTED!**`,
-        embeds: [adminAlertEmbed],
-        components: [row],
+      await guild.client.rest.post(Routes.channelMessages(logsChannelId), {
+        body: {
+          content: `${targetRole.toString()} **EMERGENCY REPORTED!**`,
+          embeds: [adminAlertEmbed.toJSON()],
+          components: [row.toJSON()],
+        },
       });
     } catch (error) {
       logger.error('Failed to send admin alert:', error);
@@ -167,7 +174,9 @@ class EmergencyService {
         .setDescription('Failed to connect to the emergency line.');
 
       if (replyMessage) {
-        await replyMessage.edit({ embeds: [errorEmbed] });
+        await guild.client.rest.patch(Routes.channelMessage(channel.id, replyMessage.id), {
+          body: { embeds: [errorEmbed.toJSON()] },
+        });
       }
       return;
     }
@@ -181,7 +190,9 @@ class EmergencyService {
 
     setTimeout(async () => {
       if (replyMessage) {
-        await replyMessage.edit({ embeds: [successEmbed] });
+        await guild.client.rest.patch(Routes.channelMessage(channel.id, replyMessage.id), {
+          body: { embeds: [successEmbed.toJSON()] },
+        });
       }
     }, 1500);
 

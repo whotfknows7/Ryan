@@ -327,10 +327,27 @@ async function main() {
     client.on('guildMemberRemove', async (member) => {
       try {
         await PunishmentService.handleMemberLeave(member);
-        await DatabaseService.deleteUserData(member.guild.id, member.id);
-        logger.info(`Cleaned up XP data for departed member ${member.user.tag}`);
+        // Retain XP data, do not delete it from DatabaseService
+        logger.info(`Recorded departure for member ${member.user.tag} (XP data retained)`);
       } catch (error) {
         logger.error('Member Remove Error:', error);
+      }
+    });
+
+    client.on('roleDelete', async (role) => {
+      try {
+        await DatabaseService.cleanDeletedRole(role.guild.id, role.id);
+      } catch (error) {
+        logger.error('Role Delete Error:', error);
+      }
+    });
+
+    client.on('channelDelete', async (channel) => {
+      try {
+        if (!channel.guild) return; // Ignore DM channels
+        await DatabaseService.cleanDeletedChannel(channel.guild.id, channel.id);
+      } catch (error) {
+        logger.error('Channel Delete Error:', error);
       }
     });
 

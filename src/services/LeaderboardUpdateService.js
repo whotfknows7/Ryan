@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes } = require('discord.js');
 const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
 const ImageService = require('./ImageService');
@@ -186,7 +186,13 @@ class LeaderboardUpdateService {
         const maxRetries = 3;
         for (let i = 0; i < maxRetries; i++) {
           try {
-            newMessage = await channel.send(payload);
+            newMessage = await guild.client.rest.post(Routes.channelMessages(channelId), {
+              body: {
+                embeds: payload.embeds?.map((e) => e.toJSON()),
+                components: payload.components?.map((c) => c.toJSON()),
+              },
+              files: payload.files,
+            });
             break; // Success!
           } catch (sendError) {
             if (i === maxRetries - 1) throw sendError; // Rethrow if last attempt
@@ -305,7 +311,7 @@ class LeaderboardUpdateService {
               const member = fetchedMembers.get(uId);
 
               const profileBase = {
-                displayName: member ? member.displayName : 'Unknown',
+                displayName: member ? member.displayName : 'Unknown (Left)',
                 avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
               };
 
@@ -355,7 +361,7 @@ class LeaderboardUpdateService {
           return {
             rank: skip + index + 1,
             userId: u.userId,
-            username: member ? member.displayName : 'Unknown',
+            username: member ? member.displayName : 'Unknown (Left)',
             avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
             xp: xpVal,
           };
@@ -368,7 +374,7 @@ class LeaderboardUpdateService {
         usersForImage = topUsers.map((u, index) => ({
           rank: skip + index + 1,
           userId: u.userId,
-          username: 'Unknown',
+          username: 'Unknown (Left)',
           avatarUrl: null,
           xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp,
         }));

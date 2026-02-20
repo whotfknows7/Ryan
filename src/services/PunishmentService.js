@@ -1,7 +1,7 @@
 // src/services/PunishmentService.js
 
-const { EmbedBuilder } = require('discord.js');
-const { getIds } = require('../utils/GuildIdsHelper');
+const { EmbedBuilder, Routes } = require('discord.js');
+const { getIds, hasRole, createGuildHelper } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 const { prisma } = require('../lib/prisma');
 
@@ -100,20 +100,21 @@ class PunishmentService {
         data: { status: 'released' },
       });
 
-      const ids = await getIds(guildId);
+      const helper = await createGuildHelper(guild);
+      const logChannel = await helper.getTrueLogsChannel();
+      const ids = helper.ids;
       const groundRoleId = ids.groundRoleId;
-      const logsChannelId = ids.logsChannelId;
-      const logChannel = logsChannelId ? guild.channels.cache.get(logsChannelId) : null;
+      const logsChannelId = logChannel?.id;
 
       if (member) {
-        if (groundRoleId && member.roles.cache.has(groundRoleId)) {
+        if (groundRoleId && hasRole(member, groundRoleId)) {
           try {
             await member.roles.remove(groundRoleId);
           } catch (roleError) {
             // [FIX] Handle Role Removal Failure ("Ghost Prisoner")
             logger.error(`Failed to remove role from ${userId}: ${roleError}`);
 
-            if (logChannel) {
+            if (logsChannelId) {
               const errEmbed = new EmbedBuilder()
                 .setTitle('⚠️ Release Error: Role Removal Failed')
                 .setColor('DarkOrange')
@@ -125,14 +126,14 @@ class PunishmentService {
                 )
                 .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
                 .setTimestamp();
-              await logChannel.send({ embeds: [errEmbed] });
+              await client.rest.post(Routes.channelMessages(logsChannelId), { body: { embeds: [errEmbed] } });
             }
           }
         }
       }
 
       // Send Success Log
-      if (logChannel && options.notify) {
+      if (logsChannelId && options.notify) {
         const embed = new EmbedBuilder()
           .setTitle('Member Released Automatically')
           .setColor('Green')
@@ -142,16 +143,15 @@ class PunishmentService {
           )
           .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
           .setTimestamp();
-        await logChannel.send({ embeds: [embed] });
+        await client.rest.post(Routes.channelMessages(logsChannelId), { body: { embeds: [embed] } });
       }
 
       // --- [NEW] Release Channel Notification ---
       const releaseChannelId = ids.releaseChannelId;
       if (releaseChannelId) {
-        const releaseChannel = guild.channels.cache.get(releaseChannelId);
-        if (releaseChannel) {
-          await releaseChannel.send(`📢 <@${userId}> has been released from jail! Be good!`);
-        }
+        await client.rest.post(Routes.channelMessages(releaseChannelId), {
+          body: { content: `📢 <@${userId}> has been released from jail! Be good!` },
+        });
       }
 
       logger.info(`Automatically released member ${userId}`);
@@ -179,7 +179,7 @@ class PunishmentService {
       const jailChannelId = ids.jailChannelId;
       const logsChannelId = ids.logsChannelId;
 
-      if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
+      if (groundRoleId && !hasRole(member, groundRoleId)) {
         await member.roles.add(groundRoleId);
       }
 
@@ -191,30 +191,26 @@ class PunishmentService {
       });
 
       if (jailChannelId) {
-        const jailChannel = member.guild.channels.cache.get(jailChannelId);
-        if (jailChannel) {
-          await jailChannel.send(
-            `${member.toString()}, welcome back! Your sentence has been increased/resumed for leaving the server. Enjoy your extended stay!`
-          );
-        }
+        await member.client.rest.post(Routes.channelMessages(jailChannelId), {
+          body: {
+            content: `${member.toString()}, welcome back! Your sentence has been increased/resumed for leaving the server. Enjoy your extended stay!`,
+          },
+        });
       }
 
       if (logsChannelId) {
-        const logChannel = member.guild.channels.cache.get(logsChannelId);
-        if (logChannel) {
-          const embed = new EmbedBuilder()
-            .setTitle('Member Grounded (Rejoined)')
-            .setColor('Red')
-            .setThumbnail(member.user.displayAvatarURL())
-            .addFields(
-              { name: 'Member', value: `${member} (${member.user.username})`, inline: true },
-              { name: 'Offences', value: `${log.offences}`, inline: true },
-              { name: 'Action', value: 'Re-jailed for evasion', inline: false }
-            )
-            .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
-            .setTimestamp();
-          await logChannel.send({ embeds: [embed] });
-        }
+        const embed = new EmbedBuilder()
+          .setTitle('Member Grounded (Rejoined)')
+          .setColor('Red')
+          .setThumbnail(member.user.displayAvatarURL())
+          .addFields(
+            { name: 'Member', value: `${member} (${member.user.username})`, inline: true },
+            { name: 'Offences', value: `${log.offences}`, inline: true },
+            { name: 'Action', value: 'Re-jailed for evasion', inline: false }
+          )
+          .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
+          .setTimestamp();
+        await member.client.rest.post(Routes.channelMessages(logsChannelId), { body: { embeds: [embed] } });
       }
 
       logger.info(`Re-jailed ${member.user.tag} for evasion attempt`);
@@ -232,7 +228,7 @@ class PunishmentService {
       // 1. Check for Ground Role (Source of Truth on Leave)
       const ids = await getIds(guildId);
       const groundRoleId = ids.groundRoleId;
-      const hasGroundRole = groundRoleId && member.roles.cache.has(groundRoleId);
+      const hasGroundRole = groundRoleId && hasRole(member, groundRoleId);
 
       if (hasGroundRole) {
         // User left while grounded. Ensure this is persisted.
@@ -253,8 +249,9 @@ class PunishmentService {
         // Now proceed with existing "evasion" logic (increase offences, ban if > 8, etc)
         // The log variable is now guaranteed to exist and be 'jailed'.
 
-        const logsChannelId = ids.logsChannelId;
-        const logChannel = logsChannelId ? member.guild.channels.cache.get(logsChannelId) : null;
+        const helper = await createGuildHelper(member.guild);
+        const logChannel = await helper.getTrueLogsChannel();
+        const logsChannelId = logChannel?.id;
         const avatarUrl = member.user?.displayAvatarURL();
 
         const newOffences = log.offences + 1; // Increment because they left (evasion attempt)
@@ -275,7 +272,7 @@ class PunishmentService {
               },
             });
 
-            if (logChannel) {
+            if (logsChannelId) {
               const embed = new EmbedBuilder()
                 .setTitle('Member Banned')
                 .setColor('DarkRed')
@@ -286,7 +283,7 @@ class PunishmentService {
                 .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
                 .setTimestamp();
               if (avatarUrl) embed.setThumbnail(avatarUrl);
-              await logChannel.send({ embeds: [embed] });
+              await member.client.rest.post(Routes.channelMessages(logsChannelId), { body: { embeds: [embed] } });
             }
           } catch (e) {
             logger.error(`Failed to ban ${userTag}: ${e}`);
@@ -302,7 +299,7 @@ class PunishmentService {
             },
           });
 
-          if (logChannel) {
+          if (logsChannelId) {
             const embed = new EmbedBuilder()
               .setTitle('Member Left While Jailed')
               .setColor('Orange')
@@ -314,7 +311,7 @@ class PunishmentService {
               .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
               .setTimestamp();
             if (avatarUrl) embed.setThumbnail(avatarUrl);
-            await logChannel.send({ embeds: [embed] });
+            await member.client.rest.post(Routes.channelMessages(logsChannelId), { body: { embeds: [embed] } });
           }
           logger.info(`Increased offences for ${userTag} to ${newOffences} and paused timer.`);
         }

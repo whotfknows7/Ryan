@@ -11,8 +11,16 @@ module.exports = {
   async execute(interaction) {
     await interaction.deferReply();
 
-    const targetUser = interaction.options.getUser('user') || interaction.user;
+    const providedUser = interaction.options.getUser('user');
+    const targetUser = providedUser || interaction.user;
     const guildId = interaction.guild.id;
+
+    // Check if the user is in the guild
+    let inGuild = true;
+    if (providedUser) {
+      const member = interaction.options.getMember('user');
+      if (!member) inGuild = false;
+    }
 
     // 1. Fetch Stats (Breakthrough 1)
     const stats = await DatabaseService.getLiveUserStats(guildId, targetUser.id);
@@ -21,7 +29,7 @@ module.exports = {
 
     // 2. Prepare Data for Image Service
     const rankData = {
-      username: targetUser.username, // Display name or username
+      username: inGuild ? targetUser.username : `${targetUser.username} (Left)`, // Display name or username
       avatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
       // Pill 1 Data
       weeklyXp: stats.weeklyXp,

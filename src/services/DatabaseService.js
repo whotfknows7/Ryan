@@ -540,6 +540,48 @@ class DatabaseService {
     });
   }
 
+  static async cleanDeletedRole(guildId, roleId) {
+    const config = await this.getFullGuildConfig(guildId);
+    if (!config || !config.ids) return;
+
+    let updated = false;
+    const currentIds = config.ids;
+    for (const [key, value] of Object.entries(currentIds)) {
+      if (value === roleId) {
+        delete currentIds[key];
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      await this.updateGuildConfig(guildId, { ids: currentIds });
+      const { invalidate } = require('../utils/GuildIdsHelper');
+      invalidate(guildId);
+      logger.info(`Cleaned up deleted role ${roleId} from guild config ${guildId}.`);
+    }
+  }
+
+  static async cleanDeletedChannel(guildId, channelId) {
+    const config = await this.getFullGuildConfig(guildId);
+    if (!config || !config.ids) return;
+
+    let updated = false;
+    const currentIds = config.ids;
+    for (const [key, value] of Object.entries(currentIds)) {
+      if (value === channelId) {
+        delete currentIds[key];
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      await this.updateGuildConfig(guildId, { ids: currentIds });
+      const { invalidate } = require('../utils/GuildIdsHelper');
+      invalidate(guildId);
+      logger.info(`Cleaned up deleted channel ${channelId} from guild config ${guildId}.`);
+    }
+  }
+
   /**
    * [NEW] Fetch multiple guild configs in one query
    */

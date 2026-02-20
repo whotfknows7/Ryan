@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('disc
 const { DatabaseService } = require('../../services/DatabaseService');
 const { prisma } = require('../../lib/prisma');
 const { addMinutes } = require('date-fns');
+const { hasRole } = require('../../utils/GuildIdsHelper');
 
 const ResetRoleCommand = {
   data: new SlashCommandBuilder()
@@ -159,7 +160,7 @@ async function processMassRoleRemoval(client, guildId, roleId, memberIds) {
   for (const userId of memberIds) {
     try {
       const member = await guild.members.fetch(userId).catch(() => null);
-      if (member && member.roles.cache.has(roleId)) {
+      if (member && hasRole(member, roleId)) {
         await member.roles.remove(roleId);
       }
     } catch {

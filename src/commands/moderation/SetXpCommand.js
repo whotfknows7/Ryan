@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags, Routes } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { getIds } = require('../../utils/GuildIdsHelper');
 const { prisma } = require('../../lib/prisma');
@@ -68,7 +68,9 @@ const SetXpCommand = {
             )
             .setColor('Orange')
             .setTimestamp();
-          await logChannel.send({ embeds: [embed] });
+          await interaction.client.rest.post(Routes.channelMessages(logChannelId), {
+            body: { embeds: [embed.toJSON()] },
+          });
         }
       }
     } catch (error) {

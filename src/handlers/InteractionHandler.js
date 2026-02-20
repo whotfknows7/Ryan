@@ -1,12 +1,12 @@
 // src/handlers/InteractionHandler.js
 
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, MessageFlags, Routes } = require('discord.js');
 const logger = require('../lib/logger');
 const { CustomRoleService } = require('../services/CustomRoleService');
 const { ConfigService } = require('../services/ConfigService');
 const { DatabaseService } = require('../services/DatabaseService');
 const { LeaderboardUpdateService } = require('../services/LeaderboardUpdateService');
-const { getIds } = require('../utils/GuildIdsHelper');
+const { createGuildHelper } = require('../utils/GuildIdsHelper');
 const { checkCooldown } = require('../lib/cooldowns');
 
 const handleInteraction = async (interaction) => {
@@ -140,7 +140,13 @@ const handleInteraction = async (interaction) => {
         // Send Message
         let msg;
         if (useFallback) {
-          msg = await interaction.channel.send(payload);
+          msg = await interaction.client.rest.post(Routes.channelMessages(interaction.channelId), {
+            body: {
+              embeds: payload.embeds?.map((e) => e.toJSON()),
+              components: payload.components?.map((c) => c.toJSON()),
+            },
+            files: payload.files,
+          });
         } else {
           msg = await interaction.editReply(payload);
         }
@@ -240,15 +246,17 @@ const handleInteraction = async (interaction) => {
         const caseId = updatedLog.caseId || 'N/A';
 
         const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
-        const targetName = targetMember ? targetMember.user.username : 'Unknown';
+        const targetName = targetMember ? targetMember.user.username : 'Unknown (Left)';
 
-        const ids = await getIds(guildId);
-        if (ids.logsChannelId) {
-          const logChannel = guild.channels.cache.get(ids.logsChannelId);
-          if (logChannel)
-            await logChannel.send(
-              `🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Case ID: ${caseId}, Total: ${voteCount})`
-            );
+        const helper = await createGuildHelper(guild);
+        const logChannel = await helper.getTrueLogsChannel();
+
+        if (logChannel) {
+          await interaction.client.rest.post(Routes.channelMessages(logChannel.id), {
+            body: {
+              content: `🗳️ **Vote:** ${user.username} voted to release ${targetName}. (Case ID: ${caseId}, Total: ${voteCount})`,
+            },
+          });
         }
         return;
       }

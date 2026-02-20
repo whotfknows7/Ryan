@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
 const { AssetService } = require('../../services/AssetService');
 const { DatabaseService } = require('../../services/DatabaseService');
-const { getIds } = require('../../utils/GuildIdsHelper');
+const { getIds, hasPermission } = require('../../utils/GuildIdsHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,7 +16,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    if (!interaction.member.permissions.has('Administrator')) {
+    if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({ content: '❌ Admin only.', flags: MessageFlags.Ephemeral });
     }
 

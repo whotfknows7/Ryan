@@ -2,6 +2,7 @@
 
 const { ConfigService } = require('../services/ConfigService');
 const { DatabaseService } = require('../services/DatabaseService');
+const { hasRole } = require('../utils/GuildIdsHelper');
 const logger = require('../lib/logger');
 
 class ReactionHandler {
@@ -90,7 +91,7 @@ class ReactionHandler {
       const member = await guild.members.fetch(user.id).catch(() => null);
       if (!member) return;
 
-      if (member.roles.cache.has(roleConfig.roleId)) {
+      if (hasRole(member, roleConfig.roleId)) {
         await member.roles.remove(roleConfig.roleId, 'Reaction role removal');
         logger.info(`Removed role ${roleConfig.roleId} from ${user.tag} via unreact`);
       }
@@ -214,7 +215,7 @@ class ReactionHandler {
 
           // 1. Enforce Correct Role
           if (trueClan) {
-            if (!freshMember.roles.cache.has(trueClan.roleId)) {
+            if (!hasRole(freshMember, trueClan.roleId)) {
               await freshMember.roles.add(trueClan.roleId, 'Clan Integrity Check');
               correctionNeeded = true;
             }
@@ -223,7 +224,7 @@ class ReactionHandler {
           // 2. Remove Incorrect Roles
           for (const c of Object.values(allClans)) {
             if (c.id !== trueClanId) {
-              if (freshMember.roles.cache.has(c.roleId)) {
+              if (hasRole(freshMember, c.roleId)) {
                 await freshMember.roles.remove(c.roleId, 'Clan Integrity Check');
                 correctionNeeded = true;
               }

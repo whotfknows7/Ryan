@@ -6,10 +6,10 @@ const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
 const { ImageService } = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
-const { getIds, getFullConfig } = require('../utils/GuildIdsHelper');
+const { getIds, getFullConfig, hasRole, hasPermission } = require('../utils/GuildIdsHelper');
 const MetricsService = require('./MetricsService');
 const logger = require('../lib/logger');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, Routes } = require('discord.js');
 
 const EMOJI_REACTION_DELAY = 500;
 
@@ -213,7 +213,7 @@ class RoleRewardHandler {
       // If user qualifies for this role
       if (currentXp >= reward.xp) {
         // Check if they already have it
-        if (!member.roles.cache.has(reward.roleId)) {
+        if (!hasRole(member, reward.roleId)) {
           try {
             await member.roles.add(reward.roleId, 'XP Role Reward');
             logger.info(`Awarded Role ${reward.roleId} to ${member.user.tag} at ${currentXp} XP`);
@@ -279,7 +279,10 @@ class RoleRewardHandler {
         }
       }
 
-      await channel.send({ embeds: [embed], files });
+      await guild.client.rest.post(Routes.channelMessages(channelId), {
+        body: { embeds: [embed.toJSON()] },
+        files,
+      });
       logger.info(`Sent reward announcement for ${member.user.tag} - ${roleName}`);
     } catch (error) {
       logger.error('Error sending role announcement:', error);
@@ -303,10 +306,9 @@ class PermissionChecker {
       const ids = await getIds(member.guild.id);
       const adminRoleId = ids.adminRoleId;
 
-      // Check roles from the member object (passed from message event)
-      const hasAdminRole = adminRoleId && member.roles.cache.has(adminRoleId);
+      const hasAdminRole = adminRoleId && hasRole(member, adminRoleId);
 
-      return hasAdminRole || member.permissions.has('Administrator');
+      return hasAdminRole || hasPermission(member, 'Administrator');
     } catch (error) {
       logger.error('Error checking admin permission:', error);
       return false;

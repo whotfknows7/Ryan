@@ -3,6 +3,7 @@
 const { registerCommandsForGuild } = require('../handlers/CommandHandler');
 const { config } = require('../config');
 const logger = require('../lib/logger');
+const { Routes } = require('discord.js');
 
 /**
  * Event handler for when the bot joins a new guild
@@ -51,7 +52,7 @@ module.exports = {
 
         // Check permissions safely
         if (guild.systemChannel && guild.systemChannel.permissionsFor(client.user)?.has('SendMessages')) {
-          await guild.systemChannel.send(welcomeMessage);
+          await client.rest.post(Routes.channelMessages(guild.systemChannel.id), { body: { content: welcomeMessage } });
         }
       } catch (error) {
         logger.error(`Failed to send welcome message to guild ${guild.id}:`, error);

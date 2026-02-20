@@ -8,10 +8,11 @@ const {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
+  Routes,
 } = require('discord.js');
 const { PunishmentService } = require('../../services/PunishmentService');
 const { ConfigService } = require('../../services/ConfigService');
-const { getIds } = require('../../utils/GuildIdsHelper');
+const { getIds, hasRole } = require('../../utils/GuildIdsHelper');
 const { generateCaseId } = require('../../utils/CaseIdGenerator');
 const logger = require('../../lib/logger');
 
@@ -147,7 +148,9 @@ const JailCommand = {
                     { name: 'Banned By', value: interaction.user.toString(), inline: false }
                   )
                   .setTimestamp();
-                await logChannel.send({ embeds: [embed] });
+                await interaction.client.rest.post(Routes.channelMessages(logsChannelId), {
+                  body: { embeds: [embed.toJSON()] },
+                });
               }
             }
 
@@ -168,7 +171,7 @@ const JailCommand = {
         if (log && log.status === 'jailed') {
           const newEnd = PunishmentService.getPunishmentDuration(newOffences);
 
-          if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
+          if (groundRoleId && !hasRole(member, groundRoleId)) {
             await member.roles.add(groundRoleId).catch(() => {});
           }
 
@@ -184,12 +187,11 @@ const JailCommand = {
 
           // [NEW] Salty Message for Extension
           if (jailChannelId) {
-            const jailChannel = guild.channels.cache.get(jailChannelId);
-            if (jailChannel) {
-              await jailChannel.send(
-                `## ${member.toString()} Your sentence has been increased *(bahahaha)* (Sin #${newOffences}) \n*Enjoy your extended stay!*`
-              );
-            }
+            await interaction.client.rest.post(Routes.channelMessages(jailChannelId), {
+              body: {
+                content: `## ${member.toString()} Your sentence has been increased *(bahahaha)* (Sin #${newOffences}) \n*Enjoy your extended stay!*`,
+              },
+            });
           }
 
           const embed = new EmbedBuilder()
@@ -208,8 +210,9 @@ const JailCommand = {
             .setTimestamp();
 
           if (logsChannelId) {
-            const logChannel = guild.channels.cache.get(logsChannelId);
-            if (logChannel) await logChannel.send({ embeds: [embed] });
+            await interaction.client.rest.post(Routes.channelMessages(logsChannelId), {
+              body: { embeds: [embed.toJSON()] },
+            });
           }
 
           return interaction.reply({
@@ -219,7 +222,7 @@ const JailCommand = {
         }
 
         // 3. NEW PUNISHMENT
-        if (groundRoleId && !member.roles.cache.has(groundRoleId)) {
+        if (groundRoleId && !hasRole(member, groundRoleId)) {
           await member.roles.add(groundRoleId).catch(() => {});
         }
 
@@ -257,23 +260,22 @@ const JailCommand = {
           flags: MessageFlags.Ephemeral,
         });
 
-        const voteMessage = await interaction.channel.send({
-          embeds: [voteEmbed],
-          components: [row],
+        const voteMessage = await interaction.client.rest.post(Routes.channelMessages(interaction.channelId), {
+          body: { embeds: [voteEmbed.toJSON()], components: [row.toJSON()] },
         });
 
         // --- 3b. Send Flavor Text to the JAIL CHANNEL ---
         if (jailChannelId) {
-          const jailChannel = guild.channels.cache.get(jailChannelId);
-          if (jailChannel) {
-            await jailChannel.send(
-              `## ${member.toString()}, Oh no, It looks like someone Cheeky got locked up in The Torture Chamber for violating the <#1228738698292625570>! (Sin #${newOffences})\n` +
+          await interaction.client.rest.post(Routes.channelMessages(jailChannelId), {
+            body: {
+              content:
+                `## ${member.toString()}, Oh no, It looks like someone Cheeky got locked up in The Torture Chamber for violating the <#1228738698292625570>! (Sin #${newOffences})\n` +
                 `### Don't worry, we'll take good care of you… by making you suffer in the most boring way possible.\n` +
                 `**The only thing you'll hear is the echoes of your sins.**\n` +
                 `* __Punishments:__\n` +
-                `\`\`\`1st sin: 30 minutes\n2nd sin: 1 hour\n3rd sin: 12 hours\n4th sin: 36 hours\n5th sin: 7 days\n6th sin: 2 weeks\n7th sin: 4 weeks\n8th sin: Ban\`\`\`*Calling mods won't help you, You can cry them a River, Build a Bridge, and get the fuck over it!*`
-            );
-          }
+                `\`\`\`1st sin: 30 minutes\n2nd sin: 1 hour\n3rd sin: 12 hours\n4th sin: 36 hours\n5th sin: 7 days\n6th sin: 2 weeks\n7th sin: 4 weeks\n8th sin: Ban\`\`\`*Calling mods won't help you, You can cry them a River, Build a Bridge, and get the fuck over it!*`,
+            },
+          });
         }
 
         // Save to DB
@@ -307,7 +309,9 @@ const JailCommand = {
               )
               .setFooter({ text: `Case ID: ${caseId}` })
               .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
+            await interaction.client.rest.post(Routes.channelMessages(logsChannelId), {
+              body: { embeds: [embed.toJSON()] },
+            });
           }
         }
 
@@ -379,7 +383,9 @@ const JailCommand = {
               )
               .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
               .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
+            await interaction.client.rest.post(Routes.channelMessages(logsChannelId), {
+              body: { embeds: [embed.toJSON()] },
+            });
           }
         }
 
@@ -509,7 +515,9 @@ const JailCommand = {
               )
               .setFooter({ text: `Case ID: ${log.caseId || 'N/A'}` })
               .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
+            await interaction.client.rest.post(Routes.channelMessages(logsChannelId), {
+              body: { embeds: [embed.toJSON()] },
+            });
           }
         }
       } catch (error) {
