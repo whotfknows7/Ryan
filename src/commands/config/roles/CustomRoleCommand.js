@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { CustomRoleService } = require('../../../services/CustomRoleService');
-const { getIds, hasRole } = require('../../../utils/GuildIdsHelper');
+const { getIds } = require('../../../utils/GuildIdsHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -35,7 +35,14 @@ module.exports = {
       const eligibilityRoleId = ids.customRoleEligibilityId;
 
       if (eligibilityRoleId) {
-        if (!hasRole(interaction.member, eligibilityRoleId)) {
+        // Stateless check: Discord's API sends the member's roles as an array of IDs in the interaction payload
+        // We use interaction.member.roles.resolve() or check the raw array to avoid cache reliance
+        const memberRoleIds =
+          interaction.member.roles instanceof Array
+            ? interaction.member.roles
+            : Array.from(interaction.member.roles.cache.keys()); // Fallback if djs populated the local interaction cache
+
+        if (!memberRoleIds.includes(eligibilityRoleId)) {
           return interaction.editReply({
             content: `❌ You do not have the required role (<@&${eligibilityRoleId}>) to request a custom role.`,
           });

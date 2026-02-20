@@ -38,18 +38,21 @@ class CustomRoleService {
     // 2. Position Role Logic (Dynamic Anchor Check)
     const ids = await DatabaseService.getGuildIds(guildId);
 
+    // OPTIMIZATION: Fetch a fresh snapshot of all roles from the API (1 Call)
+    const allRoles = await guild.roles.fetch();
+
     // Determine which anchor ID to use
-    const targetAnchorId = request.colorYourName
-      ? ids.anchorRoleColorId // Higher anchor for "Color Your Name"
-      : ids.anchorRoleDefaultId; // Standard anchor for normal custom roles
+    const targetAnchorId = request.colorYourName ? ids.anchorRoleColorId : ids.anchorRoleDefaultId;
 
     let anchorRole = null;
     if (targetAnchorId) {
-      anchorRole = guild.roles.cache.get(targetAnchorId);
+      // Look it up in our freshly fetched list, not the global cache
+      anchorRole = allRoles.get(targetAnchorId);
     }
 
     if (anchorRole) {
-      const botMember = guild.members.me;
+      // Fetch the bot member to accurately get its current highest role
+      const botMember = await guild.members.fetch(guild.client.user.id).catch(() => null);
 
       if (botMember && botMember.roles.highest.position > anchorRole.position) {
         try {
