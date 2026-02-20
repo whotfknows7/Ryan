@@ -144,12 +144,25 @@ function clearAllCache() {
 
 /**
  * Utility to check roles safely (handles both Discord.js managers and raw API arrays)
+ * OPTIMIZED FOR STATELESS: Bypasses cache by reading internal _roles array
  */
 function hasRole(member, roleId) {
   if (!member || !roleId) return false;
-  const roles = member.roles;
-  if (Array.isArray(roles)) return roles.includes(roleId);
-  return roles.cache?.has(roleId) || false;
+
+  // 1. Raw API interaction payload (sometimes Discord passes raw arrays before resolving)
+  if (Array.isArray(member.roles)) {
+    return member.roles.includes(roleId);
+  }
+
+  // 2. Stateless Discord.js Object Bypass
+  // member._roles contains the raw ID strings directly from the Discord API.
+  // This allows us to verify roles even if RoleManager cache is set to 0.
+  if (member._roles && Array.isArray(member._roles)) {
+    return member._roles.includes(roleId);
+  }
+
+  // 3. Fallback (Just in case the object structure changes in future djs versions)
+  return member.roles?.cache?.has(roleId) || false;
 }
 
 /**
@@ -210,12 +223,6 @@ class GuildHelper {
 
   async getClanRole4() {
     return this.ids.clanRole4Id ? await this.guild.roles.fetch(this.ids.clanRole4Id).catch(() => undefined) : undefined;
-  }
-
-  async getLegendaryRole() {
-    return this.ids.legendaryRoleId
-      ? await this.guild.roles.fetch(this.ids.legendaryRoleId).catch(() => undefined)
-      : undefined;
   }
 
   async getGroundRole() {

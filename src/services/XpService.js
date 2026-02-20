@@ -241,12 +241,8 @@ class RoleRewardHandler {
       const channelId = ids.leaderboardChannelId;
       if (!channelId) return;
 
-      let channel = guild.channels.cache.get(channelId);
-      if (!channel) channel = await guild.channels.fetch(channelId).catch(() => null);
-      if (!channel) return;
-
-      // Get role information (Use Cache - Roles are always in RAM)
-      const role = guild.roles.cache.get(reward.roleId);
+      // Stateless Fetch: Get the specific role from Discord API
+      const role = await guild.roles.fetch(reward.roleId).catch(() => null);
       const roleName = role ? role.name : 'Level Up';
       const roleColor = role ? role.color : 0xffffff;
 

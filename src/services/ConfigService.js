@@ -116,7 +116,6 @@ class ConfigService {
         username: log.username,
         offences: log.offences,
         status: status,
-        // Removed hasLegendaryRole
         punishmentEnd: log.punishmentEnd ? log.punishmentEnd.toISOString() : null,
         messageId: log.messageId || undefined,
         caseId: log.caseId || undefined,
@@ -134,7 +133,6 @@ class ConfigService {
         username: data.username,
         offences: data.offences,
         status: data.status,
-        // Removed hasLegendaryRole
         punishmentEnd: data.punishmentEnd ? new Date(data.punishmentEnd) : null,
         messageId: data.messageId,
         caseId: data.caseId,
@@ -144,7 +142,6 @@ class ConfigService {
   }
 
   static async createOrUpdateJailLog(data) {
-    // FIX: Removed hasLegendaryRole to prevent Prisma Validation Error
     return await prisma.jailLog.upsert({
       where: { guildId_userId: { guildId: data.guildId, userId: data.userId } },
       create: {

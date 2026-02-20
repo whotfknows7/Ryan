@@ -38,22 +38,22 @@ class CustomRoleService {
     // 2. Position Role Logic (Dynamic Anchor Check)
     const ids = await DatabaseService.getGuildIds(guildId);
 
-    // OPTIMIZATION: Fetch a fresh snapshot of all roles from the API (1 Call)
+    // FETCH SNAPSHOT: Grab all roles from API since cache is 0
     const allRoles = await guild.roles.fetch();
 
-    // Determine which anchor ID to use
     const targetAnchorId = request.colorYourName ? ids.anchorRoleColorId : ids.anchorRoleDefaultId;
 
     let anchorRole = null;
     if (targetAnchorId) {
-      // Look it up in our freshly fetched list, not the global cache
+      // Look up against the fresh snapshot
       anchorRole = allRoles.get(targetAnchorId);
     }
 
     if (anchorRole) {
-      // Fetch the bot member to accurately get its current highest role
+      // Fetch the bot member and its roles explicitly to calculate highest position
       const botMember = await guild.members.fetch(guild.client.user.id).catch(() => null);
 
+      // Safety check: ensure we can resolve the bot's highest role
       if (botMember && botMember.roles.highest.position > anchorRole.position) {
         try {
           await newRole.setPosition(anchorRole.position);
@@ -62,13 +62,10 @@ class CustomRoleService {
           logger.warn(`Could not position role ${newRole.name}: ${e}`);
         }
       } else {
-        logger.warn(
-          `Cannot position role ${newRole.name} near ${anchorRole.name}. ` +
-            `Bot's highest role is too low in hierarchy.`
-        );
+        logger.warn(`Cannot position role ${newRole.name} near ${anchorRole.name}. Bot's highest role is too low.`);
       }
     } else {
-      logger.warn(`Anchor role not configured or found (ID: ${targetAnchorId}). New role created at default position.`);
+      logger.warn(`Anchor role not configured or found. New role created at default position.`);
     }
 
     // 3. Assign Role
