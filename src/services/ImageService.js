@@ -115,105 +115,117 @@ class ImageService {
   }
 
   async generateLeaderboard(users, highlightUserId = null) {
-    const font = await this.loadFont();
+    try {
+      const font = await this.loadFont();
 
-    const width = 800;
-    const height = users.length * 60 + 20;
+      // Build the payload for the Rust renderer
+      const payload = {
+        users: await Promise.all(
+          users.map(async (user) => {
+            const { username, emojis, textEndX } = await this.prepareNameWithEmojis(font, user.username, 30, 440);
+            return {
+              user_id: user.userId,
+              username,
+              emojis,
+              avatar_url: user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png',
+              xp: user.xp,
+              rank: user.rank,
+              text_end_x: textEndX,
+            };
+          })
+        ),
+        highlight_user_id: highlightUserId || undefined,
+      };
 
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
+      const leaderboardUrl = this.rendererUrl.replace('/render', '/render/leaderboard');
+      const timer = MetricsService.rendererRequestDuration.startTimer();
+      const response = await fetch(leaderboardUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
+      });
+      timer();
 
-    ctx.clearRect(0, 0, width, height);
+      if (!response.ok) throw new Error(`Renderer HTTP error! status: ${response.status}`);
 
-    if (users.length === 0) {
-      canvas.height = 100;
-      this.renderOpenTypeText(ctx, font, 'No-one is yapping right now...', 10, 60, 30);
-      return canvas.toBuffer('image/png');
-    }
-
-    let yPosition = 10;
-    const padding = 10;
-
-    const rankColors = {
-      1: '#FFD700', // Gold
-      2: '#E6E8FA', // Silver
-      3: '#CD7F32', // Bronze
-    };
-
-    // Pre-fetch all avatars in parallel (Optimization)
-    const avatarPromises = users.map((user) => {
-      const url = user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
-      return this.fetchImage(url).catch(() => null);
-    });
-
-    // Wait for all avatar fetches (up to 10 users = 10 avatars)
-    const avatars = await Promise.all(avatarPromises);
-
-    for (let i = 0; i < users.length; i++) {
-      const user = users[i];
-      const avatarImage = avatars[i]; // Pre-fetched image or null
-
-      let bgColor = '#36393e';
-
-      if (highlightUserId && user.userId === highlightUserId) {
-        bgColor = '#823EF0';
-      } else if (rankColors[user.rank]) {
-        bgColor = rankColors[user.rank];
-      }
-
-      ctx.fillStyle = bgColor;
-      ctx.beginPath();
-      ctx.roundRect(padding, yPosition, width - padding * 2, 57, 10);
-      ctx.fill();
-
-      if (avatarImage) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(padding, yPosition, 57, 58, 10);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(avatarImage, padding, yPosition, 57, 58);
-        ctx.restore();
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (error.code === 'ECONNREFUSED') {
+        console.error('❌ Rust Renderer is unreachable! Is it running on port 3000?');
       } else {
-        // Fallback placeholder grey box if image failed
-        ctx.fillStyle = '#808080';
-        ctx.beginPath();
-        ctx.roundRect(padding, yPosition, 57, 58, 10);
-        ctx.fill();
+        console.error('Leaderboard Generation Failed:', error.message);
       }
+      throw new Error('Failed to generate leaderboard via Rust service.', { cause: error });
+    }
+  }
 
-      const textBaselineY = yPosition + 40;
-      const fontSize = 30;
+  /**
+   * Strips emojis from username, calculates their X offsets using font metrics,
+   * and ensures each emoji PNG is cached to disk for the Rust renderer to read.
+   */
+  async prepareNameWithEmojis(font, text, fontSize, maxWidth) {
+    /* eslint-disable no-misleading-character-class */
+    const emojiRegex =
+      /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}]/gu;
+    /* eslint-enable no-misleading-character-class */
 
-      const rankText = `#${user.rank}`;
-      const rankX = padding + 65;
-      const rankEndX = this.renderOpenTypeText(ctx, font, rankText, rankX, textBaselineY, fontSize);
+    const textPart = text.replace(emojiRegex, '').trim();
+    const emojiMatches = text.match(emojiRegex) || [];
 
-      const separatorX = rankEndX + 12;
-      const sep1EndX = this.renderOpenTypeText(ctx, font, '|', separatorX, textBaselineY, fontSize);
-
-      const nameStartX = sep1EndX + 12;
-      const nameEndX = await this.renderNameWithEmojis(
-        ctx,
-        font,
-        user.username,
-        nameStartX,
-        textBaselineY,
-        fontSize,
-        440
-      );
-
-      const sep2X = nameEndX + 8;
-      const sep2EndX = this.renderOpenTypeText(ctx, font, '|', sep2X, textBaselineY, fontSize);
-
-      const xpText = `XP: ${this.formatPoints(user.xp)} pts`;
-      const xpX = sep2EndX + 12;
-      this.renderOpenTypeText(ctx, font, xpText, xpX, textBaselineY, fontSize);
-
-      yPosition += 60;
+    // Truncate text if too wide
+    let displayText = textPart;
+    if (font.getAdvanceWidth(displayText, fontSize) > maxWidth) {
+      const ellipsis = '...';
+      while (font.getAdvanceWidth(displayText + ellipsis, fontSize) > maxWidth && displayText.length > 0) {
+        displayText = displayText.slice(0, -1);
+      }
+      displayText += ellipsis;
     }
 
-    return canvas.toBuffer('image/png');
+    // Calculate text width to determine where emojis start
+    const textWidth = font.getAdvanceWidth(displayText, fontSize);
+    const emojiSize = 30;
+    let currentX = textWidth; // Relative to the username text start (145px in the SVG)
+    const emojis = [];
+
+    for (const emoji of emojiMatches) {
+      if (currentX + emojiSize > maxWidth) break;
+
+      const hex = [...emoji].map((c) => c.codePointAt(0).toString(16)).join('-');
+      if (!hex) continue;
+
+      // Ensure emoji is cached to disk
+      await this.ensureEmojiCached(hex);
+
+      emojis.push({
+        hex,
+        x_offset: currentX,
+      });
+      currentX += emojiSize + 7;
+    }
+
+    return { username: displayText, emojis, textEndX: currentX };
+  }
+
+  /**
+   * Ensures an emoji PNG exists in assets/emojis/{hex}.png.
+   * Downloads from GitHub if not already cached.
+   */
+  async ensureEmojiCached(hex) {
+    const filePath = path.join(EMOJI_DIR, `${hex}.png`);
+    if (fs.existsSync(filePath)) return;
+
+    try {
+      const url = `https://raw.githubusercontent.com/whotfknows7/bangbang/main/unicode/64/${hex}.png`;
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (response.status !== 200) return;
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      fs.writeFileSync(filePath, buffer);
+    } catch {
+      console.warn(`[ImageService] Failed to cache emoji: ${hex}`);
+    }
   }
 
   // ... (Keep existing methods: generateBaseReward, generateFinalReward, helper methods) ...

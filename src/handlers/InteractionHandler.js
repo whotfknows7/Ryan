@@ -126,7 +126,8 @@ const handleInteraction = async (interaction) => {
             if (interaction.message && interaction.message.id === prevTempId) {
               await interaction.message.delete();
             } else {
-              await interaction.channel.messages.delete(prevTempId);
+              const delChannelId = prevTempEntry.channelId || interaction.channelId;
+              await interaction.client.rest.delete(Routes.channelMessage(delChannelId, prevTempId));
             }
           } catch (e) {
             logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
@@ -135,7 +136,7 @@ const handleInteraction = async (interaction) => {
         }
 
         // Generate Payload
-        const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1);
+        const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1, null, true);
 
         // Send Message
         let msg;
@@ -145,14 +146,18 @@ const handleInteraction = async (interaction) => {
               embeds: payload.embeds?.map((e) => e.toJSON()),
               components: payload.components?.map((c) => c.toJSON()),
             },
-            files: payload.files,
+            files: payload.files?.map((f) => ({
+              name: f.name,
+              data: f.attachment,
+              description: f.description,
+            })),
           });
         } else {
           msg = await interaction.editReply(payload);
         }
 
         // Persist new temp ID by type (map + JSON)
-        saveTempLeaderboard(guildId, type, msg.id, interaction.channel.id);
+        saveTempLeaderboard(guildId, type, msg.id, interaction.channelId);
 
         return;
       }
@@ -284,8 +289,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
-      else await interaction.reply(errorMsg).catch(() => {});
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
+      else await interaction.reply(errorMsg).catch(() => { });
     }
   }
 };

@@ -191,7 +191,11 @@ class LeaderboardUpdateService {
                 embeds: payload.embeds?.map((e) => e.toJSON()),
                 components: payload.components?.map((c) => c.toJSON()),
               },
-              files: payload.files,
+              files: payload.files?.map((f) => ({
+                name: f.name,
+                data: f.attachment,
+                description: f.description,
+              })),
             });
             break; // Success!
           } catch (sendError) {
@@ -248,7 +252,7 @@ class LeaderboardUpdateService {
       // The caller (updateLiveLeaderboard) provides 'daily' top 10.
       topUsers = prefetchedData;
     } else {
-      topUsers = await DatabaseService.fetchTopUsers(guild.id, limit, type, skip);
+      topUsers = await DatabaseService.getLiveTopUsers(guild.id, limit, type, skip);
     }
     const totalCount = await DatabaseService.getUserCount(guild.id, type);
     const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -383,7 +387,8 @@ class LeaderboardUpdateService {
     // 3. Generate Image (with highlight support)
     const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
     // logger.info(`[${guild.id}] Generated leaderboard image size: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
-    const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
+    const filename = `leaderboard_${type}_${page}_${Date.now()}.png`;
+    const attachment = new AttachmentBuilder(imageBuffer, { name: filename });
 
     // 4. Build Embed
     const titles = {
@@ -396,7 +401,7 @@ class LeaderboardUpdateService {
       .setColor(0xffd700)
       .setTitle(titles[type] || 'Leaderboard')
       .setDescription(`${titles[type] || 'Leaderboard'} • Page ${page}/${totalPages}`)
-      .setImage('attachment://leaderboard.png')
+      .setImage(`attachment://${filename}`)
       .setTimestamp();
 
     // Add Legend to Footer (Only for Daily View where switchers are present)
@@ -494,4 +499,9 @@ class LeaderboardUpdateService {
     }
   }
 }
-module.exports = { LeaderboardUpdateService, tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard };
+
+function invalidateGuildLeaderboardCache(guildId) {
+  previousTopUsersJSON.delete(guildId);
+}
+
+module.exports = { LeaderboardUpdateService, tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard, invalidateGuildLeaderboardCache };

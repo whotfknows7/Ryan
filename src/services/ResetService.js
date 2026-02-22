@@ -134,7 +134,7 @@ class ResetService {
       }
 
       // 2. Update Clan War (Syncs current XP to Clan DB)
-      // We removed the "Module 1" specific deletion logic. Now all modules behave consistently.
+      // Automatically manages dailyXp in the unified 7-day loop.
       const clanUpdates = await this.calculateClanUpdates(client, guildId);
       await DatabaseService.syncUserClanRoles(guildId, clanUpdates);
 
@@ -179,7 +179,7 @@ class ResetService {
       const finalTotals = await DatabaseService.getClanTotalXp(guildId);
 
       // 3. Reset ONLY the weeklyXp column
-      // We do NOT delete UserXp rows anymore, preserving Lifetime XP for everyone
+      // Preserving Lifetime XP for everyone in the unified 7-day loop.
       await DatabaseService.resetWeeklyXp(guildId);
 
       // 4. Reset ClanXP (New war starts next week)

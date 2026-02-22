@@ -48,7 +48,7 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 - **UserXp:** Tracks user experience points with lifetime, daily, weekly counters, and clan associations.
 - **GuildConfig:** Multi-guild configuration storage (reaction roles, keywords, clans, role rewards, IDs).
 - **JailLog:** Prison system with strike tracking and a vote-based release system.
-- **ResetCycle:** Configurable reset scheduling (daily/weekly/lifetime modules).
+- **ResetCycle:** Manages the Unified 7-Day Reset Cycle, where dailyXp and weeklyXp are automatically managed for every server concurrently.
 - **LeaderboardState:** Persistent leaderboard message state management.
 - **GifTemplate / ClanAsset:** Dynamic clan GIF generation templates and cached role icons.
 - **GifCache:** Hash-based GIF caching system to skip redundant renders.
@@ -72,7 +72,7 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 - **PunishmentService.js:** 8-tier strike system with progressive jail management.
 - **QueueService.js:** BullMQ initialization and scheduling for all recurring background tasks.
 - **ConfigService.js:** Abstracted management of guild-specific JSON configurations.
-- **ResetService.js:** Multi-module reset logic (daily/weekly/lifetime) driven by cron jobs.
+- **ResetService.js:** Unified 7-day reset logic driven by cron jobs.
 - **MetricsService.js:** Prometheus collection (latency, cache hits, queue sizes).
 
 ### Event Handling & Commands
@@ -88,7 +88,7 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 ### XP Engagement Core
 - **Smart Scoring:** Alpha characters (**1 XP**), Emojis (**2 XP**), URLs (**0 XP**) to prioritize quality engagement.
 - **3-Phase Verification:** RAM cache check → Member refetch → Execution with rich announcements and Level-Up cards.
-- **Multi-Module Resets:** Configurable per guild (Daily/Weekly/Lifetime) to suit different community styles.
+- **Unified 7-Day Reset Cycle:** Automatically manages dailyXp and weeklyXp concurrently across all servers.
 
 ### Clan Wars Conquest
 - **4-Faction Competition:** Dynamic visuals combining customized icons with high-octane backgrounds.

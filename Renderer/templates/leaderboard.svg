@@ -1,0 +1,65 @@
+<svg width="800" height="{{ height }}" viewBox="0 0 800 {{ height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="2" dy="2" stdDeviation="7" flood-color="#000000" flood-opacity="0.8" />
+    </filter>    
+    {% for user in users %}
+      <clipPath id="avatar-clip-{{ loop.index0 }}">
+        <rect x="10" y="{{ user.y_pos }}" width="57" height="58" rx="10"/>
+      </clipPath>
+    {% endfor %}
+  </defs>
+
+  <!-- We fill background with transparent, and only draw the user bars -->
+  <!-- <rect width="800" height="{{ height }}" fill="#000000" />  Optional overall background -->
+
+  {% for user in users %}
+    <!-- User Row Background -->
+    <rect x="10" y="{{ user.y_pos }}" width="780" height="57" rx="10" fill="{{ user.bg_color }}"/>
+    
+    <!-- User Avatar -->
+    {% if user.avatar_b64 != "" %}
+      <image x="10" y="{{ user.y_pos }}" width="57" height="58" clip-path="url(#avatar-clip-{{ loop.index0 }})" href="data:image/png;base64,{{ user.avatar_b64 }}"/>
+    {% else %}
+      <rect x="10" y="{{ user.y_pos }}" width="57" height="58" rx="10" fill="#808080"/>
+    {% endif %}
+
+    <!-- Rank -->
+    <text x="75" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      #{{ user.rank }}
+    </text>
+
+    <!-- Separator 1 -->
+    <text x="120" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      |
+    </text>
+
+    <!-- Username -->
+    <text x="145" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      {{ user.username }}
+    </text>
+
+    <!-- Emojis -->
+    {% for emoji in user.emojis %}
+      <image x="{{ emoji.x_offset }}" y="{{ user.y_pos + 15 }}" width="30" height="30" href="data:image/png;base64,{{ emoji.b64 }}"/>
+    {% endfor %}
+
+    <!-- Separator 2 -->
+    <text x="{{ user.xp_x_start - 30.0 }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      |
+    </text>
+
+    <!-- XP -->
+    <text x="{{ user.xp_x_start }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      XP: {{ user.formatted_xp }} pts
+    </text>
+
+  {% endfor %}
+
+  {% if users.len() == 0 %}
+    <text x="10" y="60" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      No-one is yapping right now...
+    </text>
+  {% endif %}
+
+</svg>

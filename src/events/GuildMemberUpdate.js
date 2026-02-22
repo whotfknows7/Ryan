@@ -2,6 +2,7 @@
 
 const { defaultRedis } = require('../config/redis');
 const logger = require('../lib/logger');
+const { LeaderboardUpdateService, invalidateGuildLeaderboardCache } = require('../services/LeaderboardUpdateService');
 
 module.exports = {
   name: 'guildMemberUpdate',
@@ -30,6 +31,14 @@ module.exports = {
         // Save the updated profile back to the Redis hash
         await defaultRedis.hset(cacheKey, userId, JSON.stringify(updatedProfile));
         logger.debug(`[LeaderboardCache] Updated profile for ${userId} in ${guildId} hash cache.`);
+
+        // Force a leaderboard update for this guild
+        invalidateGuildLeaderboardCache(guildId);
+
+        // Trigger leaderboard live update
+        LeaderboardUpdateService.updateLiveLeaderboard(newMember.client).catch(err => {
+          logger.error(`[GuildMemberUpdate] Failed to trigger live update: ${err.message}`);
+        });
       }
     } catch (e) {
       logger.error(`[GuildMemberUpdate] Failed to update leaderboard cache: ${e.message}`);

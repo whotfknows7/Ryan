@@ -8,18 +8,6 @@ module.exports = {
     .setName('setup')
     .setDescription('Configure essential bot settings and role hierarchies.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    // --- [NEW] Module Selection ---
-    .addStringOption((opt) =>
-      opt
-        .setName('reset_module')
-        .setDescription('Select the XP Reset Behavior.')
-        .addChoices(
-          { name: 'Module 1: Default (Daily User Reset)', value: 'module_1' },
-          { name: 'Module 2: Weekly User Reset (Persistent Daily)', value: 'module_2' },
-          { name: 'Module 3: Lifetime User XP (No Reset)', value: 'module_3' }
-        )
-    )
-    // ------------------------------
     .addChannelOption((opt) =>
       opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.')
     )
@@ -65,7 +53,6 @@ module.exports = {
       const jailRole = interaction.options.getRole('jail_role');
       const anchorDefault = interaction.options.getRole('anchor_role_default');
       const anchorColor = interaction.options.getRole('anchor_role_color');
-      const resetModule = interaction.options.getString('reset_module'); // [NEW]
 
       const clan1 = interaction.options.getRole('clan_role_1');
       const clan2 = interaction.options.getRole('clan_role_2');
@@ -107,19 +94,6 @@ module.exports = {
       if (anchorColor) {
         idUpdates.anchorRoleColorId = anchorColor.id;
         summary.push(`**Anchor (Color):** ${anchorColor}`);
-      }
-
-      // [NEW] Handle Reset Module
-      if (resetModule) {
-        // [FIX] atomicJsonMerge expects a plain object, not a stringified JSON
-        await DatabaseService.atomicJsonMerge(guildId, 'config', { resetModule });
-        const niceName =
-          resetModule === 'module_1'
-            ? 'Default (Daily Reset)'
-            : resetModule === 'module_2'
-              ? 'Weekly User Reset'
-              : 'Lifetime User XP';
-        summary.push(`**XP Reset System:** ${niceName}`);
       }
 
       const existingConfig = await DatabaseService.getFullGuildConfig(guildId);
