@@ -114,7 +114,7 @@ const LiveCommand = {
           userId: u.userId,
           username: profile ? profile.displayName : 'Unknown',
           avatarUrl: profile ? profile.avatarUrl : null,
-          xp: u.dailyXp || u.xp, // Show Daily XP for Live, or Total if preferred
+          xp: u.dailyXp || 0, // Show Daily XP for Live, explicit 0 fallback
         };
       });
 
