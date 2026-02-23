@@ -291,14 +291,14 @@ class DatabaseService {
       where: { guildId },
       data: { dailyXp: 0 },
     });
-    
+
     // Clear the Redis cache for this guild's daily leaderboard
     try {
       await defaultRedis.del(`lb:${guildId}:daily`);
     } catch (err) {
       logger.error(`Failed to clear daily Redis LB for ${guildId}: ${err.message}`);
     }
-    
+
     logger.info(`Reset daily XP for ${result.count} users in guild ${guildId}`);
     return result.count;
   }
@@ -311,14 +311,14 @@ class DatabaseService {
       where: { guildId },
       data: { weeklyXp: 0 },
     });
-    
+
     // Clear the Redis cache for this guild's weekly leaderboard
     try {
       await defaultRedis.del(`lb:${guildId}:weekly`);
     } catch (err) {
       logger.error(`Failed to clear weekly Redis LB for ${guildId}: ${err.message}`);
     }
-    
+
     logger.info(`Reset weekly XP for ${result.count} users in guild ${guildId}`);
     return result.count;
   }

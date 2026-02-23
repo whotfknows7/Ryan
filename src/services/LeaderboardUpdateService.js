@@ -33,26 +33,16 @@ function loadTempLeaderboards() {
     const raw = fs.readFileSync(TEMP_LB_PATH, 'utf8');
     const data = JSON.parse(raw || '[]');
     for (const entry of data) {
-      const validTypes = ['weekly', 'lifetime'];
-      if (!entry.guildId || !entry.messageId || !validTypes.includes(entry.type)) continue;
+      if (!entry.guildId || !entry.messageId || !entry.type) continue;
 
       const existing = tempLeaderboards.get(entry.guildId) || {};
 
-      // Handle both legacy (string) and new (object) formats during migration
-      if (entry.expiresAt) {
-        existing[entry.type] = {
-          messageId: entry.messageId,
-          channelId: entry.channelId,
-          expiresAt: entry.expiresAt,
-        };
-      } else {
-        // Migrate legacy entries to expire in 5 mins from now
-        existing[entry.type] = {
-          messageId: entry.messageId,
-          channelId: entry.channelId || null, // Might be missing
-          expiresAt: Date.now() + 5 * 60 * 1000,
-        };
-      }
+      // Migrate legacy entries if needed and format properly
+      existing[entry.messageId] = {
+        type: entry.type,
+        channelId: entry.channelId || null,
+        expiresAt: entry.expiresAt || Date.now() + 5 * 60 * 1000,
+      };
 
       tempLeaderboards.set(entry.guildId, existing);
     }
@@ -68,10 +58,10 @@ function loadTempLeaderboards() {
 function persistTempLeaderboards() {
   try {
     const entries = [];
-    for (const [guildId, types] of tempLeaderboards) {
-      for (const [type, data] of Object.entries(types)) {
-        // data = { messageId, channelId, expiresAt }
-        entries.push({ guildId, type, ...data });
+    for (const [guildId, msgs] of tempLeaderboards) {
+      for (const [messageId, data] of Object.entries(msgs)) {
+        // data = { type, channelId, expiresAt }
+        entries.push({ guildId, messageId, ...data });
       }
     }
     fs.writeFileSync(TEMP_LB_PATH, JSON.stringify(entries, null, 2));
@@ -85,23 +75,23 @@ function persistTempLeaderboards() {
  */
 function saveTempLeaderboard(guildId, type, messageId, channelId) {
   const existing = tempLeaderboards.get(guildId) || {};
-  existing[type] = {
-    messageId,
+  existing[messageId] = {
+    type,
     channelId,
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
   };
   tempLeaderboards.set(guildId, existing);
   persistTempLeaderboards();
-  logger.info(`[TempLB] Saved ${type} LB for ${guildId} (expires in 5m)`);
+  logger.info(`[TempLB] Saved ${type} LB for ${guildId} (msg: ${messageId}, expires in 5m)`);
 }
 
 /**
  * Remove a temp leaderboard entry (updates map + JSON).
  */
-function removeTempLeaderboard(guildId, type) {
+function removeTempLeaderboard(guildId, messageId) {
   const existing = tempLeaderboards.get(guildId);
   if (!existing) return;
-  delete existing[type];
+  delete existing[messageId];
   if (Object.keys(existing).length === 0) {
     tempLeaderboards.delete(guildId);
   } else {
@@ -456,21 +446,21 @@ class LeaderboardUpdateService {
 
     const toDelete = [];
 
-    for (const [guildId, types] of tempLeaderboards) {
+    for (const [guildId, msgs] of tempLeaderboards) {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) continue;
 
-      for (const [type, data] of Object.entries(types)) {
-        // data = { messageId, channelId, expiresAt }
+      for (const [messageId, data] of Object.entries(msgs)) {
+        // data = { type, channelId, expiresAt }
         if (!data.expiresAt || now >= data.expiresAt) {
-          logger.info(`[TempLB] Expired: ${type} LB in ${guildId}. Deleting...`);
+          logger.info(`[TempLB] Expired: ${data.type} LB in ${guildId}. Deleting...`);
 
           // Delete from Discord
           if (data.channelId) {
             const channel = await guild.channels.fetch(data.channelId).catch(() => null);
             if (channel) {
               try {
-                await channel.messages.delete(data.messageId);
+                await channel.messages.delete(messageId);
               } catch (e) {
                 logger.warn(`[TempLB] Failed to delete message: ${e.message}`);
               }
@@ -478,13 +468,13 @@ class LeaderboardUpdateService {
           }
 
           // Delete from Memory
-          delete types[type];
+          delete msgs[messageId];
           changed = true;
         }
       }
 
       // If guild has no more temp LBs, mark for removal
-      if (Object.keys(types).length === 0) {
+      if (Object.keys(msgs).length === 0) {
         toDelete.push(guildId);
       }
     }
@@ -504,4 +494,10 @@ function invalidateGuildLeaderboardCache(guildId) {
   previousTopUsersJSON.delete(guildId);
 }
 
-module.exports = { LeaderboardUpdateService, tempLeaderboards, saveTempLeaderboard, removeTempLeaderboard, invalidateGuildLeaderboardCache };
+module.exports = {
+  LeaderboardUpdateService,
+  tempLeaderboards,
+  saveTempLeaderboard,
+  removeTempLeaderboard,
+  invalidateGuildLeaderboardCache,
+};

@@ -105,8 +105,9 @@ const handleInteraction = async (interaction) => {
           removeTempLeaderboard,
         } = require('../services/LeaderboardUpdateService');
         const guildTemps = tempLeaderboards.get(guildId) || {};
-        const prevTempEntry = guildTemps[type]; // Now an object: { messageId, channelId, expiresAt }
-        const prevTempId = prevTempEntry ? prevTempEntry.messageId : null;
+
+        // Find ALL previous temp leaderboards of the SAME TYPE
+        const oldMsgIds = Object.keys(guildTemps).filter((msgId) => guildTemps[msgId].type === type);
 
         let useFallback = false;
         try {
@@ -120,8 +121,9 @@ const handleInteraction = async (interaction) => {
           }
         }
 
-        // Delete previous temp leaderboard of the SAME TYPE only
-        if (prevTempId) {
+        // Delete ALL previous temp leaderboards of the SAME TYPE
+        for (const prevTempId of oldMsgIds) {
+          const prevTempEntry = guildTemps[prevTempId];
           try {
             if (interaction.message && interaction.message.id === prevTempId) {
               await interaction.message.delete();
@@ -132,7 +134,7 @@ const handleInteraction = async (interaction) => {
           } catch (e) {
             logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
           }
-          removeTempLeaderboard(guildId, type);
+          removeTempLeaderboard(guildId, prevTempId);
         }
 
         // Generate Payload
@@ -289,8 +291,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
-      else await interaction.reply(errorMsg).catch(() => { });
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
+      else await interaction.reply(errorMsg).catch(() => {});
     }
   }
 };

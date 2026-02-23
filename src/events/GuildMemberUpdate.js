@@ -36,7 +36,7 @@ module.exports = {
         invalidateGuildLeaderboardCache(guildId);
 
         // Trigger leaderboard live update
-        LeaderboardUpdateService.updateLiveLeaderboard(newMember.client).catch(err => {
+        LeaderboardUpdateService.updateLiveLeaderboard(newMember.client).catch((err) => {
           logger.error(`[GuildMemberUpdate] Failed to trigger live update: ${err.message}`);
         });
       }
