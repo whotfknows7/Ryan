@@ -26,9 +26,9 @@ const LiveCommand = {
       const guild = interaction.guild;
 
       // 1. Fetch Data
-      const topUsers = await DatabaseService.getLiveTopUsers(guildId, 10);
-      const allUsers = await DatabaseService.getAllUserXp(guildId);
-      const totalPages = Math.max(1, Math.ceil(allUsers.length / 10));
+      const topUsers = await DatabaseService.getLiveTopUsers(guildId, 10, 'daily');
+      const totalCount = await DatabaseService.getUserCount(guildId, 'daily');
+      const totalPages = Math.max(1, Math.ceil(totalCount / 10));
 
       // 2. Prepare Image (Using Redis HASH Cache)
       const cacheKey = `member_cache:${guildId}`;

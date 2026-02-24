@@ -225,16 +225,17 @@ class DatabaseService {
   }
 
   /**
-   * [UPDATED] Count users with XP > 0 for pagination
+   * [UPDATED] Count users with XP > 0 for pagination using Redis ZCOUNT
    */
   static async getUserCount(guildId, type = 'daily') {
-    const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
-    return prisma.userXp.count({
-      where: {
-        guildId,
-        [column]: { gt: 0 },
-      },
-    });
+    const key = `lb:${guildId}:${type}`;
+
+    if (!(await defaultRedis.exists(key))) {
+      await this.populateRedisLeaderboard(guildId, type);
+    }
+
+    // zcount key "(0" "+inf" -> strictly greater than 0
+    return await defaultRedis.zcount(key, "(0", "+inf");
   }
 
   /**

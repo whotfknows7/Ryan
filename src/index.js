@@ -19,6 +19,8 @@ const { loadCommands } = require('./handlers/CommandHandler');
 const { handleInteraction } = require('./handlers/InteractionHandler');
 
 const { MessageIntentHandler } = require('./handlers/MessageIntentHandler');
+const GuildMemberUpdateEvent = require('./events/GuildMemberUpdate');
+const UserUpdateEvent = require('./events/UserUpdate');
 
 const logger = require('./lib/logger');
 
@@ -44,12 +46,11 @@ function cleanupStaleProcesses() {
     /* best-effort */
   }
 
-  // 3. Free port 3000
-  try {
+  /* [RESTRICTED] PM2 manages renderer; do not kill its port here */
+  /* try {
     execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
   } catch {
-    /* best-effort */
-  }
+  } */
 
   // 4. Remove Chrome lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
@@ -104,12 +105,11 @@ async function gracefulShutdown(signal) {
     /* best-effort */
   }
 
-  // 3. Free port 3000
-  try {
+  /* [RESTRICTED] PM2 manages renderer; do not kill its port here */
+  /* try {
     execSync('lsof -t -i:3000 | xargs -r kill -9 2>/dev/null || true', { stdio: 'ignore' });
   } catch {
-    /* best-effort */
-  }
+  } */
 
   // 4. Clean lock files
   const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
@@ -179,11 +179,12 @@ function startRenderer() {
     fs.unlinkSync(lockFile);
     logger.info('🧹 Cleared stale Chrome SingletonLock.');
   }
-  try {
+  /* [RESTRICTED] PM2 manages renderer; only cleanup in startupCleanup() */
+  /* try {
     execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' });
   } catch {
-    /* best-effort */
-  }
+    // best-effort
+  } */
 
   // 3. Spawn the process (detached so we can kill the process group)
   logger.info('🚀 Launching Renderer Service...');
@@ -257,6 +258,214 @@ async function main() {
   logger.info(`Loaded ${client.commands.size} commands.`);
 
   // 5. Start Bot
+  // =================================================================
+  // EVENTS & TASKS (REGISTER BEFORE START)
+  // =================================================================
+
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    try {
+      await XpService.handleMessageXp(message);
+      await XpService.handleKeywords(message);
+      await MessageIntentHandler.handleMessage(message);
+    } catch (error) {
+      logger.error('XP/Keyword Error:', error);
+    }
+  });
+
+  client.on('messageReactionAdd', async (reaction, user) => {
+    if (user.bot) return;
+    try {
+      const payload = {
+        guildId: reaction.message.guildId,
+        channelId: reaction.message.channelId,
+        messageId: reaction.message.id,
+        userId: user.id,
+        emojiName: reaction.emoji.name,
+        emojiId: reaction.emoji.id,
+        emojiString: reaction.emoji.toString(),
+      };
+
+      await QueueService.queues.reactions.add(
+        'reaction-add',
+        {
+          action: 'add',
+          payload,
+        },
+        {
+          removeOnComplete: true,
+          removeOnFail: 100,
+        }
+      );
+    } catch (error) {
+      logger.error('Reaction Add Error:', error);
+    }
+  });
+
+  client.on('messageReactionRemove', async (reaction, user) => {
+    if (user.bot) return;
+    try {
+      const payload = {
+        guildId: reaction.message.guildId,
+        channelId: reaction.message.channelId,
+        messageId: reaction.message.id,
+        userId: user.id,
+        emojiName: reaction.emoji.name,
+        emojiId: reaction.emoji.id,
+        emojiString: reaction.emoji.toString(),
+      };
+
+      await QueueService.queues.reactions.add(
+        'reaction-remove',
+        {
+          action: 'remove',
+          payload,
+        },
+        {
+          removeOnComplete: true,
+          removeOnFail: 100,
+        }
+      );
+    } catch (error) {
+      logger.error('Reaction Remove Error:', error);
+    }
+  });
+
+  client.on('guildMemberAdd', async (member) => {
+    try {
+      const wasJailed = await PunishmentService.handleMemberJoin(member);
+    } catch (error) {
+      logger.error('Member Join Error:', error);
+    }
+  });
+
+  client.on('guildMemberRemove', async (member) => {
+    try {
+      await PunishmentService.handleMemberLeave(member);
+      // Retain XP data, do not delete it from DatabaseService
+      logger.info(`Recorded departure for member ${member.user.tag} (XP data retained)`);
+    } catch (error) {
+      logger.error('Member Remove Error:', error);
+    }
+  });
+
+  client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    try {
+      await GuildMemberUpdateEvent.execute(oldMember, newMember);
+    } catch (error) {
+      logger.error('GuildMemberUpdate Error:', error);
+    }
+  });
+
+  client.on('userUpdate', async (oldUser, newUser) => {
+    try {
+      await UserUpdateEvent.execute(oldUser, newUser);
+    } catch (error) {
+      logger.error('UserUpdate Error:', error);
+    }
+  });
+
+  client.on('roleDelete', async (role) => {
+    try {
+      await DatabaseService.cleanDeletedRole(role.guild.id, role.id);
+    } catch (error) {
+      logger.error('Role Delete Error:', error);
+    }
+  });
+
+  client.on('channelDelete', async (channel) => {
+    try {
+      if (!channel.guild) return; // Ignore DM channels
+      await DatabaseService.cleanDeletedChannel(channel.guild.id, channel.id);
+    } catch (error) {
+      logger.error('Channel Delete Error:', error);
+    }
+  });
+
+  client.on('emojiUpdate', async (oldEmoji, newEmoji) => {
+    try {
+      const oldString = oldEmoji.toString();
+      const newString = newEmoji.toString();
+
+      if (oldString === newString) return;
+
+      const guildId = newEmoji.guild.id;
+      const keywords = await ConfigService.getKeywords(guildId);
+      if (!keywords || Object.keys(keywords).length === 0) return;
+
+      let changed = false;
+
+      for (const [keyword, emojis] of Object.entries(keywords)) {
+        const updatedEmojis = emojis.map((e) => (e === oldString ? newString : e));
+
+        if (JSON.stringify(emojis) !== JSON.stringify(updatedEmojis)) {
+          keywords[keyword] = updatedEmojis;
+          changed = true;
+          logger.info(`Updated emoji ${oldString} -> ${newString} for keyword "${keyword}" in guild ${guildId}`);
+        }
+      }
+
+      if (changed) {
+        await ConfigService.saveKeywords(guildId, keywords);
+      }
+    } catch (error) {
+      logger.error('Emoji Update Error:', error);
+    }
+  });
+
+  client.on('emojiDelete', async (emoji) => {
+    try {
+      const emojiString = emoji.toString();
+      const guildId = emoji.guild.id;
+      const keywords = await ConfigService.getKeywords(guildId);
+
+      if (!keywords || Object.keys(keywords).length === 0) return;
+
+      let changed = false;
+
+      for (const [keyword, emojis] of Object.entries(keywords)) {
+        const filteredEmojis = emojis.filter((e) => e !== emojiString);
+
+        if (filteredEmojis.length !== emojis.length) {
+          if (filteredEmojis.length === 0) {
+            delete keywords[keyword];
+            logger.info(`Removed keyword "${keyword}" in guild ${guildId} because its only emoji was deleted.`);
+          } else {
+            keywords[keyword] = filteredEmojis;
+            logger.info(`Removed deleted emoji ${emojiString} from keyword "${keyword}" in guild ${guildId}`);
+          }
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await ConfigService.saveKeywords(guildId, keywords);
+      }
+    } catch (error) {
+      logger.error('Emoji Delete Error:', error);
+    }
+  });
+
+  client.on('stickerUpdate', async (oldSticker, newSticker) => {
+    try {
+      if (oldSticker.name !== newSticker.name) {
+        logger.info(
+          `Sticker updated: ${oldSticker.name} -> ${newSticker.name} (${newSticker.id}) in guild ${newSticker.guildId}`
+        );
+      }
+    } catch (error) {
+      logger.error('Sticker Update Error:', error);
+    }
+  });
+
+  client.on('stickerDelete', async (sticker) => {
+    try {
+      logger.info(`Sticker deleted: ${sticker.name} (${sticker.id}) in guild ${sticker.guildId}`);
+    } catch (error) {
+      logger.error('Sticker Delete Error:', error);
+    }
+  });
+
   try {
     await client.start();
     logger.info('Bot started successfully.');
@@ -275,203 +484,6 @@ async function main() {
             })
             .catch(logger.error);
         }
-      }
-    });
-
-    // =================================================================
-    // EVENTS & TASKS
-    // =================================================================
-
-    client.on('messageCreate', async (message) => {
-      if (message.author.bot) return;
-      try {
-        await XpService.handleMessageXp(message);
-        await XpService.handleKeywords(message);
-        await MessageIntentHandler.handleMessage(message);
-      } catch (error) {
-        logger.error('XP/Keyword Error:', error);
-      }
-    });
-
-    client.on('messageReactionAdd', async (reaction, user) => {
-      if (user.bot) return;
-      try {
-        const payload = {
-          guildId: reaction.message.guildId,
-          channelId: reaction.message.channelId,
-          messageId: reaction.message.id,
-          userId: user.id,
-          emojiName: reaction.emoji.name,
-          emojiId: reaction.emoji.id,
-          emojiString: reaction.emoji.toString(),
-        };
-
-        await QueueService.queues.reactions.add(
-          'reaction-add',
-          {
-            action: 'add',
-            payload,
-          },
-          {
-            removeOnComplete: true,
-            removeOnFail: 100,
-          }
-        );
-      } catch (error) {
-        logger.error('Reaction Add Error:', error);
-      }
-    });
-
-    client.on('messageReactionRemove', async (reaction, user) => {
-      if (user.bot) return;
-      try {
-        const payload = {
-          guildId: reaction.message.guildId,
-          channelId: reaction.message.channelId,
-          messageId: reaction.message.id,
-          userId: user.id,
-          emojiName: reaction.emoji.name,
-          emojiId: reaction.emoji.id,
-          emojiString: reaction.emoji.toString(),
-        };
-
-        await QueueService.queues.reactions.add(
-          'reaction-remove',
-          {
-            action: 'remove',
-            payload,
-          },
-          {
-            removeOnComplete: true,
-            removeOnFail: 100,
-          }
-        );
-      } catch (error) {
-        logger.error('Reaction Remove Error:', error);
-      }
-    });
-
-    client.on('guildMemberAdd', async (member) => {
-      try {
-        const wasJailed = await PunishmentService.handleMemberJoin(member);
-        if (!wasJailed) {
-          if (!wasJailed) {
-            // Role skip logic removed
-          }
-        }
-      } catch (error) {
-        logger.error('Member Join Error:', error);
-      }
-    });
-
-    client.on('guildMemberRemove', async (member) => {
-      try {
-        await PunishmentService.handleMemberLeave(member);
-        // Retain XP data, do not delete it from DatabaseService
-        logger.info(`Recorded departure for member ${member.user.tag} (XP data retained)`);
-      } catch (error) {
-        logger.error('Member Remove Error:', error);
-      }
-    });
-
-    client.on('roleDelete', async (role) => {
-      try {
-        await DatabaseService.cleanDeletedRole(role.guild.id, role.id);
-      } catch (error) {
-        logger.error('Role Delete Error:', error);
-      }
-    });
-
-    client.on('channelDelete', async (channel) => {
-      try {
-        if (!channel.guild) return; // Ignore DM channels
-        await DatabaseService.cleanDeletedChannel(channel.guild.id, channel.id);
-      } catch (error) {
-        logger.error('Channel Delete Error:', error);
-      }
-    });
-
-    client.on('emojiUpdate', async (oldEmoji, newEmoji) => {
-      try {
-        const oldString = oldEmoji.toString();
-        const newString = newEmoji.toString();
-
-        if (oldString === newString) return;
-
-        const guildId = newEmoji.guild.id;
-        const keywords = await ConfigService.getKeywords(guildId);
-        if (!keywords || Object.keys(keywords).length === 0) return;
-
-        let changed = false;
-
-        for (const [keyword, emojis] of Object.entries(keywords)) {
-          const updatedEmojis = emojis.map((e) => (e === oldString ? newString : e));
-
-          if (JSON.stringify(emojis) !== JSON.stringify(updatedEmojis)) {
-            keywords[keyword] = updatedEmojis;
-            changed = true;
-            logger.info(`Updated emoji ${oldString} -> ${newString} for keyword "${keyword}" in guild ${guildId}`);
-          }
-        }
-
-        if (changed) {
-          await ConfigService.saveKeywords(guildId, keywords);
-        }
-      } catch (error) {
-        logger.error('Emoji Update Error:', error);
-      }
-    });
-
-    client.on('emojiDelete', async (emoji) => {
-      try {
-        const emojiString = emoji.toString();
-        const guildId = emoji.guild.id;
-        const keywords = await ConfigService.getKeywords(guildId);
-
-        if (!keywords || Object.keys(keywords).length === 0) return;
-
-        let changed = false;
-
-        for (const [keyword, emojis] of Object.entries(keywords)) {
-          const filteredEmojis = emojis.filter((e) => e !== emojiString);
-
-          if (filteredEmojis.length !== emojis.length) {
-            if (filteredEmojis.length === 0) {
-              delete keywords[keyword];
-              logger.info(`Removed keyword "${keyword}" in guild ${guildId} because its only emoji was deleted.`);
-            } else {
-              keywords[keyword] = filteredEmojis;
-              logger.info(`Removed deleted emoji ${emojiString} from keyword "${keyword}" in guild ${guildId}`);
-            }
-            changed = true;
-          }
-        }
-
-        if (changed) {
-          await ConfigService.saveKeywords(guildId, keywords);
-        }
-      } catch (error) {
-        logger.error('Emoji Delete Error:', error);
-      }
-    });
-
-    client.on('stickerUpdate', async (oldSticker, newSticker) => {
-      try {
-        if (oldSticker.name !== newSticker.name) {
-          logger.info(
-            `Sticker updated: ${oldSticker.name} -> ${newSticker.name} (${newSticker.id}) in guild ${newSticker.guildId}`
-          );
-        }
-      } catch (error) {
-        logger.error('Sticker Update Error:', error);
-      }
-    });
-
-    client.on('stickerDelete', async (sticker) => {
-      try {
-        logger.info(`Sticker deleted: ${sticker.name} (${sticker.id}) in guild ${sticker.guildId}`);
-      } catch (error) {
-        logger.error('Sticker Delete Error:', error);
       }
     });
 

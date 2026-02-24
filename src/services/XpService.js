@@ -11,6 +11,26 @@ const MetricsService = require('./MetricsService');
 const logger = require('../lib/logger');
 const { EmbedBuilder, Routes } = require('discord.js');
 
+// ============================================================================
+// Native Aho-Corasick Keyword Matcher (Rust N-API addon)
+// O(N) multi-keyword search in a single pass per message — never blocks V8.
+// ============================================================================
+let nativeMatcher = null;
+try {
+  // Load the pre-built .node binary directly to avoid the napi-rs generated
+  // loader's shell-out to `which ldd` which can hang in restricted envs.
+  const path = require('path');
+  const addonDir = path.join(__dirname, '../../native/keyword_matcher');
+  const fs = require('fs');
+  const files = fs.readdirSync(addonDir).filter(f => f.endsWith('.node'));
+  if (files.length === 0) throw new Error('No .node binary found in addon directory');
+  const binding = require(path.join(addonDir, files[0]));
+  nativeMatcher = { findMatches: binding.findMatches };
+  logger.info(`[KeywordMatcher] Loaded native Aho-Corasick addon (${files[0]}) ✓`);
+} catch (err) {
+  logger.warn('[KeywordMatcher] Native addon not available, falling back to JS regex:', err.message);
+}
+
 const EMOJI_REACTION_DELAY = 500;
 
 // ============================================================================
@@ -123,8 +143,9 @@ XpPipeline.init();
 
 class KeywordReactionHandler {
   /**
-   * Handles automatic emoji reactions based on keyword matching
-   * Checks guild-specific keyword configuration and reacts accordingly
+   * Handles automatic emoji reactions based on keyword matching.
+   * Uses the Rust Aho-Corasick native addon (O(N) single pass).
+   * Falls back to the JS regex approach if the addon is unavailable.
    */
   static async handle(message) {
     if (message.author.bot || !message.guild) return;
@@ -134,11 +155,29 @@ class KeywordReactionHandler {
       if (!keywords || Object.keys(keywords).length === 0) return;
 
       const content = message.content;
+      if (!content) return;
 
-      for (const [keyword, emojis] of Object.entries(keywords)) {
-        if (this.shouldReact(content, keyword)) {
-          await this.reactWithEmojis(message, emojis);
+      let matchedKeywords;
+
+      if (nativeMatcher) {
+        // ─── Fast path: Rust Aho-Corasick (O(N), non-blocking) ───────────────
+        // The addon caches the compiled automaton per guild so repeated calls
+        // are essentially free — it only rebuilds when the keyword list changes.
+        const keywordList = Object.keys(keywords);
+        matchedKeywords = nativeMatcher.findMatches(message.guild.id, content, keywordList);
+      } else {
+        // ─── Slow path: JS regex fallback (O(M*N), synchronous) ──────────────
+        matchedKeywords = [];
+        for (const keyword of Object.keys(keywords)) {
+          if (this.shouldReactFallback(content, keyword)) {
+            matchedKeywords.push(keyword);
+          }
         }
+      }
+
+      for (const keyword of matchedKeywords) {
+        const emojis = keywords[keyword];
+        if (emojis) await this.reactWithEmojis(message, emojis);
       }
     } catch (error) {
       logger.error('Error in KeywordReactionHandler:', error);
@@ -146,10 +185,10 @@ class KeywordReactionHandler {
   }
 
   /**
-   * Checks if content matches keyword (case-insensitive, word boundary aware)
+   * JS regex fallback — only used when the native addon is unavailable.
    * Supports possessive forms (e.g., "bot's" matches "bot")
    */
-  static shouldReact(content, keyword) {
+  static shouldReactFallback(content, keyword) {
     const regex = new RegExp(`\\b${this.escapeRegex(keyword)}(?:'s)?\\b`, 'i');
     return regex.test(content);
   }
@@ -169,7 +208,7 @@ class KeywordReactionHandler {
   }
 
   /**
-   * Escapes special regex characters in keyword string
+   * Escapes special regex characters in keyword string (used by JS fallback)
    */
   static escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

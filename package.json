@@ -4,10 +4,10 @@
   "description": "Discord XP bot with Rust-powered rendering",
   "main": "src/index.js",
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && cd native/keyword_matcher && npm install && npm run build",
     "setup": "npm install && cd Renderer && cargo build --release",
     "cleanup": "node cleanup.js",
-    "start": "npx prisma db push --accept-data-loss && (cd Renderer && cargo build --release) && npm run start:bot",
+    "start": "npx prisma db push --accept-data-loss && (cd native/keyword_matcher && npm run build) && (cd Renderer && cargo build --release) && npm run start:bot",
     "start:bot": "node src/index.js",
     "start:renderer": "cd Renderer && cargo run --release",
     "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:bot\"",
