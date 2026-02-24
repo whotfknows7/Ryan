@@ -10,9 +10,6 @@
     {% endfor %}
   </defs>
 
-  <!-- We fill background with transparent, and only draw the user bars -->
-  <!-- <rect width="800" height="{{ height }}" fill="#000000" />  Optional overall background -->
-
   {% for user in users %}
     <!-- User Row Background -->
     <rect x="10" y="{{ user.y_pos }}" width="780" height="57" rx="10" fill="{{ user.bg_color }}"/>
@@ -29,29 +26,19 @@
       #{{ user.rank }}
     </text>
 
-    <!-- Separator 1 -->
-    <text x="120" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+    <!-- Separator -->
+    <text x="{{ user.separator_x }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
       |
     </text>
 
     <!-- Username -->
-    <text x="145" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+    <text x="{{ user.username_x }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
       {{ user.username }}
     </text>
 
-    <!-- Emojis -->
-    {% for emoji in user.emojis %}
-      <image x="{{ emoji.x_offset }}" y="{{ user.y_pos + 15 }}" width="30" height="30" href="data:image/png;base64,{{ emoji.b64 }}"/>
-    {% endfor %}
-
-    <!-- Separator 2 -->
-    <text x="{{ user.xp_x_start - 30.0 }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      |
-    </text>
-
-    <!-- XP -->
-    <text x="{{ user.xp_x_start }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      XP: {{ user.formatted_xp }} pts
+    <!-- XP Separator + Value (inline after username) -->
+    <text x="{{ user.xp_x }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+      | XP: {{ user.formatted_xp }} pts
     </text>
 
   {% endfor %}

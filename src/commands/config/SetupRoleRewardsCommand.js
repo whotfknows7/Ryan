@@ -168,7 +168,7 @@ module.exports = {
           if (message) {
             try {
               // Generate the Base Image (Icon + Role Name)
-              const buffer = await ImageService.generateBaseReward(role.name, role.hexColor, iconUrl);
+              const buffer = await ImageService.generateBaseRewardViaRust(role.name, role.hexColor, iconUrl);
 
               // Store in Dev Channel
               const assetLink = await AssetService.storeToDevChannel(

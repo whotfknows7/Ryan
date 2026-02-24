@@ -30,7 +30,6 @@ class CustomClient extends Client {
         PresenceManager: 0,
         ThreadManager: 0,
         VoiceStateManager: 0,
-        ChannelManager: 0,
       }),
       // Sweepers to clean up messages every hour
       sweepers: {

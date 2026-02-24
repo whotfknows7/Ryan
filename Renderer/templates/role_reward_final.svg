@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 341" width="1024" height="341">
+  <defs>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="2" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- The Base Image we just generated -->
+  <image href="data:image/png;base64,{{ base_image_b64 }}" x="0" y="0" width="1024" height="341" />
+
+  <!-- Username Text -->
+  <text x="298" y="241" font-family="TT Fors Trial" font-size="40" font-weight="bold" fill="white" stroke="black" stroke-width="5" paint-order="stroke fill" filter="url(#shadow)">
+    {{ username }}
+  </text>
+</svg>

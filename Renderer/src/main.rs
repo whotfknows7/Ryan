@@ -34,9 +34,15 @@ async fn main() -> anyhow::Result<()> {
     let mut fontdb = usvg::fontdb::Database::new();
     fontdb.load_system_fonts();
     tracing::info!("Loaded system fonts.");
+
     let font_data = include_bytes!("../../assets/fonts/TT Fors Trial Bold.ttf");
     fontdb.load_font_data(font_data.to_vec());
     tracing::info!("Loaded TT Fors Trial Bold font.");
+    
+    // Load Emoji Fallback Font
+    let emoji_font_data = include_bytes!("../../assets/fonts/EmojiFont.ttf");
+    fontdb.load_font_data(emoji_font_data.to_vec());
+    tracing::info!("Loaded EmojiFont.ttf for emoji fallback.");
     
     let fontdb_arc = Arc::new(fontdb);
 
@@ -50,6 +56,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/render", post(handler::render_rank_card))
         .route("/render/leaderboard", post(handler::render_leaderboard))
+        .route("/render/role_reward/base", post(handler::render_role_reward_base))
+        .route("/render/role_reward/final", post(handler::render_role_reward_final))
         .route("/metrics", get(move || {
             // println!("Metrics endpoint hit!");
             metrics::counter!("renderer_metrics_requests").increment(1);

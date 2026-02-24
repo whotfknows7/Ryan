@@ -138,7 +138,7 @@ const handleInteraction = async (interaction) => {
         }
 
         // Generate Payload
-        const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1, null, true);
+        const payload = await LeaderboardUpdateService.generateLeaderboardPayload(guild, type, 1, null, false);
 
         // Send Message
         let msg;

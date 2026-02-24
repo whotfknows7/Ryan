@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
 const { Worker } = require('worker_threads');
 const { execFile } = require('child_process');
 const gifsicle = '/usr/bin/gifsicle'; // System binary (like ffmpeg)
@@ -90,11 +89,14 @@ class GifService {
       for (let i = 0; i < iconBuffers.length; i++) {
         const p = path.join(TEMP_DIR, `icon_${Date.now()}_${i}.png`);
         if (iconBuffers[i]) {
-          await sharp(iconBuffers[i]).toFile(p);
+          fs.writeFileSync(p, iconBuffers[i]);
         } else {
-          await sharp({ create: { width: 1, height: 1, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-            .png()
-            .toFile(p);
+          // Hardcoded 1x1 transparent PNG buffer to avoid sharp
+          const transparentPng = Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+            'base64'
+          );
+          fs.writeFileSync(p, transparentPng);
         }
         iconPaths.push(p);
         tempFiles.push(p);
@@ -132,15 +134,14 @@ class GifService {
 
   static async prepareClanIcons(client, roleIds) {
     const icons = [];
-    const ICON_SIZE = 60;
+    const _ICON_SIZE = 60;
     for (const roleId of roleIds) {
       try {
         const asset = await DatabaseService.getClanAsset(roleId);
         if (asset && client) {
           const buffer = await AssetService.fetchAssetFromLink(client, asset.messageLink);
           if (buffer) {
-            const resized = await sharp(buffer).resize(ICON_SIZE, ICON_SIZE).toBuffer();
-            icons.push(resized);
+            icons.push(buffer);
             continue;
           }
         }

@@ -83,7 +83,7 @@ const LiveCommand = {
             const member = fetchedMembers.get(uId);
 
             const profileBase = {
-              displayName: member ? member.nickname || member.user.username : 'Unknown',
+              displayName: member ? member.nickname || member.user.username : 'Unknown (Left',
               avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
             };
 
@@ -112,7 +112,7 @@ const LiveCommand = {
         return {
           rank: index + 1,
           userId: u.userId,
-          username: profile ? profile.displayName : 'Unknown',
+          username: profile ? profile.displayName : 'Unknown (Left',
           avatarUrl: profile ? profile.avatarUrl : null,
           xp: u.dailyXp || 0, // Show Daily XP for Live, explicit 0 fallback
         };

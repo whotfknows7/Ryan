@@ -11,20 +11,12 @@ pub struct RankCardRequest {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct EmojiData {
-    pub hex: String,
-    pub x_offset: f64,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct LeaderboardUser {
     pub user_id: String,
     pub username: String,
-    pub emojis: Vec<EmojiData>,
     pub avatar_url: String,
     pub xp: i32,
     pub rank: i32,
-    pub text_end_x: f64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -33,4 +25,15 @@ pub struct LeaderboardRequest {
     pub highlight_user_id: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct RoleRewardBaseRequest {
+    pub role_name: String,
+    pub role_color_hex: String,
+    pub icon_url: Option<String>,
+}
 
+#[derive(Deserialize, Debug)]
+pub struct RoleRewardFinalRequest {
+    pub base_image_b64: String,
+    pub username: String,
+}

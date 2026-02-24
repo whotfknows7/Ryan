@@ -1,7 +1,5 @@
 // src/services/LeaderboardUpdateService.js
 
-const fs = require('fs');
-const path = require('path');
 const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes } = require('discord.js');
 const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
@@ -17,61 +15,12 @@ const updatingGuilds = new Set();
 const lastUpdateTimes = new Map();
 const tempLeaderboards = new Map(); // guildId -> { weekly: msgId, lifetime: msgId }
 
-const TEMP_LB_PATH = path.join(__dirname, '../events/CurrentLbs.json');
-
 // =================================================================
-// TEMP LEADERBOARD PERSISTENCE — Synced to CurrentLbs.json
+// TEMP LEADERBOARD PERSISTENCE — Synced to Postgres Database
 // =================================================================
 
 /**
- * Load saved temp leaderboard IDs from JSON into the in-memory map.
- * Called once on bot startup.
- */
-function loadTempLeaderboards() {
-  try {
-    if (!fs.existsSync(TEMP_LB_PATH)) return;
-    const raw = fs.readFileSync(TEMP_LB_PATH, 'utf8');
-    const data = JSON.parse(raw || '[]');
-    for (const entry of data) {
-      if (!entry.guildId || !entry.messageId || !entry.type) continue;
-
-      const existing = tempLeaderboards.get(entry.guildId) || {};
-
-      // Migrate legacy entries if needed and format properly
-      existing[entry.messageId] = {
-        type: entry.type,
-        channelId: entry.channelId || null,
-        expiresAt: entry.expiresAt || Date.now() + 5 * 60 * 1000,
-      };
-
-      tempLeaderboards.set(entry.guildId, existing);
-    }
-    logger.info(`[TempLB] Loaded ${data.length} temp leaderboard(s) from disk.`);
-  } catch (e) {
-    logger.warn(`[TempLB] Failed to load from disk: ${e.message}`);
-  }
-}
-
-/**
- * Persist the entire tempLeaderboards map to JSON.
- */
-function persistTempLeaderboards() {
-  try {
-    const entries = [];
-    for (const [guildId, msgs] of tempLeaderboards) {
-      for (const [messageId, data] of Object.entries(msgs)) {
-        // data = { type, channelId, expiresAt }
-        entries.push({ guildId, messageId, ...data });
-      }
-    }
-    fs.writeFileSync(TEMP_LB_PATH, JSON.stringify(entries, null, 2));
-  } catch (e) {
-    logger.warn(`[TempLB] Failed to persist to disk: ${e.message}`);
-  }
-}
-
-/**
- * Save a temp leaderboard entry (updates map + JSON).
+ * Save a temp leaderboard entry (updates map + DB).
  */
 function saveTempLeaderboard(guildId, type, messageId, channelId) {
   const existing = tempLeaderboards.get(guildId) || {};
@@ -81,12 +30,14 @@ function saveTempLeaderboard(guildId, type, messageId, channelId) {
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
   };
   tempLeaderboards.set(guildId, existing);
-  persistTempLeaderboards();
+  DatabaseService.updateTempLeaderboards(guildId, existing).catch((e) => {
+    logger.warn(`[TempLB] Failed to persist to DB: ${e.message}`);
+  });
   logger.info(`[TempLB] Saved ${type} LB for ${guildId} (msg: ${messageId}, expires in 5m)`);
 }
 
 /**
- * Remove a temp leaderboard entry (updates map + JSON).
+ * Remove a temp leaderboard entry (updates map + DB).
  */
 function removeTempLeaderboard(guildId, messageId) {
   const existing = tempLeaderboards.get(guildId);
@@ -94,14 +45,16 @@ function removeTempLeaderboard(guildId, messageId) {
   delete existing[messageId];
   if (Object.keys(existing).length === 0) {
     tempLeaderboards.delete(guildId);
+    DatabaseService.updateTempLeaderboards(guildId, {}).catch((e) => {
+      logger.warn(`[TempLB] Failed to delete from DB: ${e.message}`);
+    });
   } else {
     tempLeaderboards.set(guildId, existing);
+    DatabaseService.updateTempLeaderboards(guildId, existing).catch((e) => {
+      logger.warn(`[TempLB] Failed to persist to DB: ${e.message}`);
+    });
   }
-  persistTempLeaderboards();
 }
-
-// Load on module import (cold start)
-loadTempLeaderboards();
 
 class LeaderboardUpdateService {
   static async updateLiveLeaderboard(client) {
@@ -266,7 +219,6 @@ class LeaderboardUpdateService {
 
             for (let i = 0; i < dbUserIds.length; i++) {
               if (cachedData[i]) {
-                // Cache hit
                 const parsed = JSON.parse(cachedData[i]);
                 profiles.push({
                   userId: dbUserIds[i],
@@ -305,7 +257,7 @@ class LeaderboardUpdateService {
               const member = fetchedMembers.get(uId);
 
               const profileBase = {
-                displayName: member ? member.displayName : 'Unknown (Left)',
+                displayName: member ? member.displayName : ' (Left)Unknown',
                 avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
               };
 
@@ -439,6 +391,25 @@ class LeaderboardUpdateService {
     return { embeds: [embed], files: [attachment], components: [row], fetchReply: true };
   }
 
+  static async loadTempLeaderboards() {
+    try {
+      const records = await DatabaseService.getAllTempLeaderboards();
+      let count = 0;
+      for (const row of records) {
+        if (!row.lastRanks || typeof row.lastRanks !== 'object' || Object.keys(row.lastRanks).length === 0) continue;
+
+        // Handle migration from legacy format if necessary
+        // previous CurrentLbs.json might have been Array format if pushed differently
+        // But our getAllTempLeaderboards returns directly what we saved.
+        tempLeaderboards.set(row.guildId, row.lastRanks);
+        count += Object.keys(row.lastRanks).length;
+      }
+      logger.info(`[TempLB] Loaded ${count} temp leaderboard(s) from Postgres.`);
+    } catch (e) {
+      logger.warn(`[TempLB] Failed to load from DB: ${e.message}`);
+    }
+  }
+
   static async cleanupExpiredTempLeaderboards(client) {
     logger.debug('[TempLB] Checking for expired leaderboards...');
     const now = Date.now();
@@ -485,7 +456,19 @@ class LeaderboardUpdateService {
     }
 
     if (changed) {
-      persistTempLeaderboards();
+      // Fire and forget db updates for the changed guilds
+      for (const guildId of toDelete) {
+        DatabaseService.updateTempLeaderboards(guildId, {}).catch((e) => {
+          logger.warn(`[TempLB] Failed to update DB on cleanup: ${e.message}`);
+        });
+      }
+
+      // Also update any guilds that still have temp LBs
+      for (const [guildId, msgs] of tempLeaderboards) {
+        DatabaseService.updateTempLeaderboards(guildId, msgs).catch((e) => {
+          logger.warn(`[TempLB] Failed to update DB on cleanup: ${e.message}`);
+        });
+      }
     }
   }
 }

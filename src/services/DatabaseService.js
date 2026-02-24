@@ -750,6 +750,31 @@ class DatabaseService {
     });
   }
 
+  static async updateTempLeaderboards(guildId, tempLbsObj) {
+    return prisma.leaderboardState.upsert({
+      where: { guildId },
+      create: {
+        guildId,
+        lastRanks: tempLbsObj,
+      },
+      update: {
+        lastRanks: tempLbsObj,
+      },
+    });
+  }
+
+  static async getAllTempLeaderboards() {
+    return prisma.leaderboardState.findMany({
+      where: {
+        lastRanks: { not: Prisma.JsonNull },
+      },
+      select: {
+        guildId: true,
+        lastRanks: true,
+      },
+    });
+  }
+
   static async getGifCache(rankHash) {
     return prisma.gifCache.findUnique({
       where: { rankHash },

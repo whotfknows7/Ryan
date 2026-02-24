@@ -18,11 +18,13 @@ pub async fn render_rank_card(
 
     // 1. Fetch Discord Avatar & Convert to Base64
     let client = Client::new();
-    let avatar_bytes = match client.get(&payload.avatar_url).send().await {
-        Ok(res) => res.bytes().await.unwrap_or_default(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch avatar").into_response(),
+    let avatar_b64 = match client.get(&payload.avatar_url).send().await {
+        Ok(res) if res.status().is_success() => {
+            let bytes = res.bytes().await.unwrap_or_default();
+            general_purpose::STANDARD.encode(&bytes)
+        },
+        _ => "".to_string(),
     };
-    let avatar_b64 = general_purpose::STANDARD.encode(&avatar_bytes);
 
     // 2. Math for Progress Bar (Max width is 500px)
     let progress_percent = if payload.next_xp > 0 {
@@ -124,50 +126,60 @@ pub async fn render_leaderboard(
         // Fetch avatar concurrently or sequentially (sequential for simplicity here, can optimize later)
         let avatar_b64 = if !user.avatar_url.is_empty() {
             match client.get(&user.avatar_url).send().await {
-                Ok(res) => {
+                Ok(res) if res.status().is_success() => {
                     let bytes = res.bytes().await.unwrap_or_default();
                     general_purpose::STANDARD.encode(&bytes)
                 },
-                Err(_) => "".to_string(),
+                _ => "".to_string(),
             }
         } else {
             "".to_string()
         };
 
         let is_highlighted = payload.highlight_user_id.as_ref() == Some(&user.user_id);
-        
-        let mut template_emojis = Vec::new();
-        for emoji in user.emojis {
-            // we read emoji from disk: assets/emojis/{hex}.png
-            let mut path = format!("./assets/emojis/{}.png", emoji.hex);
-            if !std::path::Path::new(&path).exists() {
-                path = format!("../assets/emojis/{}.png", emoji.hex);
-            }
-            let b64 = match tokio::fs::read(&path).await {
-                Ok(bytes) => general_purpose::STANDARD.encode(&bytes),
-                Err(_) => "".to_string(),
-            };
-            if !b64.is_empty() {
-                template_emojis.push(crate::template::TemplateEmojiData {
-                    b64,
-                    x_offset: emoji.x_offset + 145.0 + 8.0, // 145 is username X start, 8 is gap
-                });
+
+        let display_text = user.username.trim().to_string();
+
+        // Fixed layout: rank starts at x=75, then separator "|" with spacing, then username
+        let rank_str = format!("#{}", user.rank);
+        let rank_char_count = rank_str.chars().count() as f64;
+        // Bold font-size 30 is approx 19px per character
+        let rank_text_end = 75.0 + (rank_char_count * 19.0);
+        // Place separator with generous gap after rank text
+        let separator_x = rank_text_end + 15.0;
+        // Username starts well after separator (pipe ~10px wide + 15px gap)
+        let username_x = separator_x + 25.0;
+
+        // Username truncation (conservative: ~19px per char at bold font-size 30)
+        let max_username_width = 380.0;
+        let mut final_text = display_text;
+        let estimated_width = final_text.chars().count() as f64 * 19.0;
+        if estimated_width > max_username_width {
+            let max_chars = (max_username_width / 19.0) as usize;
+            if max_chars > 3 {
+                // UTF-8 safe truncation: use char_indices to find a safe boundary
+                let truncated: String = final_text.chars().take(max_chars - 3).collect();
+                final_text = format!("{}...", truncated);
+            } else {
+                final_text = "...".to_string();
             }
         }
 
-        // naive way to calculate xp x start based on username length and emoji count
-        // We will pass emoji_x_end from Node.js, so we know exactly where it ends.
-        let xp_x_start = user.text_end_x + 145.0 + 8.0 + 30.0;
+        let text_width_after = final_text.chars().count() as f64 * 19.0;
+        
+        // Calculate xp_x: position the "| XP: N pts" after username text with padding
+        let xp_x = username_x + text_width_after + 15.0;
 
         template_users.push(crate::template::TemplateUserData {
-            username: user.username,
+            username: final_text,
             avatar_b64,
             rank: user.rank,
             formatted_xp: format_xp(user.xp),
-            emojis: template_emojis,
             bg_color: get_bg_color(user.rank, is_highlighted),
             y_pos,
-            xp_x_start,
+            separator_x,
+            username_x,
+            xp_x,
         });
 
         y_pos += 60;
@@ -210,6 +222,118 @@ pub async fn render_leaderboard(
     let duration = start.elapsed().as_secs_f64();
     tracing::debug!("Recording leaderboard render duration: {}s", duration);
     metrics::histogram!("renderer_leaderboard_render_duration_seconds").record(duration);
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        png_bytes,
+    ).into_response()
+}
+
+pub async fn render_role_reward_base(
+    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    Json(payload): Json<crate::models::RoleRewardBaseRequest>,
+) -> Response {
+    let start = Instant::now();
+    let client = Client::new();
+
+    let icon_b64 = if let Some(url) = payload.icon_url {
+        match client.get(&url).send().await {
+            Ok(res) if res.status().is_success() => {
+                let bytes = res.bytes().await.unwrap_or_default();
+                Some(general_purpose::STANDARD.encode(&bytes))
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    let template = crate::template::BaseRewardTemplate {
+        role_name: payload.role_name,
+        role_color_hex: payload.role_color_hex,
+        icon_b64,
+    };
+
+    let svg_string = match template.render() {
+        Ok(s) => s,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to render template: {}", e)).into_response(),
+    };
+
+    let mut opt = Options::default();
+    opt.font_family = "TT Fors Trial".to_string();
+
+    let mut rtree = match Tree::from_str(&svg_string, &opt) {
+        Ok(tree) => tree,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse SVG: {}", e)).into_response(),
+    };
+    
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+
+    let mut pixmap = match Pixmap::new(1024, 341) {
+        Some(p) => p,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to allocate pixmap").into_response(),
+    };
+    
+    resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    let png_bytes = match pixmap.encode_png() {
+        Ok(bytes) => bytes,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
+    };
+
+    let duration = start.elapsed().as_secs_f64();
+    tracing::debug!("Recording role_reward_base render duration: {}s", duration);
+    metrics::histogram!("renderer_role_reward_base_duration_seconds").record(duration);
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        png_bytes,
+    ).into_response()
+}
+
+pub async fn render_role_reward_final(
+    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    Json(payload): Json<crate::models::RoleRewardFinalRequest>,
+) -> Response {
+    let start = Instant::now();
+
+    let template = crate::template::FinalRewardTemplate {
+        base_image_b64: payload.base_image_b64,
+        username: payload.username,
+    };
+
+    let svg_string = match template.render() {
+        Ok(s) => s,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to render template: {}", e)).into_response(),
+    };
+
+    let mut opt = Options::default();
+    opt.font_family = "TT Fors Trial".to_string();
+
+    let mut rtree = match Tree::from_str(&svg_string, &opt) {
+        Ok(tree) => tree,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse SVG: {}", e)).into_response(),
+    };
+    
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+
+    let mut pixmap = match Pixmap::new(1024, 341) {
+        Some(p) => p,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to allocate pixmap").into_response(),
+    };
+    
+    resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    let png_bytes = match pixmap.encode_png() {
+        Ok(bytes) => bytes,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
+    };
+
+    let duration = start.elapsed().as_secs_f64();
+    tracing::debug!("Recording role_reward_final render duration: {}s", duration);
+    metrics::histogram!("renderer_role_reward_final_duration_seconds").record(duration);
 
     (
         StatusCode::OK,
