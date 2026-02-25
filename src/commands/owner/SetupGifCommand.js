@@ -4,7 +4,7 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-const { execFile } = require('child_process');
+const sharp = require('sharp'); // Replaces gif-frames
 const { DatabaseService } = require('../../services/DatabaseService');
 const logger = require('../../lib/logger');
 
@@ -63,31 +63,22 @@ module.exports = {
         }
         fs.mkdirSync(framesDir, { recursive: true });
 
-        // 3. Save buffer to disk temporarily for FFmpeg
-        const tempGifPath = path.join(targetDir, 'temp.gif');
-        fs.writeFileSync(tempGifPath, buffer);
-
-        // 4. Extract Frames using FFmpeg
-        await new Promise((resolve, reject) => {
-          execFile('ffmpeg', ['-y', '-i', tempGifPath, path.join(framesDir, '%03d.png')], (error) => {
-            if (error) reject(error);
-            else resolve();
-          });
-        });
-
-        // Clean up temp gif
-        if (fs.existsSync(tempGifPath)) fs.rmSync(tempGifPath);
-
-        // Count frames generated
-        const frames = fs.readdirSync(framesDir).filter((f) => f.endsWith('.png'));
-        const pages = frames.length;
+        // 3. Extract Frames using Sharp
+        const metadata = await sharp(buffer, { animated: true }).metadata();
+        const pages = metadata.pages || 1;
 
         const coords = [];
+
         for (let i = 0; i < pages; i++) {
+          const fileName = `${String(i).padStart(3, '0')}.png`;
+
+          await sharp(buffer, { page: i }).png().toFile(path.join(framesDir, fileName));
+
+          // Init coords
           coords.push(Array(clanCount).fill({ x: 0, y: 0 }));
         }
 
-        // 5. Save coords.json
+        // 4. Save coords.json
         fs.writeFileSync(path.join(targetDir, 'coords.json'), JSON.stringify(coords, null, 2));
 
         // 5. Register in DB

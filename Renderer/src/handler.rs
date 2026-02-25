@@ -51,7 +51,7 @@ pub async fn render_rank_card(
 
     // 4. Setup resvg & Font options
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif".to_string();
 
     // 5. Render SVG to PNG Bytes
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
@@ -92,6 +92,7 @@ pub async fn render_leaderboard(
     Json(payload): Json<crate::models::LeaderboardRequest>,
 ) -> Response {
     let start = Instant::now();
+
     let client = Client::new();
 
     let mut template_users = Vec::new();
@@ -198,7 +199,7 @@ pub async fn render_leaderboard(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,
@@ -261,7 +262,7 @@ pub async fn render_role_reward_base(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,
@@ -310,7 +311,7 @@ pub async fn render_role_reward_final(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,

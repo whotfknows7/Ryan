@@ -40,9 +40,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loaded TT Fors Trial Bold font.");
     
     // Load Emoji Fallback Font
-    let emoji_font_data = include_bytes!("../../assets/fonts/EmojiFont.ttf");
+    let emoji_font_data = include_bytes!("../../assets/fonts/ColrEmoji.subset.ttf");
     fontdb.load_font_data(emoji_font_data.to_vec());
-    tracing::info!("Loaded EmojiFont.ttf for emoji fallback.");
+    tracing::info!("Loaded ColrEmoji.subset.ttf for emoji fallback.");
     
     let fontdb_arc = Arc::new(fontdb);
 

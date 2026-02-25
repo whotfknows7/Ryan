@@ -85,12 +85,8 @@ const runFFmpeg = async ({ templatePath, iconPaths, outputPath, clanCount, coord
 
       const nextOutput = `tmp${iconInputIdx}`;
       const enablePart = enableExpr ? `:enable='${enableExpr}'` : '';
-      const scaledOutput = `scaled${iconInputIdx}`;
 
-      // Native FFmpeg scaling instead of sharp
-      filterComplex += `[${iconInputIdx}:v]scale=60:60[${scaledOutput}];`;
-      filterComplex += `[${lastOutput}][${scaledOutput}]overlay=x='${xExpr}':y='${yExpr}'${enablePart}[${nextOutput}];`;
-
+      filterComplex += `[${lastOutput}][${iconInputIdx}:v]overlay=x='${xExpr}':y='${yExpr}'${enablePart}[${nextOutput}];`;
       lastOutput = nextOutput;
     });
 

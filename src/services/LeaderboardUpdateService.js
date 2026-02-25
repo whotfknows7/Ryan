@@ -258,7 +258,7 @@ class LeaderboardUpdateService {
 
               const profileBase = {
                 displayName: member ? member.displayName : ' (Left)Unknown',
-                avatarUrl: member?.displayAvatarURL({ extension: 'png', size: 128 }) || null,
+                avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
               };
 
               profiles[pIndex] = {
@@ -308,7 +308,7 @@ class LeaderboardUpdateService {
             rank: skip + index + 1,
             userId: u.userId,
             username: member ? member.displayName : 'Unknown (Left)',
-            avatarUrl: member?.displayAvatarURL({ extension: 'png', size: 128 }) || null,
+            avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
             xp: xpVal,
           };
         });

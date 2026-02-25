@@ -20,15 +20,15 @@
     <rect x="50" y="50" width="150" height="150" rx="75" fill="#808080"/>
   {% endif %}
 
-  <text x="250" y="100" font-family="TT Fors Trial, sans-serif" font-size="42" font-weight="bold" fill="#ffffff">
+  <text x="250" y="100" font-family="TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif" font-size="42" font-weight="bold" fill="#ffffff">
     {{ username }}
   </text>
 
-  <text x="750" y="90" font-family="TT Fors Trial, sans-serif" font-size="28" fill="#a0a0a0" text-anchor="end">
+  <text x="750" y="90" font-family="TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif" font-size="28" fill="#a0a0a0" text-anchor="end">
     RANK <tspan fill="#ffffff" font-size="42">#{{ rank }}</tspan>
   </text>
 
-  <text x="750" y="160" font-family="TT Fors Trial, sans-serif" font-size="24" fill="#a0a0a0" text-anchor="end">
+  <text x="750" y="160" font-family="TT Fors Trial, ColrEmoji, Noto Color Emoji, sans-serif" font-size="24" fill="#a0a0a0" text-anchor="end">
     {{ current_xp }} / {{ next_xp }} XP
   </text>
 

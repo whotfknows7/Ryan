@@ -25,6 +25,9 @@ anyhow = "1.0"
 metrics = "0.22"
 metrics-exporter-prometheus = "0.13"
 metrics-util = "0.16"
+fontdb = "0.23.0"
+skrifa = "0.20"
+read-fonts = "0.20"
 [profile.release]
 opt-level = 3
 lto = true

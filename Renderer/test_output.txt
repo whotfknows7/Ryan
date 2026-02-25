@@ -1,0 +1,376 @@
+--- Emoji: 😪 ---
+GID: GlyphId(752)
+Format is V1: false
+push_clip_glyph: GlyphId(14752)
+fill: Solid { palette_index: 3921, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14756)
+fill: Solid { palette_index: 1280, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18995)
+fill: Solid { palette_index: 10632, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(13713)
+fill: Solid { palette_index: 10633, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(11933)
+fill: Solid { palette_index: 14173, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14591)
+fill: Solid { palette_index: 14174, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18963)
+fill: Solid { palette_index: 1292, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19419)
+fill: Solid { palette_index: 1261, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19420)
+fill: Solid { palette_index: 1282, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19421)
+fill: Solid { palette_index: 1281, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18967)
+fill: Solid { palette_index: 1288, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19422)
+fill: Solid { palette_index: 3831, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19423)
+fill: Solid { palette_index: 1262, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19338)
+fill: Solid { palette_index: 1300, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19326)
+fill: Solid { palette_index: 1272, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19424)
+fill: Solid { palette_index: 913, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18969)
+fill: Solid { palette_index: 1295, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19425)
+fill: Solid { palette_index: 1247, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19426)
+fill: Solid { palette_index: 6827, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19427)
+fill: Solid { palette_index: 738, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19428)
+fill: Solid { palette_index: 7471, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19165)
+fill: Solid { palette_index: 785, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19429)
+fill: Solid { palette_index: 7937, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18970)
+fill: Solid { palette_index: 14175, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19430)
+fill: Solid { palette_index: 14188, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19431)
+fill: Solid { palette_index: 1287, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2010)
+fill: Solid { palette_index: 736, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19432)
+fill: Solid { palette_index: 1999, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19433)
+fill: Solid { palette_index: 14176, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19434)
+fill: Solid { palette_index: 6818, alpha: 1.0 }
+pop_clip
+
+--- Emoji: 😴 ---
+GID: GlyphId(762)
+Format is V1: false
+push_clip_glyph: GlyphId(14752)
+fill: Solid { palette_index: 3921, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(12989)
+fill: Solid { palette_index: 1261, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14753)
+fill: Solid { palette_index: 785, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(5205)
+fill: Solid { palette_index: 1262, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19557)
+fill: Solid { palette_index: 10632, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(5207)
+fill: Solid { palette_index: 1247, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19558)
+fill: Solid { palette_index: 3831, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19559)
+fill: Solid { palette_index: 7471, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19560)
+fill: Solid { palette_index: 1272, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2154)
+fill: Solid { palette_index: 1287, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19561)
+fill: Solid { palette_index: 1281, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19562)
+fill: Solid { palette_index: 913, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19480)
+fill: Solid { palette_index: 1999, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19563)
+fill: Solid { palette_index: 1280, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19482)
+fill: Solid { palette_index: 14176, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19476)
+fill: Solid { palette_index: 6818, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19564)
+fill: Solid { palette_index: 7937, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19565)
+fill: Solid { palette_index: 1292, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19566)
+fill: Solid { palette_index: 14173, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19174)
+fill: Solid { palette_index: 1282, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19567)
+fill: Solid { palette_index: 1288, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19534)
+fill: Solid { palette_index: 6827, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19535)
+fill: Solid { palette_index: 738, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2010)
+fill: Solid { palette_index: 736, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19568)
+fill: Solid { palette_index: 14175, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19569)
+fill: Solid { palette_index: 14174, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19570)
+fill: Solid { palette_index: 1295, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19571)
+fill: Solid { palette_index: 10633, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19572)
+fill: Solid { palette_index: 1300, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18990)
+fill: Solid { palette_index: 14177, alpha: 1.0 }
+pop_clip
+
+--- Emoji: 🥱 ---
+GID: GlyphId(1007)
+Format is V1: false
+push_clip_glyph: GlyphId(25000)
+fill: Solid { palette_index: 1, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14753)
+fill: Solid { palette_index: 785, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14754)
+fill: Solid { palette_index: 1272, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(1883)
+fill: Solid { palette_index: 7471, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19133)
+fill: Solid { palette_index: 7937, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25001)
+fill: Solid { palette_index: 3831, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18963)
+fill: Solid { palette_index: 1292, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25002)
+fill: Solid { palette_index: 7935, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25003)
+fill: Solid { palette_index: 1261, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25004)
+fill: Solid { palette_index: 1280, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18967)
+fill: Solid { palette_index: 1288, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25005)
+fill: Solid { palette_index: 1300, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19324)
+fill: Solid { palette_index: 7938, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25006)
+fill: Solid { palette_index: 913, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25007)
+fill: Solid { palette_index: 1281, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18969)
+fill: Solid { palette_index: 1295, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19455)
+fill: Solid { palette_index: 14173, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19087)
+fill: Solid { palette_index: 1284, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25008)
+fill: Solid { palette_index: 1290, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25009)
+fill: Solid { palette_index: 1262, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25010)
+fill: Solid { palette_index: 14174, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25011)
+fill: Solid { palette_index: 14188, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25012)
+fill: Solid { palette_index: 10632, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25013)
+fill: Solid { palette_index: 1283, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(23153)
+fill: Solid { palette_index: 1287, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(19334)
+fill: Solid { palette_index: 1999, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25014)
+fill: Solid { palette_index: 14176, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25015)
+fill: Solid { palette_index: 734, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18990)
+fill: Solid { palette_index: 14177, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(25016)
+fill: Solid { palette_index: 6818, alpha: 1.0 }
+pop_clip
+
+--- Emoji: 😀 ---
+GID: GlyphId(710)
+Format is V1: false
+push_clip_glyph: GlyphId(18962)
+fill: Solid { palette_index: 913, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(12989)
+fill: Solid { palette_index: 1261, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14753)
+fill: Solid { palette_index: 785, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(13713)
+fill: Solid { palette_index: 10633, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(15364)
+fill: Solid { palette_index: 1300, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(11933)
+fill: Solid { palette_index: 14173, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(14591)
+fill: Solid { palette_index: 14174, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18963)
+fill: Solid { palette_index: 1292, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18964)
+fill: Solid { palette_index: 3921, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18965)
+fill: Solid { palette_index: 3831, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18966)
+fill: Solid { palette_index: 10632, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2331)
+fill: Solid { palette_index: 7471, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18967)
+fill: Solid { palette_index: 1288, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18968)
+fill: Solid { palette_index: 7937, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(1641)
+fill: Solid { palette_index: 6827, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2025)
+fill: Solid { palette_index: 1272, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2006)
+fill: Solid { palette_index: 738, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18969)
+fill: Solid { palette_index: 1295, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18970)
+fill: Solid { palette_index: 14175, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18971)
+fill: Solid { palette_index: 1280, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18972)
+fill: Solid { palette_index: 1, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18973)
+fill: Solid { palette_index: 6818, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(2010)
+fill: Solid { palette_index: 736, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18974)
+fill: Solid { palette_index: 1282, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18975)
+fill: Solid { palette_index: 1281, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18976)
+fill: Solid { palette_index: 1262, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18977)
+fill: Solid { palette_index: 1247, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(11096)
+fill: Solid { palette_index: 1287, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(18978)
+fill: Solid { palette_index: 1999, alpha: 1.0 }
+pop_clip
+push_clip_glyph: GlyphId(10921)
+fill: Solid { palette_index: 14176, alpha: 1.0 }
+pop_clip
+

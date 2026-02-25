@@ -134,7 +134,6 @@ class GifService {
 
   static async prepareClanIcons(client, roleIds) {
     const icons = [];
-    const _ICON_SIZE = 60;
     for (const roleId of roleIds) {
       try {
         const asset = await DatabaseService.getClanAsset(roleId);
