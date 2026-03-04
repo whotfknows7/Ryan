@@ -478,7 +478,8 @@ async function main() {
     // Background Tasks (BullMQ-scheduled)
     QueueService.initialize(client);
 
-    // Leaderboard Cleanup (Startup + Interval)
+    // Leaderboard Initialization & Cleanup (Startup + Interval)
+    await LeaderboardUpdateService.loadTempLeaderboards();
     await LeaderboardUpdateService.cleanupExpiredTempLeaderboards(client);
     setInterval(() => LeaderboardUpdateService.cleanupExpiredTempLeaderboards(client), 60 * 1000);
 
