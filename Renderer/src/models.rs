@@ -33,4 +33,15 @@ pub struct LeaderboardRequest {
     pub highlight_user_id: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct RoleRewardBaseRequest {
+    pub role_name: String,
+    pub role_color: String, // hex e.g. "#FF5500"
+    pub icon_url: Option<String>,
+}
 
+#[derive(Deserialize, Debug)]
+pub struct RoleRewardFinalRequest {
+    pub base_image_b64: String, // base64-encoded PNG of the pre-rendered base image
+    pub username: String,
+}

@@ -4,8 +4,8 @@ use base64::{engine::general_purpose, Engine as _};
 use usvg::{Options, Tree, TreeParsing, TreePostProc};
 use tiny_skia::Pixmap;
 
-use crate::models::RankCardRequest;
-use crate::template::RankCardTemplate;
+use crate::models::{RankCardRequest, RoleRewardBaseRequest, RoleRewardFinalRequest};
+use crate::template::{RankCardTemplate, RoleRewardBaseTemplate, RoleRewardFinalTemplate};
 use askama::Template;
 use std::time::Instant;
 
@@ -294,4 +294,200 @@ pub async fn render_leaderboard(
         [(axum::http::header::CONTENT_TYPE, "image/png")],
         png_bytes,
     ).into_response()
+}
+
+// =============================================================================
+// Role Reward Renderers
+// =============================================================================
+
+/// POST /render/role-reward/base
+/// Generates the "base" role reward image:
+///   role_announcement_template.png + circle-clipped icon + role name text
+pub async fn render_role_reward_base(
+    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    Json(payload): Json<RoleRewardBaseRequest>,
+) -> Response {
+    let start = Instant::now();
+
+    // 1. Load template PNG from disk
+    let template_bytes = {
+        let mut buf = tokio::fs::read("./assets/role template/role_announcement_template.png").await;
+        if buf.is_err() {
+            buf = tokio::fs::read("../assets/role template/role_announcement_template.png").await;
+        }
+        match buf {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("Failed to read role template PNG: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Missing role template PNG").into_response();
+            }
+        }
+    };
+
+    // Decode the template to get its actual dimensions
+    let template_pixmap = match Pixmap::decode_png(&template_bytes) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to decode role template PNG: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to decode role template PNG").into_response();
+        }
+    };
+    let canvas_width  = template_pixmap.width();
+    let canvas_height = template_pixmap.height();
+
+    let template_b64 = general_purpose::STANDARD.encode(&template_bytes);
+
+    // 2. Fetch the role icon (if provided)
+    let icon_b64 = if let Some(ref url) = payload.icon_url {
+        if !url.is_empty() {
+            let client = Client::new();
+            match client.get(url).send().await {
+                Ok(res) if res.status().is_success() => {
+                    let bytes = res.bytes().await.unwrap_or_default().to_vec();
+                    if bytes.is_empty() { String::new() } else { general_purpose::STANDARD.encode(&bytes) }
+                }
+                _ => String::new(),
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    // 3. Build the Askama SVG — exact geometry from the original Node.js canvas code:
+    //    icon: x=74, y=67, size=171×172, circle centre=(74+85, 67+86)=(159,153), r=85
+    //    role name: x=298, y=(111+48)=159 baseline, font-size=50
+    let template = RoleRewardBaseTemplate {
+        template_b64,
+        icon_b64,
+        role_name: escape_xml(&payload.role_name),
+        role_color: payload.role_color.clone(),
+        canvas_width,
+        canvas_height,
+        icon_x: 74,
+        icon_y: 67,
+        icon_size: 171,
+        icon_cx: 74 + 85,  // 159
+        icon_cy: 67 + 86,  // 153
+        icon_radius: 85,
+        text_x: 298,
+        text_y: 111 + 48,  // 159
+        font_size: 50,
+    };
+
+    let svg_string = match template.render() {
+        Ok(s) => s,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG template error: {}", e)).into_response(),
+    };
+
+    // 4. Render SVG → PNG
+    let mut opt = Options::default();
+    opt.font_family = "Poppins, DejaVu Sans, sans-serif".to_string();
+
+    let mut rtree = match Tree::from_str(&svg_string, &opt) {
+        Ok(t) => t,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG parse error: {}", e)).into_response(),
+    };
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+
+    let mut pixmap = match Pixmap::new(canvas_width, canvas_height) {
+        Some(p) => p,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to allocate pixmap").into_response(),
+    };
+    resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    let png_bytes = match pixmap.encode_png() {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
+    };
+
+    let duration = start.elapsed().as_secs_f64();
+    metrics::histogram!("renderer_role_reward_base_duration_seconds").record(duration);
+    tracing::debug!("Role reward base rendered in {:.3}s", duration);
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        png_bytes,
+    ).into_response()
+}
+
+/// POST /render/role-reward/final
+/// Overlays the username onto the pre-rendered base image.
+///   username: x=298, y=(206+35)=241 baseline, font-size=40 — exact match to generateFinalReward
+pub async fn render_role_reward_final(
+    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    Json(payload): Json<RoleRewardFinalRequest>,
+) -> Response {
+    let start = Instant::now();
+
+    // 1. Decode base image to get its dimensions
+    let base_bytes = match general_purpose::STANDARD.decode(&payload.base_image_b64) {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::BAD_REQUEST, "Invalid base64 in base_image_b64").into_response(),
+    };
+
+    let base_pixmap = match Pixmap::decode_png(&base_bytes) {
+        Ok(p) => p,
+        Err(_) => return (StatusCode::BAD_REQUEST, "base_image_b64 is not a valid PNG").into_response(),
+    };
+    let canvas_width  = base_pixmap.width();
+    let canvas_height = base_pixmap.height();
+
+    // 2. Build the SVG — embed base image + draw username text
+    let template = RoleRewardFinalTemplate {
+        base_b64: payload.base_image_b64.clone(),
+        username: escape_xml(&payload.username),
+        canvas_width,
+        canvas_height,
+        text_x: 298,
+        text_y: 206 + 35, // 241 — matches Node.js yBaseline
+        font_size: 40,
+    };
+
+    let svg_string = match template.render() {
+        Ok(s) => s,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG template error: {}", e)).into_response(),
+    };
+
+    // 3. Render SVG → PNG
+    let mut opt = Options::default();
+    opt.font_family = "Poppins, DejaVu Sans, sans-serif".to_string();
+
+    let mut rtree = match Tree::from_str(&svg_string, &opt) {
+        Ok(t) => t,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG parse error: {}", e)).into_response(),
+    };
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+
+    let mut pixmap = match Pixmap::new(canvas_width, canvas_height) {
+        Some(p) => p,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to allocate pixmap").into_response(),
+    };
+    resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    let png_bytes = match pixmap.encode_png() {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
+    };
+
+    let duration = start.elapsed().as_secs_f64();
+    metrics::histogram!("renderer_role_reward_final_duration_seconds").record(duration);
+    tracing::debug!("Role reward final rendered in {:.3}s", duration);
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        png_bytes,
+    ).into_response()
+}
+
+// XML-escape helper to prevent malformed SVG when role names contain <, >, &, etc.
+fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+     .replace('\'', "&apos;")
 }

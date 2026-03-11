@@ -4,8 +4,10 @@ mod template;
 
 use axum::{
     routing::{get, post},
+    extract::DefaultBodyLimit,
     Router,
 };
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -53,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/render", post(handler::render_rank_card))
         .route("/render/leaderboard", post(handler::render_leaderboard))
+        .route("/render/role-reward/base",  post(handler::render_role_reward_base))
+        .route("/render/role-reward/final", post(handler::render_role_reward_final))
         .route("/metrics", get(move || {
             // println!("Metrics endpoint hit!");
             metrics::counter!("renderer_metrics_requests").increment(1);
@@ -60,6 +64,9 @@ async fn main() -> anyhow::Result<()> {
            // println!("Metrics output length: {}", output.len());
             std::future::ready(output)
         }))
+        // 20MB global limit: /render/role-reward/final sends a base image as base64
+        // (~4-5MB). All other routes send only a few KB so this is safe.
+        .layer(DefaultBodyLimit::max(20 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(fontdb_arc);

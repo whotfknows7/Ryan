@@ -1,7 +1,5 @@
 // src/services/ImageService.js
 
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
-
 const path = require('path');
 const fs = require('fs');
 const opentype = require('opentype.js');
@@ -14,17 +12,12 @@ const EMOJI_DIR = path.join(ASSETS_DIR, 'emojis');
 
 // Cache objects
 let cachedFont = null;
-let cachedRoleTemplate = null;
 
 // Ensure required directories exist
 if (!fs.existsSync(EMOJI_DIR)) {
   fs.mkdirSync(EMOJI_DIR, { recursive: true });
 }
 
-// Pre-load validation
-if (!fs.existsSync(ROLE_TEMPLATE_PATH)) {
-  console.warn(`[ImageService] Missing Template: ${ROLE_TEMPLATE_PATH}`);
-}
 
 class ImageService {
   constructor() {
@@ -228,112 +221,55 @@ class ImageService {
     }
   }
 
-  // ... (Keep existing methods: generateBaseReward, generateFinalReward, helper methods) ...
-  // [OMITTED FOR BREVITY - KEEP YOUR EXISTING CODE BELOW THIS LINE]
+  // =================================================================
+  // RUST MICROSERVICE INTEGRATION (Role Rewards)
+  // =================================================================
 
   async generateBaseReward(roleName, roleColorHex, iconUrl) {
-    if (!cachedRoleTemplate) {
-      cachedRoleTemplate = await loadImage(ROLE_TEMPLATE_PATH);
+    try {
+      const payload = {
+        role_name: roleName,
+        role_color: roleColorHex || '#FFFFFF',
+        icon_url: iconUrl || null,
+      };
+      const url = this.rendererUrl.replace('/render', '/render/role-reward/base');
+      const timer = MetricsService.rendererRequestDuration.startTimer();
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+      timer();
+      if (!response.ok) throw new Error(`Role reward base renderer error: ${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      console.error('[ImageService] generateBaseReward failed:', error.message);
+      throw error;
     }
-    const background = cachedRoleTemplate;
-
-    const canvas = createCanvas(background.width, background.height);
-    const ctx = canvas.getContext('2d');
-    const font = await this.loadFont();
-
-    ctx.drawImage(background, 0, 0);
-
-    if (iconUrl) {
-      const iconImg = await this.fetchImage(iconUrl);
-      if (iconImg) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(74 + 171 / 2, 67 + 172 / 2, 171 / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(iconImg, 74, 67, 171, 172);
-        ctx.restore();
-      }
-    }
-
-    const fontSize = 50;
-    const x = 298;
-    const yBaseline = 111 + 48;
-    const maxWidth = 641;
-
-    let displayText = roleName;
-    const ellipsis = '...';
-
-    while (font.getAdvanceWidth(displayText, fontSize) > maxWidth && displayText.length > 0) {
-      displayText = displayText.slice(0, -1);
-    }
-    if (displayText !== roleName) {
-      displayText += ellipsis;
-    }
-
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-
-    const path = font.getPath(displayText, x, yBaseline, fontSize);
-
-    path.fill = null;
-    path.stroke = 'black';
-    path.strokeWidth = 5;
-    path.draw(ctx);
-
-    path.fill = roleColorHex || '#FFFFFF';
-    path.stroke = null;
-    path.draw(ctx);
-    ctx.restore();
-
-    return canvas.toBuffer('image/png');
   }
 
   async generateFinalReward(baseImageBuffer, username) {
-    const baseImage = await loadImage(baseImageBuffer);
-    const canvas = createCanvas(baseImage.width, baseImage.height);
-    const ctx = canvas.getContext('2d');
-    const font = await this.loadFont();
-
-    ctx.drawImage(baseImage, 0, 0);
-
-    const fontSize = 40;
-    const x = 298;
-    const yBaseline = 206 + 35;
-    const maxWidth = 637;
-
-    let displayText = username;
-    const ellipsis = '...';
-
-    while (font.getAdvanceWidth(displayText, fontSize) > maxWidth && displayText.length > 0) {
-      displayText = displayText.slice(0, -1);
+    try {
+      const payload = {
+        base_image_b64: baseImageBuffer.toString('base64'),
+        username,
+      };
+      const url = this.rendererUrl.replace('/render', '/render/role-reward/final');
+      const timer = MetricsService.rendererRequestDuration.startTimer();
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+      timer();
+      if (!response.ok) throw new Error(`Role reward final renderer error: ${response.status}`);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      console.error('[ImageService] generateFinalReward failed:', error.message);
+      throw error;
     }
-    if (displayText !== username) {
-      displayText += ellipsis;
-    }
-
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-
-    const path = font.getPath(displayText, x, yBaseline, fontSize);
-
-    path.fill = null;
-    path.stroke = 'black';
-    path.strokeWidth = 5;
-    path.draw(ctx);
-
-    path.fill = 'white';
-    path.stroke = null;
-    path.draw(ctx);
-    ctx.restore();
-
-    return canvas.toBuffer('image/png');
   }
 
   renderOpenTypeText(ctx, font, text, x, y, fontSize) {
@@ -473,11 +409,6 @@ class ImageService {
     try {
       await this.loadFont();
       console.log('[ImageService] Font preloaded successfully');
-
-      if (fs.existsSync(ROLE_TEMPLATE_PATH)) {
-        cachedRoleTemplate = await loadImage(ROLE_TEMPLATE_PATH);
-        console.log('[ImageService] Role template preloaded successfully');
-      }
     } catch (e) {
       console.error('[ImageService] Failed to preload assets:', e.message);
     }
