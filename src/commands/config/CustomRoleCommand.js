@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { CustomRoleService } = require('../../../services/CustomRoleService');
-const { getIds, hasRole } = require('../../../utils/GuildIdsHelper');
+const { CustomRoleService } = require('../../services/CustomRoleService');
+const { getIds, hasRole } = require('../../utils/GuildIdsHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
