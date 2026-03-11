@@ -25,19 +25,13 @@
     {% endif %}
 
     <!-- Rank -->
-    <text x="75" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      #{{ user.rank }}
-    </text>
+    <text x="{{ user.rank_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">#{{ user.rank }}</text>
 
     <!-- Separator 1 -->
-    <text x="120" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      |
-    </text>
+    <text x="{{ user.separator_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">|</text>
 
     <!-- Username -->
-    <text x="145" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      {{ user.username }}
-    </text>
+    <text x="{{ user.username_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">{{ user.username }}</text>
 
     <!-- Emojis -->
     {% for emoji in user.emojis %}
@@ -45,19 +39,15 @@
     {% endfor %}
 
     <!-- Separator 2 -->
-    <text x="{{ user.xp_x_start - 30.0 }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      |
-    </text>
+    <text x="{{ user.separator2_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">|</text>
 
     <!-- XP -->
-    <text x="{{ user.xp_x_start }}" y="{{ user.y_pos + 40 }}" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
-      XP: {{ user.formatted_xp }} pts
-    </text>
+    <text x="{{ user.xp_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">XP: {{ user.formatted_xp }} pts</text>
 
   {% endfor %}
 
   {% if users.len() == 0 %}
-    <text x="10" y="60" font-family="TT Fors Trial, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
+    <text x="10" y="60" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">
       No-one is yapping right now...
     </text>
   {% endif %}

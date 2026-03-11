@@ -750,6 +750,18 @@ class DatabaseService {
     });
   }
 
+  static async getAllTempLeaderboards() {
+    return prisma.leaderboardState.findMany();
+  }
+
+  static async updateTempLeaderboards(guildId, msgs) {
+    return prisma.leaderboardState.upsert({
+      where: { guildId },
+      create: { guildId, lastRanks: msgs },
+      update: { lastRanks: msgs },
+    });
+  }
+
   static async getGifCache(rankHash) {
     return prisma.gifCache.findUnique({
       where: { rankHash },

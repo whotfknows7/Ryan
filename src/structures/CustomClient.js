@@ -19,6 +19,8 @@ class CustomClient extends Client {
         Partials.Message,
         Partials.Channel,
         Partials.Reaction, // Required for fetching reactions on old messages
+        Partials.GuildMember, // Required for uncached member updates
+        Partials.User, // Required for global uncached user updates
       ],
       // RAM OPTIMIZATION: Strict Cache Limits for Stateless Architecture
       makeCache: Options.cacheWithLimits({

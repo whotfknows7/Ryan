@@ -224,6 +224,7 @@ class LeaderboardUpdateService {
                   userId: dbUserIds[i],
                   displayName: parsed.displayName,
                   avatarUrl: parsed.avatarUrl,
+                  fallbackUsername: parsed.fallbackUsername || (parsed.displayName || 'Unknown'),
                 });
               } else {
                 // Cache miss
@@ -257,8 +258,9 @@ class LeaderboardUpdateService {
               const member = fetchedMembers.get(uId);
 
               const profileBase = {
-                displayName: member ? member.displayName : ' (Left)Unknown',
+                displayName: member ? member.displayName : 'Unknown (Left)',
                 avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+                fallbackUsername: member ? member.user.username : 'Unknown (Left)',
               };
 
               profiles[pIndex] = {
@@ -291,6 +293,7 @@ class LeaderboardUpdateService {
             username: profile.displayName,
             avatarUrl: profile.avatarUrl,
             xp: xpVal,
+            fallbackUsername: profile.fallbackUsername,
           };
         });
       } else {
@@ -310,6 +313,7 @@ class LeaderboardUpdateService {
             username: member ? member.displayName : 'Unknown (Left)',
             avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
             xp: xpVal,
+            fallbackUsername: member ? member.user.username : 'Unknown (Left)',
           };
         });
       }
@@ -323,11 +327,42 @@ class LeaderboardUpdateService {
           username: 'Unknown (Left)',
           avatarUrl: null,
           xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp,
+          fallbackUsername: 'Unknown (Left)',
         }));
     }
 
-    // 3. Generate Image (with highlight support)
-    const imageBuffer = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
+    // 3. Generate Image (with highlight support) and update cache if fallback occurred
+    const { buffer: imageBuffer, fallbackUserIds } = await ImageService.generateLeaderboard(usersForImage, highlightUserId);
+
+    // Update Redis cache for users whose fonts failed to render
+    if (fallbackUserIds && fallbackUserIds.length > 0 && page === 1) {
+      const cacheKey = `member_cache:${guild.id}`;
+      const pipeline = defaultRedis.pipeline();
+      let hasUpdates = false;
+
+      for (const uId of fallbackUserIds) {
+        const uInfo = usersForImage.find(u => u.userId === uId);
+        if (uInfo && uInfo.fallbackUsername) {
+          const profileBase = {
+            displayName: uInfo.fallbackUsername, // PERMANENTLY overwrite displayName
+            avatarUrl: uInfo.avatarUrl,
+            fallbackUsername: uInfo.fallbackUsername,
+          };
+          pipeline.hset(cacheKey, uId, JSON.stringify(profileBase));
+          hasUpdates = true;
+          logger.info(`[Fallback LB] Overwrote Redis display name for ${uId} to ${uInfo.fallbackUsername}`);
+        }
+      }
+
+      if (hasUpdates) {
+        try {
+          await pipeline.exec();
+        } catch (e) {
+          logger.warn(`[Fallback LB] Failed to save fallback names to Redis for ${guild.id}: ${e.message}`);
+        }
+      }
+    }
+
     // logger.info(`[${guild.id}] Generated leaderboard image size: ${(imageBuffer.length / 1024).toFixed(2)} KB`);
     const filename = `leaderboard_${type}_${page}_${Date.now()}.png`;
     const attachment = new AttachmentBuilder(imageBuffer, { name: filename });

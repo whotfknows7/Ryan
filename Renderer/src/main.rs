@@ -34,9 +34,9 @@ async fn main() -> anyhow::Result<()> {
     let mut fontdb = usvg::fontdb::Database::new();
     fontdb.load_system_fonts();
     tracing::info!("Loaded system fonts.");
-    let font_data = include_bytes!("../../assets/fonts/TT Fors Trial Bold.ttf");
+    let font_data = include_bytes!("../../assets/fonts/Poppins-SemiBold.ttf");
     fontdb.load_font_data(font_data.to_vec());
-    tracing::info!("Loaded TT Fors Trial Bold font.");
+    tracing::info!("Loaded Poppins-SemiBold font.");
     
     let fontdb_arc = Arc::new(fontdb);
 

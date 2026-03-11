@@ -1,4 +1,4 @@
-use axum::{Json, http::StatusCode, response::{IntoResponse, Response}, extract::State};
+use axum::{Json, http::StatusCode, response::{IntoResponse, Response}, extract::State, http::HeaderMap};
 use reqwest::Client;
 use base64::{engine::general_purpose, Engine as _};
 use usvg::{Options, Tree, TreeParsing, TreePostProc};
@@ -8,6 +8,36 @@ use crate::models::RankCardRequest;
 use crate::template::RankCardTemplate;
 use askama::Template;
 use std::time::Instant;
+
+fn contains_unsupported_chars(text: &str, fontdb: &std::sync::Arc<usvg::fontdb::Database>) -> bool {
+    let mut unsupported = false;
+    for c in text.chars() {
+        if c.is_whitespace() || c.is_control() {
+            continue;
+        }
+
+        let mut found = false;
+        for face_info in fontdb.faces() {
+            let has_glyph = fontdb.with_face_data(face_info.id, |font_data, face_index| {
+                if let Ok(face) = ttf_parser::Face::parse(font_data, face_index) {
+                    return face.glyph_index(c).is_some();
+                }
+                false
+            }).unwrap_or(false);
+
+            if has_glyph {
+                found = true;
+                break;
+            }
+        }
+        
+        if !found {
+            unsupported = true;
+            break;
+        }
+    }
+    unsupported
+}
 
 
 pub async fn render_rank_card(
@@ -93,6 +123,7 @@ pub async fn render_leaderboard(
     let client = Client::new();
 
     let mut template_users = Vec::new();
+    let mut fallback_user_ids = Vec::new();
     let mut y_pos = 10;
     
     // Map colors
@@ -159,8 +190,16 @@ pub async fn render_leaderboard(
         // We will pass emoji_x_end from Node.js, so we know exactly where it ends.
         let xp_x_start = user.text_end_x + 145.0 + 8.0 + 30.0;
 
+        let mut display_username = user.username.clone();
+        
+        // CHECK FOR UNSUPPORTED CHARACTERS (Fallback Logic)
+        if contains_unsupported_chars(&display_username, &fontdb) {
+            display_username = user.fallback_username.clone();
+            fallback_user_ids.push(user.user_id.clone());
+        }
+
         template_users.push(crate::template::TemplateUserData {
-            username: user.username,
+            username: display_username, // Use display_username here
             avatar_b64,
             rank: user.rank,
             formatted_xp: format_xp(user.xp),
@@ -211,9 +250,18 @@ pub async fn render_leaderboard(
     tracing::debug!("Recording leaderboard render duration: {}s", duration);
     metrics::histogram!("renderer_leaderboard_render_duration_seconds").record(duration);
 
+    let mut headers = HeaderMap::new();
+    headers.insert(axum::http::header::CONTENT_TYPE, "image/png".parse().unwrap());
+    
+    if !fallback_user_ids.is_empty() {
+        if let Ok(value) = fallback_user_ids.join(",").parse() {
+            headers.insert("X-Fallback-Users", value);
+        }
+    }
+
     (
         StatusCode::OK,
-        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        headers,
         png_bytes,
     ).into_response()
 }

@@ -131,6 +131,7 @@ class ImageService {
               xp: user.xp,
               rank: user.rank,
               text_end_x: textEndX,
+              fallback_username: user.fallbackUsername || (user.userId ? `User ${user.userId}` : 'Unknown'),
             };
           })
         ),

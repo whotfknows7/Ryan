@@ -24,6 +24,7 @@ const logger = require('./lib/logger');
 
 const client = new CustomClient();
 const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateService');
+const RawProfileUpdateHandler = require('./handlers/RawProfileUpdateHandler');
 // =================================================================
 // STARTUP CLEANUP — Kill zombies from previous sessions
 // =================================================================
@@ -281,6 +282,9 @@ async function main() {
     // =================================================================
     // EVENTS & TASKS
     // =================================================================
+
+    // Raw Websocket Interceptor (For catching stateless GUILD_MEMBER_UPDATE)
+    client.on('raw', (packet) => RawProfileUpdateHandler.handle(client, packet));
 
     client.on('messageCreate', async (message) => {
       if (message.author.bot) return;
