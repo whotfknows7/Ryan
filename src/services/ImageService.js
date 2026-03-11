@@ -41,9 +41,9 @@ class ImageService {
   async urlToBase64(url) {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer).toString('base64');
+      if (!response.ok) throw new Error(`Renderer HTTP error! status: ${response.status}`);
+
+      return Buffer.from(await response.arrayBuffer());
     } catch (error) {
       console.error(`Failed to convert image to base64: ${url}`, error.message);
       return '';
@@ -131,7 +131,6 @@ class ImageService {
               xp: user.xp,
               rank: user.rank,
               text_end_x: textEndX,
-              fallback_username: user.fallbackUsername || (user.userId ? `User ${user.userId}` : 'Unknown'),
             };
           })
         ),

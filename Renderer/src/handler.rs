@@ -1,4 +1,4 @@
-use axum::{Json, http::StatusCode, response::{IntoResponse, Response}, extract::State, http::HeaderMap};
+use axum::{Json, http::StatusCode, response::{IntoResponse, Response}, extract::State};
 use reqwest::Client;
 use base64::{engine::general_purpose, Engine as _};
 use usvg::{Options, Tree, TreeParsing, TreePostProc};
@@ -9,37 +9,6 @@ use crate::template::RankCardTemplate;
 use askama::Template;
 use std::time::Instant;
 
-fn contains_unsupported_chars(text: &str, fontdb: &std::sync::Arc<usvg::fontdb::Database>) -> bool {
-    let mut unsupported = false;
-    for c in text.chars() {
-        if c.is_whitespace() || c.is_control() {
-            continue;
-        }
-
-        let mut found = false;
-        for face_info in fontdb.faces() {
-            let has_glyph = fontdb.with_face_data(face_info.id, |font_data, face_index| {
-                if let Ok(face) = ttf_parser::Face::parse(font_data, face_index) {
-                    return face.glyph_index(c).is_some();
-                }
-                false
-            }).unwrap_or(false);
-
-            if has_glyph {
-                found = true;
-                break;
-            }
-        }
-        
-        if !found {
-            unsupported = true;
-            break;
-        }
-    }
-    unsupported
-}
-
-
 pub async fn render_rank_card(
     State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
     Json(payload): Json<RankCardRequest>,
@@ -49,10 +18,21 @@ pub async fn render_rank_card(
     // 1. Fetch Discord Avatar & Convert to Base64
     let client = Client::new();
     let avatar_bytes = match client.get(&payload.avatar_url).send().await {
-        Ok(res) => res.bytes().await.unwrap_or_default(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch avatar").into_response(),
+        Ok(res) if res.status().is_success() => res.bytes().await.unwrap_or_default().to_vec(),
+        _ => {
+            let mut buf = tokio::fs::read("./assets/default_avatar.png").await;
+            if buf.is_err() {
+                buf = tokio::fs::read("../assets/default_avatar.png").await;
+            }
+            buf.unwrap_or_default()
+        }
     };
-    let avatar_b64 = general_purpose::STANDARD.encode(&avatar_bytes);
+    
+    let avatar_b64 = if avatar_bytes.is_empty() {
+        "".to_string()
+    } else {
+        general_purpose::STANDARD.encode(&avatar_bytes)
+    };
 
     // 2. Math for Progress Bar (Max width is 500px)
     let progress_percent = if payload.next_xp > 0 {
@@ -79,7 +59,7 @@ pub async fn render_rank_card(
 
     // 4. Setup resvg & Font options
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, sans-serif".to_string();
 
     // 5. Render SVG to PNG Bytes
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
@@ -123,7 +103,6 @@ pub async fn render_leaderboard(
     let client = Client::new();
 
     let mut template_users = Vec::new();
-    let mut fallback_user_ids = Vec::new();
     let mut y_pos = 10;
     
     // Map colors
@@ -151,15 +130,35 @@ pub async fn render_leaderboard(
         }
     };
 
+    let measure_text = |text: &str, fontdb: &std::sync::Arc<usvg::fontdb::Database>| -> f64 {
+        let escaped = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let tree_str = format!(
+            r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold">{}</text></svg>"#,
+            escaped
+        );
+        let mut tree = usvg::Tree::from_str(&tree_str, &usvg::Options::default()).unwrap_or_else(|_| {
+            usvg::Tree::from_str(
+                r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text> </text></svg>"#,
+                &usvg::Options::default()
+            ).unwrap()
+        });
+        tree.postprocess(usvg::PostProcessingSteps::default(), fontdb);
+        tree.root.abs_bounding_box().map(|bb| bb.width() as f64).unwrap_or(0.0)
+    };
+
     for user in payload.users {
         // Fetch avatar concurrently or sequentially (sequential for simplicity here, can optimize later)
         let avatar_b64 = if !user.avatar_url.is_empty() {
             match client.get(&user.avatar_url).send().await {
-                Ok(res) => {
-                    let bytes = res.bytes().await.unwrap_or_default();
-                    general_purpose::STANDARD.encode(&bytes)
+                Ok(res) if res.status().is_success() => {
+                    let bytes = res.bytes().await.unwrap_or_default().to_vec();
+                    if bytes.is_empty() {
+                        "".to_string()
+                    } else {
+                        general_purpose::STANDARD.encode(&bytes)
+                    }
                 },
-                Err(_) => "".to_string(),
+                _ => "".to_string(),
             }
         } else {
             "".to_string()
@@ -167,6 +166,16 @@ pub async fn render_leaderboard(
 
         let is_highlighted = payload.highlight_user_id.as_ref() == Some(&user.user_id);
         
+        // 1. Measure precise widths
+        let rank_text = format!("#{}", user.rank);
+        let rank_width = measure_text(&rank_text, &fontdb);
+        let separator_width = measure_text("|", &fontdb);
+        
+        // 2. Calculate horizontal positions dynamically with EXACT 20px gaps
+        let rank_x_start = 75.0; // Fixed start past avatar
+        let separator_x_start = rank_x_start + rank_width + 20.0;
+        let username_x_start = separator_x_start + separator_width + 20.0;
+
         let mut template_emojis = Vec::new();
         for emoji in user.emojis {
             // we read emoji from disk: assets/emojis/{hex}.png
@@ -181,29 +190,59 @@ pub async fn render_leaderboard(
             if !b64.is_empty() {
                 template_emojis.push(crate::template::TemplateEmojiData {
                     b64,
-                    x_offset: emoji.x_offset + 145.0 + 8.0, // 145 is username X start, 8 is gap
+                    x_offset: emoji.x_offset + username_x_start + 8.0, // 8 is gap
                 });
             }
         }
 
-        // naive way to calculate xp x start based on username length and emoji count
-        // We will pass emoji_x_end from Node.js, so we know exactly where it ends.
-        let xp_x_start = user.text_end_x + 145.0 + 8.0 + 30.0;
+        // Measure the username width
+        let xp_str = format!("XP: {} pts", format_xp(user.xp));
+        let xp_width = measure_text(&xp_str, &fontdb);
+
+        // Emoji total width
+        let emoji_count = template_emojis.len();
+        let emoji_total_width = if emoji_count > 0 {
+            (emoji_count as f64) * 30.0 + ((emoji_count - 1) as f64) * 7.0 + 8.0 
+        } else {
+            0.0
+        };
+
+        let max_content_end = 775.0 - xp_width - 18.0 - separator_width - 20.0 - emoji_total_width;
+        let max_username_width = max_content_end - username_x_start;
 
         let mut display_username = user.username.clone();
-        
-        // CHECK FOR UNSUPPORTED CHARACTERS (Fallback Logic)
-        if contains_unsupported_chars(&display_username, &fontdb) {
-            display_username = user.fallback_username.clone();
-            fallback_user_ids.push(user.user_id.clone());
+
+        let mut username_width = {
+            let w = measure_text(&display_username, &fontdb);
+            if w > 0.0 { w } else { user.text_end_x }
+        };
+
+        if username_width > max_username_width && max_username_width > 0.0 {
+            let mut chars: Vec<char> = display_username.chars().collect();
+            while username_width > max_username_width && !chars.is_empty() {
+                chars.pop();
+                display_username = format!("{}…", chars.iter().collect::<String>());
+                username_width = measure_text(&display_username, &fontdb);
+            }
         }
 
+        // End of the content block (username + emojis)
+        let content_end_x = username_x_start + username_width + if emoji_count > 0 { emoji_total_width } else { 0.0 };
+        
+        // Exact 20px gap for the second separator and 18px gap for XP text
+        let separator2_x_start = content_end_x + 20.0;
+        let xp_x_start = separator2_x_start + separator_width + 18.0;
+
         template_users.push(crate::template::TemplateUserData {
-            username: display_username, // Use display_username here
+            username: display_username,
             avatar_b64,
             rank: user.rank,
             formatted_xp: format_xp(user.xp),
             emojis: template_emojis,
+            rank_x_start,
+            separator_x_start,
+            username_x_start,
+            separator2_x_start,
             bg_color: get_bg_color(user.rank, is_highlighted),
             y_pos,
             xp_x_start,
@@ -225,7 +264,7 @@ pub async fn render_leaderboard(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "TT Fors Trial".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,
@@ -250,18 +289,9 @@ pub async fn render_leaderboard(
     tracing::debug!("Recording leaderboard render duration: {}s", duration);
     metrics::histogram!("renderer_leaderboard_render_duration_seconds").record(duration);
 
-    let mut headers = HeaderMap::new();
-    headers.insert(axum::http::header::CONTENT_TYPE, "image/png".parse().unwrap());
-    
-    if !fallback_user_ids.is_empty() {
-        if let Ok(value) = fallback_user_ids.join(",").parse() {
-            headers.insert("X-Fallback-Users", value);
-        }
-    }
-
     (
         StatusCode::OK,
-        headers,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
         png_bytes,
     ).into_response()
 }

@@ -25,7 +25,6 @@ pub struct LeaderboardUser {
     pub xp: i32,
     pub rank: i32,
     pub text_end_x: f64,
-    pub fallback_username: String,
 }
 
 #[derive(Deserialize, Debug)]

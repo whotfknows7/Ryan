@@ -43,22 +43,19 @@ const LiveCommand = {
           // Fetch multiple users from the Redis hash
           const cachedData = await defaultRedis.hmget(cacheKey, ...dbUserIds);
 
-          for (let i = 0; i < dbUserIds.length; i++) {
-            if (cachedData[i]) {
-              // Cache hit
-              const parsed = JSON.parse(cachedData[i]);
-              profiles.push({
-                userId: dbUserIds[i],
-                displayName: parsed.displayName,
-                avatarUrl: parsed.avatarUrl,
-                fallbackUsername: parsed.fallbackUsername || (parsed.displayName || 'Unknown'),
-              });
-            } else {
-              // Cache miss
-              profiles.push(null);
-              missingUserIds.push(dbUserIds[i]);
-              missingIndices.push(i);
-            }
+          for (let i = 0; i < dbUserIds.length; i++)              if (cachedData[i]) {
+            // Cache hit
+            const parsed = JSON.parse(cachedData[i]);
+            profiles.push({
+              userId: dbUserIds[i],
+              displayName: parsed.displayName,
+              avatarUrl: parsed.avatarUrl,
+            });
+          } else {
+            // Cache miss
+            profiles.push(null);
+            missingUserIds.push(dbUserIds[i]);
+            missingIndices.push(i);
           }
         } catch (err) {
           console.error(`[LiveCommandCache] Failed to fetch hash cache for ${guildId}: ${err.message}`);
@@ -86,7 +83,6 @@ const LiveCommand = {
             const profileBase = {
               displayName: member ? member.nickname || member.user.username : 'Unknown (Left)',
               avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
-              fallbackUsername: member ? member.user.username : 'Unknown (Left)',
             };
 
             profiles[pIndex] = {
@@ -117,39 +113,10 @@ const LiveCommand = {
           username: profile ? profile.displayName : 'Unknown (Left)',
           avatarUrl: profile ? profile.avatarUrl : null,
           xp: u.dailyXp || 0, // Show Daily XP for Live, explicit 0 fallback
-          fallbackUsername: profile ? profile.fallbackUsername : 'Unknown (Left)',
         };
       });
 
-      const { buffer: imageBuffer, fallbackUserIds } = await ImageService.generateLeaderboard(usersForImage);
-
-      if (fallbackUserIds && fallbackUserIds.length > 0) {
-        const pipeline = defaultRedis.pipeline();
-        let hasUpdates = false;
-
-        for (const uId of fallbackUserIds) {
-          const uInfo = usersForImage.find(u => u.userId === uId);
-          if (uInfo && uInfo.fallbackUsername) {
-            const profileBase = {
-              displayName: uInfo.fallbackUsername, // PERMANENTLY overwrite displayName
-              avatarUrl: uInfo.avatarUrl,
-              fallbackUsername: uInfo.fallbackUsername,
-            };
-            pipeline.hset(cacheKey, uId, JSON.stringify(profileBase));
-            hasUpdates = true;
-            console.log(`[Fallback LB Live] Overwrote Redis display name for ${uId} to ${uInfo.fallbackUsername}`);
-          }
-        }
-
-        if (hasUpdates) {
-          try {
-            await pipeline.exec();
-          } catch (e) {
-            console.warn(`[Fallback LB Live] Failed to save fallback names to Redis for ${guildId}: ${e.message}`);
-          }
-        }
-      }
-
+      const imageBuffer = await ImageService.generateLeaderboard(usersForImage);
       const attachment = new AttachmentBuilder(imageBuffer, { name: 'leaderboard.png' });
 
       // 3. Build Embed
