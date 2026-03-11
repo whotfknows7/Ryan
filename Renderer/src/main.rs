@@ -36,9 +36,9 @@ async fn main() -> anyhow::Result<()> {
     let mut fontdb = usvg::fontdb::Database::new();
     fontdb.load_system_fonts();
     tracing::info!("Loaded system fonts.");
-    let font_data = include_bytes!("../../assets/fonts/Poppins-SemiBold.ttf");
+    let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
     fontdb.load_font_data(font_data.to_vec());
-    tracing::info!("Loaded Poppins-SemiBold font.");
+    tracing::info!("Loaded Poppins-Bold font.");
     let symbola_data = include_bytes!("../../assets/fonts/Symbola.ttf");
     fontdb.load_font_data(symbola_data.to_vec());
     tracing::info!("Loaded Symbola font.");
