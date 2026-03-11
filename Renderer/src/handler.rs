@@ -105,6 +105,32 @@ pub async fn render_leaderboard(
     let mut template_users = Vec::new();
     let mut y_pos = 10;
     
+    // 1. Fetch ALL avatars concurrently
+    let mut avatar_futures = Vec::new();
+    for user in &payload.users {
+        let client_clone = client.clone();
+        let url = user.avatar_url.clone();
+        avatar_futures.push(async move {
+            if !url.is_empty() {
+                match client_clone.get(&url).send().await {
+                    Ok(res) if res.status().is_success() => {
+                        let bytes = res.bytes().await.unwrap_or_default().to_vec();
+                        if bytes.is_empty() {
+                            "".to_string()
+                        } else {
+                            general_purpose::STANDARD.encode(&bytes)
+                        }
+                    },
+                    _ => "".to_string(),
+                }
+            } else {
+                "".to_string()
+            }
+        });
+    }
+
+    let avatars_b64 = futures::future::join_all(avatar_futures).await;
+
     // Map colors
     let get_bg_color = |rank: i32, is_highlighted: bool| -> String {
         if is_highlighted {
@@ -130,77 +156,44 @@ pub async fn render_leaderboard(
         }
     };
 
-    let measure_text = |text: &str, fontdb: &std::sync::Arc<usvg::fontdb::Database>| -> f64 {
-        let escaped = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-        let tree_str = format!(
-            r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text font-family="Poppins, DejaVu Sans, Noto Color Emoji, Noto Sans Math, Noto Sans Arabic, Symbola, sans-serif" font-size="30" font-weight="bold">{}</text></svg>"#,
-            escaped
-        );
-        let mut tree = usvg::Tree::from_str(&tree_str, &usvg::Options::default()).unwrap_or_else(|_| {
-            usvg::Tree::from_str(
-                r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text> </text></svg>"#,
-                &usvg::Options::default()
-            ).unwrap()
-        });
-        tree.postprocess(usvg::PostProcessingSteps::default(), fontdb);
-        tree.root.abs_bounding_box().map(|bb| bb.width() as f64).unwrap_or(0.0)
+    let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
+    let face = ttf_parser::Face::parse(font_data, 0).unwrap();
+    let units_per_em = face.units_per_em() as f64;
+    let scale = 30.0 / units_per_em;
+
+    let measure_text = |text: &str| -> f64 {
+        text.chars().map(|c| {
+            if let Some(glyph_id) = face.glyph_index(c) {
+                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
+                    return advance as f64 * scale;
+                }
+            }
+            if c == ' ' { return 8.0; } // Fallback for spaces if needed
+            0.0
+        }).sum()
     };
 
-    for user in payload.users {
-        // Fetch avatar concurrently or sequentially (sequential for simplicity here, can optimize later)
-        let avatar_b64 = if !user.avatar_url.is_empty() {
-            match client.get(&user.avatar_url).send().await {
-                Ok(res) if res.status().is_success() => {
-                    let bytes = res.bytes().await.unwrap_or_default().to_vec();
-                    if bytes.is_empty() {
-                        "".to_string()
-                    } else {
-                        general_purpose::STANDARD.encode(&bytes)
-                    }
-                },
-                _ => "".to_string(),
-            }
-        } else {
-            "".to_string()
-        };
+    for (i, user) in payload.users.into_iter().enumerate() {
+        let avatar_b64 = avatars_b64[i].clone();
 
         let is_highlighted = payload.highlight_user_id.as_ref() == Some(&user.user_id);
         
         // 1. Measure precise widths
         let rank_text = format!("#{}", user.rank);
-        let rank_width = measure_text(&rank_text, &fontdb);
-        let separator_width = measure_text("|", &fontdb);
+        let rank_width = measure_text(&rank_text);
+        let separator_width = measure_text("|");
         
         // 2. Calculate horizontal positions dynamically with EXACT 20px gaps
         let rank_x_start = 75.0; // Fixed start past avatar
         let separator_x_start = rank_x_start + rank_width + 20.0;
         let username_x_start = separator_x_start + separator_width + 20.0;
 
-        let mut template_emojis = Vec::new();
-        for emoji in user.emojis {
-            // we read emoji from disk: assets/emojis/{hex}.png
-            let mut path = format!("./assets/emojis/{}.png", emoji.hex);
-            if !std::path::Path::new(&path).exists() {
-                path = format!("../assets/emojis/{}.png", emoji.hex);
-            }
-            let b64 = match tokio::fs::read(&path).await {
-                Ok(bytes) => general_purpose::STANDARD.encode(&bytes),
-                Err(_) => "".to_string(),
-            };
-            if !b64.is_empty() {
-                template_emojis.push(crate::template::TemplateEmojiData {
-                    b64,
-                    x_offset: emoji.x_offset + username_x_start + 8.0, // 8 is gap
-                });
-            }
-        }
-
-        // Measure the username width
+        // Measure the xp width
         let xp_str = format!("XP: {} pts", format_xp(user.xp));
-        let xp_width = measure_text(&xp_str, &fontdb);
+        let xp_width = measure_text(&xp_str);
 
         // Emoji total width
-        let emoji_count = template_emojis.len();
+        let emoji_count = user.emojis.len();
         let emoji_total_width = if emoji_count > 0 {
             (emoji_count as f64) * 30.0 + ((emoji_count - 1) as f64) * 7.0 + 8.0 
         } else {
@@ -212,17 +205,36 @@ pub async fn render_leaderboard(
 
         let mut display_username = user.username.clone();
 
-        let mut username_width = {
-            let w = measure_text(&display_username, &fontdb);
-            if w > 0.0 { w } else { user.text_end_x }
-        };
+        let mut username_width = measure_text(&display_username);
 
         if username_width > max_username_width && max_username_width > 0.0 {
             let mut chars: Vec<char> = display_username.chars().collect();
             while username_width > max_username_width && !chars.is_empty() {
                 chars.pop();
-                display_username = format!("{}…", chars.iter().collect::<String>());
-                username_width = measure_text(&display_username, &fontdb);
+                display_username = format!("{}...", chars.iter().collect::<String>());
+                username_width = measure_text(&display_username);
+            }
+        }
+
+        // Generate template_emojis with x_offset calculated dynamically!
+        let mut template_emojis = Vec::new();
+        let mut current_emoji_x = username_x_start + username_width + 8.0;
+
+        for emoji in user.emojis {
+            let mut path = format!("./assets/emojis/{}.png", emoji.hex);
+            if !std::path::Path::new(&path).exists() {
+                path = format!("../assets/emojis/{}.png", emoji.hex);
+            }
+            let b64 = match tokio::fs::read(&path).await {
+                Ok(bytes) => general_purpose::STANDARD.encode(&bytes),
+                Err(_) => "".to_string(),
+            };
+            if !b64.is_empty() {
+                template_emojis.push(crate::template::TemplateEmojiData {
+                    b64,
+                    x_offset: current_emoji_x,
+                });
+                current_emoji_x += 37.0; // 30 size + 7 gap
             }
         }
 

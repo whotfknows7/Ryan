@@ -13,7 +13,6 @@ pub struct RankCardRequest {
 #[derive(Deserialize, Debug)]
 pub struct EmojiData {
     pub hex: String,
-    pub x_offset: f64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -24,7 +23,6 @@ pub struct LeaderboardUser {
     pub avatar_url: String,
     pub xp: i32,
     pub rank: i32,
-    pub text_end_x: f64,
 }
 
 #[derive(Deserialize, Debug)]
