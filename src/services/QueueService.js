@@ -33,9 +33,6 @@ class QueueService {
         // logger.info(`⚙️ Processing job: ${job.name}`);
         try {
           switch (job.name) {
-            case 'db-heartbeat':
-              await DatabaseService.checkDatabaseIntegrity();
-              break;
             case 'punishment-check':
               await PunishmentService.checkExpiredPunishments(this.client);
               break;
@@ -154,9 +151,6 @@ class QueueService {
     };
 
     // --- Schedule Definition ---
-
-    // DB Heartbeat - every 5 mins
-    await addJob('db-heartbeat', '*/5 * * * *');
 
     // Punishment Checker - every 1 min
     await addJob('punishment-check', '* * * * *');

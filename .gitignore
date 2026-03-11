@@ -9,5 +9,5 @@ error.log
 chrome/
 role template/
 tests/
-my_responses.md
+my-resps.md
 .agents/
