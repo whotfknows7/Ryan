@@ -28,8 +28,8 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 - **Framework:** `discord.js v14.25.1` for Discord API integration.
 - **Database:** PostgreSQL with **Prisma ORM (v7.4.0)** for type-safe database operations.
 - **Caching & State:** **Redis (v5.9.3)** for live leaderboards, XP buffering, and cross-process Pub/Sub.
-- **Image Processing:** `@napi-rs/canvas` (0.1.88) for real-time image generation (leaderboards).
-- **Additional Libraries:** `sharp` (0.34.5), `gifencoder`, `gifsicle`, `opentype.js` (font rendering).
+- **Image Processing:** `sharp` (0.34.5) for resizing and basic image manipulation.
+- **GIF Generation:** System `ffmpeg` and `gifsicle` via `worker_threads` for heavy lifting.
 - **Queue Management:** `BullMQ` (5.69.2) for reliable scheduled background jobs.
 - **Validation & Safety:** `Zod` (4.3.6) for environment variables; `rate-limiter-flexible` for API protection.
 - **Monitoring:** `prom-client` (15.1.3) for Prometheus performance metrics.
@@ -65,28 +65,31 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 ### Core Services (`src/services/`)
 - **XpService.js:** Main XP processing, scoring logic, and keyword reaction handling.
 - **DatabaseService.js:** Prisma client management, atomic JSON updates, and Redis ZSET interactions.
+- **AssetService.js:** External asset fetching and Discord message-link image retrieval.
 - **XpSyncService.js:** "Write-Behind" synchronization from Redis buffers to PostgreSQL.
 - **LeaderboardUpdateService.js:** Real-time leaderboard generation and Discord message integration.
-- **ImageService.js:** Orchestrates rank card generation via the Rust microservice.
+- **ImageService.js:** Orchestrates rank card and reward generation via the Rust microservice.
 - **GifService.js:** Clan warfare GIF generation pipeline with animated background processing.
+- **CustomRoleService.js:** Management of user-owned custom roles.
+- **WeeklyRoleService.js:** Automated delivery of rewards for weekly leaderboard winners.
 - **PunishmentService.js:** 8-tier strike system with progressive jail management.
-- **QueueService.js:** BullMQ initialization and scheduling for all recurring background tasks.
 - **ConfigService.js:** Abstracted management of guild-specific JSON configurations.
 - **ResetService.js:** Unified 7-day reset logic driven by cron jobs.
 - **MetricsService.js:** Prometheus collection (latency, cache hits, queue sizes).
 
 ### Event Handling & Commands
+- **Command Architecture:** `CommandHandler.js` preloads slash commands into the client.
 - **Interactions:** `InteractionHandler.js` routes slash commands and validates parameters.
-- **Messages:** `MessageIntentHandler.js` calculates XP and awards logic for chat events.
-- **Reactions:** `ReactionHandler.js` handles emoji-based interaction flows and clan role switching.
-- **Maintenance:** `EmergencyService.js` handles zombie process cleanup and self-healing.
+- **Messages:** `MessageIntentHandler.js` processes content-based triggers and logic.
+- **Profiles:** `RawProfileUpdateHandler.js` intercepts raw WebSocket packets for avatar/name changes.
+- **Reactions:** `ReactionHandler.js` processes emoji-based interaction flows via BullMQ.
 
 ---
 
 ## ⚔️ Key Systems & Features
 
 ### XP Engagement Core
-- **Smart Scoring:** Alpha characters (**1 XP**), Emojis (**2 XP**), URLs (**0 XP**) to prioritize quality engagement.
+- **Smart Scoring:** Alpha characters (**1 XP**), Emojis (**2 XP**), Stickers (**2 XP**) to prioritize quality engagement.
 - **3-Phase Verification:** RAM cache check → Member refetch → Execution with rich announcements and Level-Up cards.
 - **Unified 7-Day Reset Cycle:** Automatically manages dailyXp and weeklyXp concurrently across all servers.
 
@@ -119,19 +122,19 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 ```text
 Ryan/
 ├── src/
-│   ├── commands/         # Admin, Config, General, Moderation, Owner
+│   ├── commands/         # admin, config, general, moderation, owner
 │   ├── services/         # Core business logic layer
 │   ├── handlers/         # Event and interaction routing
-│   ├── structures/       # Custom Discord Client & Sharding extensions
+│   ├── structures/       # Custom Discord Client extensions
 │   ├── workers/          # Heavy GIF/FFmpeg processing threads
+│   ├── events/           # Discord event specific listeners
+│   ├── config/           # Redis and Logger initialization
 │   ├── utils/            # Shared helpers (GuildIdsHelper, etc.)
-│   ├── lib/              # Logger, Prisma, Redis clients
-│   └── index.js          # Startup, Cleanup, and Cron management
-├── Renderer/             # RUST: High-performance visual engine
-│   ├── src/              # Axum handlers, SVG templates, Models
-│   └── templates/        # Askama SVG source templates
+│   ├── lib/              # Prisma and core client instances
+│   └── index.js          # Main entrypoint and lifecycle management
+├── Renderer/             # RUST: High-performance visual engine (Axum)
 ├── assets/               # Fonts, Icons, and MP4/PNG Templates
-├── monitoring/           # Prometheus/Grafana configs & dashboards
+├── monitoring/           # Prometheus/Grafana configurations
 └── schema.prisma         # Postgres Source of Truth
 ```
 
