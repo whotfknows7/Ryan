@@ -59,7 +59,7 @@ pub async fn render_rank_card(
 
     // 4. Setup resvg & Font options
     let mut opt = Options::default();
-    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, sans-serif".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Symbola, sans-serif".to_string();
 
     // 5. Render SVG to PNG Bytes
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
@@ -264,7 +264,7 @@ pub async fn render_leaderboard(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, sans-serif".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Symbola, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,

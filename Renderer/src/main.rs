@@ -37,6 +37,9 @@ async fn main() -> anyhow::Result<()> {
     let font_data = include_bytes!("../../assets/fonts/Poppins-SemiBold.ttf");
     fontdb.load_font_data(font_data.to_vec());
     tracing::info!("Loaded Poppins-SemiBold font.");
+    let symbola_data = include_bytes!("../../assets/fonts/Symbola.ttf");
+    fontdb.load_font_data(symbola_data.to_vec());
+    tracing::info!("Loaded Symbola font.");
     
     let fontdb_arc = Arc::new(fontdb);
 
