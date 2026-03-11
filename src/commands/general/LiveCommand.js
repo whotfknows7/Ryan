@@ -43,20 +43,21 @@ const LiveCommand = {
           // Fetch multiple users from the Redis hash
           const cachedData = await defaultRedis.hmget(cacheKey, ...dbUserIds);
 
-          for (let i = 0; i < dbUserIds.length; i++)              if (cachedData[i]) {
-            // Cache hit
-            const parsed = JSON.parse(cachedData[i]);
-            profiles.push({
-              userId: dbUserIds[i],
-              displayName: parsed.displayName,
-              avatarUrl: parsed.avatarUrl,
-            });
-          } else {
-            // Cache miss
-            profiles.push(null);
-            missingUserIds.push(dbUserIds[i]);
-            missingIndices.push(i);
-          }
+          for (let i = 0; i < dbUserIds.length; i++)
+            if (cachedData[i]) {
+              // Cache hit
+              const parsed = JSON.parse(cachedData[i]);
+              profiles.push({
+                userId: dbUserIds[i],
+                displayName: parsed.displayName,
+                avatarUrl: parsed.avatarUrl,
+              });
+            } else {
+              // Cache miss
+              profiles.push(null);
+              missingUserIds.push(dbUserIds[i]);
+              missingIndices.push(i);
+            }
         } catch (err) {
           console.error(`[LiveCommandCache] Failed to fetch hash cache for ${guildId}: ${err.message}`);
           missingUserIds = dbUserIds;

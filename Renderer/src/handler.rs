@@ -133,7 +133,7 @@ pub async fn render_leaderboard(
     let measure_text = |text: &str, fontdb: &std::sync::Arc<usvg::fontdb::Database>| -> f64 {
         let escaped = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
         let tree_str = format!(
-            r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold">{}</text></svg>"#,
+            r#"<svg viewBox="0 0 2000 100" xmlns="http://www.w3.org/2000/svg"><text font-family="Poppins, DejaVu Sans, Noto Color Emoji, Noto Sans Math, Noto Sans Arabic, Symbola, sans-serif" font-size="30" font-weight="bold">{}</text></svg>"#,
             escaped
         );
         let mut tree = usvg::Tree::from_str(&tree_str, &usvg::Options::default()).unwrap_or_else(|_| {
@@ -264,7 +264,7 @@ pub async fn render_leaderboard(
     };
 
     let mut opt = Options::default();
-    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Symbola, sans-serif".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Noto Sans Math, Noto Sans Arabic, Symbola, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(tree) => tree,
