@@ -2,8 +2,7 @@
 require('dotenv').config();
 const QueueService = require('./services/QueueService');
 
-const { execSync, spawn } = require('child_process');
-const path = require('path');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const { MessageFlags } = require('discord.js');
 const { CustomClient } = require('./structures/CustomClient');
@@ -31,14 +30,7 @@ const RawProfileUpdateHandler = require('./handlers/RawProfileUpdateHandler');
 function cleanupStaleProcesses() {
   logger.info('🧹 Running startup cleanup...');
 
-  // 1. Kill any stale renderer processes
-  try {
-    execSync("pkill -f 'target/release/renderer' 2>/dev/null || true", { stdio: 'ignore' });
-  } catch {
-    /* best-effort */
-  }
-
-  // 2. Kill any stale chrome/chromium processes
+  // 1. Kill any stale chrome/chromium processes
   try {
     execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
   } catch {
@@ -83,22 +75,7 @@ async function gracefulShutdown(signal) {
   isShuttingDown = true;
   logger.info(`\n🛑 Received ${signal}. Shutting down gracefully...`);
 
-  // 1. Kill renderer process tree
-  if (startRenderer._currentProcess && !startRenderer._currentProcess.killed) {
-    try {
-      // Kill the entire process group (renderer + chrome children)
-      process.kill(-startRenderer._currentProcess.pid, 'SIGTERM');
-    } catch {
-      try {
-        startRenderer._currentProcess.kill('SIGKILL');
-      } catch {
-        /* best-effort */
-      }
-    }
-    logger.info('🦀 Renderer process terminated.');
-  }
-
-  // 2. Kill any remaining chrome processes
+  // 1. Kill any remaining chrome processes
   try {
     execSync("pkill -f 'chrome.*--headless' 2>/dev/null || true", { stdio: 'ignore' });
   } catch {
@@ -148,96 +125,11 @@ async function gracefulShutdown(signal) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT')); // Ctrl+C
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // kill command
 
-// =================================================================
-// RUST RENDERER MANAGER
-// =================================================================
-function startRenderer() {
-  const rootDir = path.resolve(__dirname, '../'); // Go up to Ryan root
-  const rendererDir = path.join(rootDir, 'Renderer');
-  const binaryPath = path.join(rendererDir, 'target/release/renderer');
 
-  logger.info('🦀 Checking Rust Renderer status...');
-
-  // 1. Check if binary exists
-  if (!fs.existsSync(binaryPath)) {
-    logger.warn('⚠️ Renderer binary not found. Attempting to build... (This may take minutes)');
-    try {
-      // Attempt to build using cargo
-      execSync('cargo build --release', { cwd: rendererDir, stdio: 'inherit' });
-      logger.info('✅ Rust Renderer built successfully.');
-    } catch {
-      logger.error('❌ FAILED TO BUILD RENDERER. Do you have Rust/Cargo installed?');
-      logger.error(
-        'If you are on a shared host, you may need to compile "Renderer" on your PC and upload the "target" folder.'
-      );
-      return; // Stop here if build fails
-    }
-  }
-
-  // 2. Clean up stale Chrome lock files and port 3000 before spawning
-  const lockFile = '/tmp/chromiumoxide-runner/SingletonLock';
-  if (fs.existsSync(lockFile)) {
-    fs.unlinkSync(lockFile);
-    logger.info('🧹 Cleared stale Chrome SingletonLock.');
-  }
-  try {
-    execSync('lsof -t -i:3000 | xargs -r kill -9', { stdio: 'ignore' });
-  } catch {
-    /* best-effort */
-  }
-
-  // 3. Spawn the process (detached so we can kill the process group)
-  logger.info('🚀 Launching Renderer Service...');
-  startRenderer._currentProcess?.kill(); // Kill previous if still alive
-  const rendererProcess = spawn(binaryPath, [], {
-    cwd: rendererDir,
-    detached: true,
-    stdio: 'inherit', // Pipe logs to console so you can see "Listening on..."
-  });
-  startRenderer._currentProcess = rendererProcess;
-
-  rendererProcess.on('error', (err) => {
-    logger.error('❌ Renderer failed to start:', err);
-  });
-
-  // Track consecutive failures to prevent infinite restart loops
-  startRenderer._failures = (startRenderer._failures || 0) + 1;
-  const MAX_RESTARTS = 10;
-
-  rendererProcess.on('exit', (code, _signal) => {
-    if (isShuttingDown) return; // Don't restart during shutdown
-    if (code === 0 || code === null) {
-      startRenderer._failures = 0; // Reset on clean exit
-      return;
-    }
-    if (startRenderer._failures >= MAX_RESTARTS) {
-      logger.error(`❌ Renderer failed ${MAX_RESTARTS} times in a row. Giving up. Use /reconnect or restart the bot.`);
-      return;
-    }
-    logger.warn(
-      `⚠️ Renderer exited with code ${code}. Restarting in 5s... (${startRenderer._failures}/${MAX_RESTARTS})`
-    );
-    setTimeout(startRenderer, 5000);
-  });
-}
-// =================================================================
 
 async function main() {
   // 0. Cleanup stale processes from previous sessions
   cleanupStaleProcesses();
-
-  // 1. Force DB Sync
-  try {
-    logger.info('🔄 Force-Syncing Database Schema...');
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-    logger.info('✅ Database Synced Successfully.');
-  } catch (error) {
-    logger.error('❌ Failed to sync database (Prisma error):', error);
-  }
-
-  // 2. START THE RENDERER
-  // [DISABLED] Using separate PM2 process for renderer management as requested
-  // startRenderer();
 
   // 3. Database Health Check
   logger.info('Checking database connection...');
@@ -357,12 +249,7 @@ async function main() {
 
     client.on('guildMemberAdd', async (member) => {
       try {
-        const wasJailed = await PunishmentService.handleMemberJoin(member);
-        if (!wasJailed) {
-          if (!wasJailed) {
-            // Role skip logic removed
-          }
-        }
+        await PunishmentService.handleMemberJoin(member);
       } catch (error) {
         logger.error('Member Join Error:', error);
       }

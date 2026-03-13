@@ -736,16 +736,14 @@ class DatabaseService {
     });
   }
 
-  static async updateLeaderboardState(guildId, messageId, ranksArray) {
+  static async updateLeaderboardState(guildId, ranksArray) {
     return prisma.leaderboardState.upsert({
       where: { guildId },
       create: {
         guildId,
-        lastMessageId: messageId,
         lastRanks: ranksArray,
       },
       update: {
-        lastMessageId: messageId,
         lastRanks: ranksArray,
       },
     });

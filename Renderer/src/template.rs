@@ -1,5 +1,11 @@
 use askama::Template;
 
+/// Zero-field template — renders only the static gradient background + progress trough.
+/// Pre-rendered once at startup; cloned per request.
+#[derive(Template)]
+#[template(path = "rank_card_bg.svg", escape = "xml")]
+pub struct RankCardBackgroundTemplate {}
+
 #[derive(Template)]
 #[template(path = "rank_card.svg", escape = "xml")]
 pub struct RankCardTemplate {

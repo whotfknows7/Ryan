@@ -53,6 +53,9 @@ module.exports = {
     collector.on('collect', async (selectInteraction) => {
       logger.info(`[SetupRoleRewards] Received RoleSelect interaction from ${selectInteraction.user.id}`);
       try {
+        // Acknowledge immediately to prevent "This interaction failed"
+        await selectInteraction.deferUpdate();
+
         // Sort roles by position (Ascending: Lowest Role First)
         const selectedRoles = selectInteraction.roles.sort((a, b) => a.position - b.position);
         const guildId = interaction.guildId;
@@ -84,14 +87,18 @@ module.exports = {
               .setEmoji('⚙️')
           );
 
+          logger.info(`[SetupRoleRewards] Showing config button for role: ${role.name} (${currentIndex + 1}/${totalRoles})`);
+
           const content = `**Step ${currentIndex + 1}/${totalRoles}:** Configuring ${role}\nClick the button below to set XP, Message, and Icon.`;
 
           // Handle interaction types (Update vs Edit)
           if (i.deferred || i.replied) {
             await i.editReply({ content, components: [btnRow] });
           } else {
+            // Fallback for safety, though it should be deferred now
             await i.update({ content, components: [btnRow] });
           }
+          logger.info(`[SetupRoleRewards] Config button message updated successfully.`);
         };
 
         // Start the loop

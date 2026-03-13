@@ -1,0 +1,12 @@
+<svg width="800" height="250" viewBox="0 0 800 250" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e24"/>
+      <stop offset="100%" stop-color="#15151a"/>
+    </linearGradient>
+  </defs>
+  <!-- Static gradient background -->
+  <rect width="800" height="250" rx="20" fill="url(#bg)"/>
+  <!-- Static progress bar trough -->
+  <rect x="250" y="175" width="500" height="25" rx="12.5" fill="#2c2c35"/>
+</svg>

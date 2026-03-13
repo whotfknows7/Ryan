@@ -1,6 +1,7 @@
 mod handler;
 mod models;
 mod template;
+mod state;
 
 use axum::{
     routing::{get, post},
@@ -14,10 +15,33 @@ use tokio::signal;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use metrics_exporter_prometheus::PrometheusBuilder;
+use askama::Template;
+use usvg::{Options, Tree, TreeParsing, TreePostProc};
+use tiny_skia::Pixmap;
 
 // Use jemalloc to prevent memory fragmentation in long-running service
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+use crate::state::AppState;
+
+/// Render the static rank card background SVG into a Pixmap exactly once.
+fn build_rank_card_bg(fontdb: &usvg::fontdb::Database) -> anyhow::Result<Pixmap> {
+    let svg_string = crate::template::RankCardBackgroundTemplate {}.render()?;
+
+    let mut opt = Options::default();
+    opt.font_family = "Poppins, DejaVu Sans, sans-serif".to_string();
+
+    let mut rtree = Tree::from_str(&svg_string, &opt)
+        .map_err(|e| anyhow::anyhow!("Failed to parse rank_card_bg SVG: {}", e))?;
+    rtree.postprocess(usvg::PostProcessingSteps::default(), fontdb);
+
+    let mut pixmap = Pixmap::new(800, 250)
+        .ok_or_else(|| anyhow::anyhow!("Failed to allocate rank_card_bg pixmap"))?;
+    resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    Ok(pixmap)
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,8 +66,17 @@ async fn main() -> anyhow::Result<()> {
     let symbola_data = include_bytes!("../../assets/fonts/Symbola.ttf");
     fontdb.load_font_data(symbola_data.to_vec());
     tracing::info!("Loaded Symbola font.");
-    
-    let fontdb_arc = Arc::new(fontdb);
+
+    // Pre-bake the static rank card background once.
+    tracing::info!("Pre-baking rank card background...");
+    let rank_card_bg = build_rank_card_bg(&fontdb)?;
+    tracing::info!("Rank card background cached ({} bytes).", rank_card_bg.data().len());
+
+    let state = Arc::new(AppState {
+        fontdb: Arc::new(fontdb),
+        rank_card_bg: Arc::new(rank_card_bg),
+    });
+
 
     // Initialize Prometheus recorder
     let builder = PrometheusBuilder::new();
@@ -58,10 +91,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/render/role-reward/base",  post(handler::render_role_reward_base))
         .route("/render/role-reward/final", post(handler::render_role_reward_final))
         .route("/metrics", get(move || {
-            // println!("Metrics endpoint hit!");
             metrics::counter!("renderer_metrics_requests").increment(1);
             let output = handle.render();
-           // println!("Metrics output length: {}", output.len());
             std::future::ready(output)
         }))
         // 20MB global limit: /render/role-reward/final sends a base image as base64
@@ -69,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(DefaultBodyLimit::max(20 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        .with_state(fontdb_arc);
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Renderer listening on {}", addr);

@@ -84,7 +84,6 @@ model ClanAsset {
 
 model LeaderboardState {
   guildId        String   @id
-  lastMessageId  String?
   lastRanks      Json?    
   updatedAt      DateTime @updatedAt
 }

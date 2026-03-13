@@ -295,6 +295,12 @@ const handleInteraction = async (interaction) => {
       if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
       else await interaction.reply(errorMsg).catch(() => { });
     }
+    return;
+  }
+
+  // 3. UNHANDLED (Selective log to avoid noise, but helpful for debugging)
+  if (interaction.isAnySelectMenu()) {
+    logger.debug(`[Interaction] SelectMenu ${interaction.customId} passed to collectors.`);
   }
 };
 

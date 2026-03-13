@@ -4,13 +4,15 @@ use base64::{engine::general_purpose, Engine as _};
 use usvg::{Options, Tree, TreeParsing, TreePostProc};
 use tiny_skia::Pixmap;
 
-use crate::models::{RankCardRequest, RoleRewardBaseRequest, RoleRewardFinalRequest};
-use crate::template::{RankCardTemplate, RoleRewardBaseTemplate, RoleRewardFinalTemplate};
+use crate::models::{RankCardRequest, RoleRewardBaseRequest};
+use crate::template::{RankCardTemplate, RoleRewardBaseTemplate};
+use crate::state::AppState;
 use askama::Template;
+use std::sync::Arc;
 use std::time::Instant;
 
 pub async fn render_rank_card(
-    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<RankCardRequest>,
 ) -> Response {
     let start = Instant::now();
@@ -42,7 +44,7 @@ pub async fn render_rank_card(
     };
     let progress_width = (progress_percent * 500.0).clamp(0.0, 500.0);
 
-    // 3. Populate Askama SVG Template
+    // 3. Populate Askama SVG Template (dynamic layer only — no bg rect, no trough)
     let template = RankCardTemplate {
         username: payload.username,
         avatar_b64,
@@ -68,12 +70,12 @@ pub async fn render_rank_card(
     };
     
     // Convert text to paths using the loaded font database
-    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &state.fontdb);
 
-    let mut pixmap = match Pixmap::new(800, 250) {
-        Some(p) => p,
-        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to allocate pixmap").into_response(),
-    };
+    // 6. Clone the pre-baked background pixmap — O(n) memcpy of pixel bytes.
+    //    This pixmap already has the gradient background + progress trough painted.
+    //    We composite the dynamic SVG layer directly on top.
+    let mut pixmap = state.rank_card_bg.as_ref().clone();
     
     resvg::render(&rtree, usvg::Transform::default(), &mut pixmap.as_mut());
 
@@ -96,7 +98,7 @@ pub async fn render_rank_card(
 }
 
 pub async fn render_leaderboard(
-    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<crate::models::LeaderboardRequest>,
 ) -> Response {
     let start = Instant::now();
@@ -283,7 +285,7 @@ pub async fn render_leaderboard(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse SVG: {}", e)).into_response(),
     };
     
-    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &state.fontdb);
 
     let mut pixmap = match Pixmap::new(800, height as u32) {
         Some(p) => p,
@@ -316,7 +318,7 @@ pub async fn render_leaderboard(
 /// Generates the "base" role reward image:
 ///   role_announcement_template.png + circle-clipped icon + role name text
 pub async fn render_role_reward_base(
-    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<RoleRewardBaseRequest>,
 ) -> Response {
     let start = Instant::now();
@@ -401,7 +403,7 @@ pub async fn render_role_reward_base(
         Ok(t) => t,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG parse error: {}", e)).into_response(),
     };
-    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &state.fontdb);
 
     let mut pixmap = match Pixmap::new(canvas_width, canvas_height) {
         Some(p) => p,
@@ -429,8 +431,8 @@ pub async fn render_role_reward_base(
 /// Overlays the username onto the pre-rendered base image.
 ///   username: x=298, y=(206+35)=241 baseline, font-size=40 — exact match to generateFinalReward
 pub async fn render_role_reward_final(
-    State(fontdb): State<std::sync::Arc<usvg::fontdb::Database>>,
-    Json(payload): Json<RoleRewardFinalRequest>,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<crate::models::RoleRewardFinalRequest>,
 ) -> Response {
     let start = Instant::now();
 
@@ -448,7 +450,7 @@ pub async fn render_role_reward_final(
     let canvas_height = base_pixmap.height();
 
     // 2. Build the SVG — embed base image + draw username text
-    let template = RoleRewardFinalTemplate {
+    let template = crate::template::RoleRewardFinalTemplate {
         base_b64: payload.base_image_b64.clone(),
         username: escape_xml(&payload.username),
         canvas_width,
@@ -471,7 +473,7 @@ pub async fn render_role_reward_final(
         Ok(t) => t,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG parse error: {}", e)).into_response(),
     };
-    rtree.postprocess(usvg::PostProcessingSteps::default(), &fontdb);
+    rtree.postprocess(usvg::PostProcessingSteps::default(), &state.fontdb);
 
     let mut pixmap = match Pixmap::new(canvas_width, canvas_height) {
         Some(p) => p,
