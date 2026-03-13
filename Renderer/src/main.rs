@@ -72,9 +72,15 @@ async fn main() -> anyhow::Result<()> {
     let rank_card_bg = build_rank_card_bg(&fontdb)?;
     tracing::info!("Rank card background cached ({} bytes).", rank_card_bg.data().len());
 
+    let avatar_cache = moka::future::Cache::builder()
+        .time_to_live(std::time::Duration::from_secs(15 * 60))
+        .max_capacity(1000)
+        .build();
+
     let state = Arc::new(AppState {
         fontdb: Arc::new(fontdb),
         rank_card_bg: Arc::new(rank_card_bg),
+        avatar_cache,
     });
 
 

@@ -18,22 +18,32 @@ pub async fn render_rank_card(
     let start = Instant::now();
 
     // 1. Fetch Discord Avatar & Convert to Base64
-    let client = Client::new();
-    let avatar_bytes = match client.get(&payload.avatar_url).send().await {
-        Ok(res) if res.status().is_success() => res.bytes().await.unwrap_or_default().to_vec(),
-        _ => {
-            let mut buf = tokio::fs::read("./assets/default_avatar.png").await;
-            if buf.is_err() {
-                buf = tokio::fs::read("../assets/default_avatar.png").await;
-            }
-            buf.unwrap_or_default()
-        }
-    };
-    
-    let avatar_b64 = if avatar_bytes.is_empty() {
-        "".to_string()
+    let avatar_b64 = if let Some(cached) = state.avatar_cache.get(&payload.avatar_url).await {
+        cached
     } else {
-        general_purpose::STANDARD.encode(&avatar_bytes)
+        let client = Client::new();
+        let avatar_bytes = match client.get(&payload.avatar_url).send().await {
+            Ok(res) if res.status().is_success() => res.bytes().await.unwrap_or_default().to_vec(),
+            _ => {
+                let mut buf = tokio::fs::read("./assets/default_avatar.png").await;
+                if buf.is_err() {
+                    buf = tokio::fs::read("../assets/default_avatar.png").await;
+                }
+                buf.unwrap_or_default()
+            }
+        };
+        
+        let b64 = if avatar_bytes.is_empty() {
+            "".to_string()
+        } else {
+            general_purpose::STANDARD.encode(&avatar_bytes)
+        };
+        
+        if !payload.avatar_url.is_empty() && !b64.is_empty() {
+            state.avatar_cache.insert(payload.avatar_url.clone(), b64.clone()).await;
+        }
+        
+        b64
     };
 
     // 2. Math for Progress Bar (Max width is 500px)
@@ -112,15 +122,21 @@ pub async fn render_leaderboard(
     for user in &payload.users {
         let client_clone = client.clone();
         let url = user.avatar_url.clone();
+        let cache = state.avatar_cache.clone();
         avatar_futures.push(async move {
             if !url.is_empty() {
+                if let Some(cached) = cache.get(&url).await {
+                    return cached;
+                }
                 match client_clone.get(&url).send().await {
                     Ok(res) if res.status().is_success() => {
                         let bytes = res.bytes().await.unwrap_or_default().to_vec();
                         if bytes.is_empty() {
                             "".to_string()
                         } else {
-                            general_purpose::STANDARD.encode(&bytes)
+                            let b64 = general_purpose::STANDARD.encode(&bytes);
+                            cache.insert(url, b64.clone()).await;
+                            b64
                         }
                     },
                     _ => "".to_string(),
@@ -354,13 +370,23 @@ pub async fn render_role_reward_base(
     // 2. Fetch the role icon (if provided)
     let icon_b64 = if let Some(ref url) = payload.icon_url {
         if !url.is_empty() {
-            let client = Client::new();
-            match client.get(url).send().await {
-                Ok(res) if res.status().is_success() => {
-                    let bytes = res.bytes().await.unwrap_or_default().to_vec();
-                    if bytes.is_empty() { String::new() } else { general_purpose::STANDARD.encode(&bytes) }
+            if let Some(cached) = state.avatar_cache.get(url).await {
+                cached
+            } else {
+                let client = Client::new();
+                match client.get(url).send().await {
+                    Ok(res) if res.status().is_success() => {
+                        let bytes = res.bytes().await.unwrap_or_default().to_vec();
+                        if bytes.is_empty() { 
+                            String::new() 
+                        } else { 
+                            let b64 = general_purpose::STANDARD.encode(&bytes);
+                            state.avatar_cache.insert(url.clone(), b64.clone()).await;
+                            b64
+                        }
+                    }
+                    _ => String::new(),
                 }
-                _ => String::new(),
             }
         } else {
             String::new()

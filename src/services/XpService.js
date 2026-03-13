@@ -77,11 +77,6 @@ class XpCalculator {
 class XpPipeline {
   static buffer = new Map();
 
-  // Tracks which guilds have had their Redis leaderboard ZSETs verified/seeded from DB.
-  // This prevents zincrby from silently creating a ZSET from 0 if the key was lost
-  // (e.g., after a Redis restart), which would cause the all-time LB to show wrong XP.
-  static seededGuilds = new Set();
-
   static init() {
     // Flush the pipeline every 1,000 milliseconds (1 second)
     setInterval(async () => {
@@ -93,43 +88,14 @@ class XpPipeline {
       const currentBatch = this.buffer;
       this.buffer = new Map(); // Clear instantly to accept new incoming XP
 
-      // --- GUARD: Ensure all guilds in this batch have seeded ZSETs from DB first ---
-      // We only need to check guilds we haven't verified yet. This runs at most once
-      // per guild per bot lifecycle (after which seededGuilds caches the result).
-      const newGuildIds = [...new Set([...currentBatch.keys()].map((k) => k.split(':')[0]))].filter(
-        (gId) => !this.seededGuilds.has(gId)
-      );
-
-      if (newGuildIds.length > 0) {
-        await Promise.all(
-          newGuildIds.flatMap((guildId) =>
-            ['lifetime', 'daily', 'weekly'].map(async (type) => {
-              const key = `lb:${guildId}:${type}`;
-              const exists = await defaultRedis.exists(key);
-              if (!exists) {
-                logger.info(`[XpPipeline] Cold-starting ${type} ZSET for guild ${guildId} from DB...`);
-                await DatabaseService.populateRedisLeaderboard(guildId, type);
-              }
-            })
-          )
-        );
-        // Mark all new guilds as verified for this bot lifecycle
-        for (const gId of newGuildIds) this.seededGuilds.add(gId);
-      }
-
       const timer = MetricsService.redisPipelineLatency.startTimer();
       const pipeline = defaultRedis.pipeline();
 
       for (const [key, xpToAdd] of currentBatch.entries()) {
         const [guildId, userId] = key.split(':');
 
-        // 1. Buffer for the Postgres sync
+        // 1. Buffer for the Postgres sync (Hot Buffer)
         pipeline.hincrby(`xp_buffer:${guildId}`, userId, xpToAdd);
-
-        // 2. Instantly update the 3 Live Leaderboards
-        pipeline.zincrby(`lb:${guildId}:lifetime`, xpToAdd, userId);
-        pipeline.zincrby(`lb:${guildId}:daily`, xpToAdd, userId);
-        pipeline.zincrby(`lb:${guildId}:weekly`, xpToAdd, userId);
       }
 
       await pipeline.exec().catch((err) => logger.error('Redis Pipeline Error:', err));

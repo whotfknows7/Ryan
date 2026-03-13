@@ -23,6 +23,7 @@ const logger = require('./lib/logger');
 
 const client = new CustomClient();
 const { LeaderboardUpdateService } = require('./services/LeaderboardUpdateService');
+const { XpSyncService } = require('./services/XpSyncService');
 const RawProfileUpdateHandler = require('./handlers/RawProfileUpdateHandler');
 // =================================================================
 // STARTUP CLEANUP — Kill zombies from previous sessions
@@ -110,7 +111,16 @@ async function gracefulShutdown(signal) {
     /* best-effort */
   }
 
-  // 6. Shutdown QueueService
+  // 6. Flush XP Buffers
+  try {
+    logger.info('💾 Flushing XP buffers to database...');
+    await XpSyncService.syncXpBuffers();
+    logger.info('💾 XP buffers flushed successfully.');
+  } catch (e) {
+    logger.error('Error flushing XP buffers:', e);
+  }
+
+  // 7. Shutdown QueueService
   try {
     await QueueService.shutdown();
   } catch (e) {

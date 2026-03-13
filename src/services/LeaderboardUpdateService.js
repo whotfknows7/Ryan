@@ -3,6 +3,7 @@
 const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Routes } = require('discord.js');
 const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
+const { XpSyncService } = require('./XpSyncService');
 const ImageService = require('./ImageService');
 const logger = require('../lib/logger');
 const { defaultRedis } = require('../config/redis');
@@ -190,6 +191,13 @@ class LeaderboardUpdateService {
 
     // 1. Fetch Data (or use prefetched)
     let topUsers;
+
+    if (page > 1) {
+      // Tier C: Pagination (The Forced Flush)
+      // Flush the buffer to ensure accurate offset pagination
+      await XpSyncService.processGuildBuffer(`xp_buffer:${guild.id}`);
+    }
+
     if (prefetchedData && page === 1 && type === 'daily') {
       // Only use prefetched data if it matches the current request context (page 1, daily)
       // The caller (updateLiveLeaderboard) provides 'daily' top 10.
