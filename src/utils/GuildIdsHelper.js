@@ -273,6 +273,9 @@ class GuildHelper {
   async getLeaderboardChannel() {
     return this._getChannel(this.ids.leaderboardChannelId);
   }
+  async getRoleRewardsChannel() {
+    return this._getChannel(this.ids.roleRewardsChannelId || this.ids.leaderboardChannelId);
+  }
   async getClanChannel() {
     return this._getChannel(this.ids.clanChannelId);
   }

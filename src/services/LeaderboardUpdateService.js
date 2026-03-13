@@ -388,7 +388,7 @@ class LeaderboardUpdateService {
         .setDisabled(page >= totalPages)
     );
 
-    return { embeds: [embed], files: [attachment], components: [row], fetchReply: true };
+    return { embeds: [embed], files: [attachment], components: [row] };
   }
 
   static async loadTempLeaderboards() {

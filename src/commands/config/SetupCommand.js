@@ -12,6 +12,9 @@ module.exports = {
       opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.')
     )
     .addChannelOption((opt) =>
+      opt.setName('role_rewards_channel').setDescription('Channel for Role Reward announcements.')
+    )
+    .addChannelOption((opt) =>
       opt.setName('mod_log_channel').setDescription('Channel for Admin Requests (Custom Roles) and Logs.')
     )
     .addChannelOption((opt) =>
@@ -46,6 +49,7 @@ module.exports = {
 
     try {
       const leaderboardChannel = interaction.options.getChannel('leaderboard_channel');
+      const roleRewardsChannel = interaction.options.getChannel('role_rewards_channel');
       const modLogChannel = interaction.options.getChannel('mod_log_channel');
       const releaseChannel = interaction.options.getChannel('release_channel');
       const adminRole = interaction.options.getRole('admin_role');
@@ -66,6 +70,10 @@ module.exports = {
       if (leaderboardChannel) {
         idUpdates.leaderboardChannelId = leaderboardChannel.id;
         summary.push(`**Leaderboard Channel:** ${leaderboardChannel}`);
+      }
+      if (roleRewardsChannel) {
+        idUpdates.roleRewardsChannelId = roleRewardsChannel.id;
+        summary.push(`**Role Rewards Channel:** ${roleRewardsChannel}`);
       }
       if (modLogChannel) {
         idUpdates.modLogChannelId = modLogChannel.id;

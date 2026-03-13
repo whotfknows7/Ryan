@@ -267,9 +267,9 @@ class RoleRewardHandler {
    */
   static async sendAnnouncement(guild, member, reward, currentXp) {
     try {
-      // Fetch announcement channel
+      // Fetch announcement channel (prioritize role rewards channel, fallback to leaderboard)
       const ids = await getIds(guild.id);
-      const channelId = ids.leaderboardChannelId;
+      const channelId = ids.roleRewardsChannelId || ids.leaderboardChannelId;
       if (!channelId) return;
 
       // Stateless Fetch: Use cached data or fallback to API for older configs

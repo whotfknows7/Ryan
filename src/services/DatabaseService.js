@@ -35,8 +35,9 @@ class DatabaseService {
       pipeline.zadd(key, user[column], user.userId);
     }
 
-    // Set a 24-hour expiry so inactive servers naturally drop out of RAM
-    pipeline.expire(key, 86400);
+    // We no longer set a TTL to prevent the key from silently expiring and causing
+    // XpPipeline's zincrby to create a new ZSET starting from 0.
+    // pipeline.expire(key, 86400);
     await pipeline.exec();
   }
 

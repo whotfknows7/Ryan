@@ -55,6 +55,8 @@ class ResetService {
       currentCycle = (currentCycle + 1) % this.DAYS_IN_CYCLE;
       try {
         if (currentCycle === this.WEEKLY_RESET_DAY) {
+          // Process Daily Reset first to ensure daily XP is flushed before Weekly Reset
+          await this.processDailyReset(client, guildId, currentCycle, resetStats);
           await this.processWeeklyReset(client, guildId, resetStats);
         } else {
           await this.processDailyReset(client, guildId, currentCycle, resetStats);
@@ -78,6 +80,7 @@ class ResetService {
     try {
       if (nextCycleCount === this.WEEKLY_RESET_DAY) {
         const resetStats = { daily: 0, weekly: 0, lastValidWeeklyData: null };
+        await this.processDailyReset(client, guildId, nextCycleCount, resetStats);
         await this.processWeeklyReset(client, guildId, resetStats);
         await this.sendResetAnnouncements(client, guildId, 1, resetStats.lastValidWeeklyData);
       } else {

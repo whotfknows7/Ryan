@@ -10,6 +10,7 @@ const { createGuildHelper } = require('../utils/GuildIdsHelper');
 const { checkCooldown } = require('../lib/cooldowns');
 
 const handleInteraction = async (interaction) => {
+  logger.info(`[Interaction] Incoming: ${interaction.type} (isCommand: ${interaction.isChatInputCommand()}, isButton: ${interaction.isButton()}, isSelect: ${interaction.isAnySelectMenu()})`);
   // 1. SLASH COMMANDS
   if (interaction.isChatInputCommand()) {
     const command = interaction.client.commands.get(interaction.commandName);
@@ -291,8 +292,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
-      else await interaction.reply(errorMsg).catch(() => {});
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
+      else await interaction.reply(errorMsg).catch(() => { });
     }
   }
 };
