@@ -2,8 +2,16 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: ryan_prometheus
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.size=2GB'
     ports:
       - "9090:9090"
     extra_hosts:
@@ -12,6 +20,11 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: ryan_grafana
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
@@ -25,6 +38,11 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: ryan_node_exporter
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -39,6 +57,11 @@ services:
   process-exporter:
     image: ncabatoff/process-exporter:latest
     container_name: ryan_process_exporter
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - /proc:/host/proc:ro
       - ./process-exporter.yml:/config/process-exporter.yml:ro
