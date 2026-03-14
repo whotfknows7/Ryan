@@ -176,61 +176,70 @@ class DatabaseService {
    * Tier B: Page 1 Live Leaderboards (The Top-K Search)
    * Merges DB Baseline with Redis Hot Buffer in-memory.
    */
+  /**
+   * Stateless Live Leaderboard Fetching
+   */
   static async getLiveTopUsers(guildId, limit = 10, type = 'daily', skip = 0) {
-    // If skip > 0 (Page 2+), the buffer should have been flushed by Tier C, so we can just use DB.
-    if (skip > 0) {
-      return this.fetchTopUsers(guildId, limit, type, skip);
-    }
-
     const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
 
-    // 1. Fetch Top N from the Database
-    const dbTop = await this.fetchTopUsers(guildId, limit, type, 0);
+    // 1. Fetch DB Baseline (Grab a few extra to account for buffer overtakes)
+    const fetchLimit = skip === 0 ? limit + 10 : limit; 
+    const dbTop = await prisma.userXp.findMany({
+      where: { guildId, [column]: { gt: 0 } },
+      orderBy: { [column]: 'desc' },
+      take: fetchLimit,
+      skip: skip,
+      select: { userId: true, [column]: true },
+    });
 
-    // 2. Fetch everyone currently in the Redis xp_buffer
-    const bufferData = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
-    if (!bufferData || Object.keys(bufferData).length === 0) {
-      return dbTop;
+    // Tier C (Cold Path): If we are deep paginating, we assume LeaderboardUpdateService 
+    // already forced a buffer flush. No need to merge.
+    if (skip > 0) {
+      return dbTop.map(u => ({ userId: u.userId, [column]: u[column] })).slice(0, limit);
     }
 
-    const bufferUsers = Object.entries(bufferData).map(([id, val]) => ({ userId: id, bufferXp: parseInt(val, 10) }));
-
-    // 3. For any buffer user not already in the DB Top N, fetch their DB baseline
-    const dbTopIds = new Set(dbTop.map(u => u.userId));
-    const missingUserIds = bufferUsers.filter(u => !dbTopIds.has(u.userId)).map(u => u.userId);
-
-    let extraDbUsers = [];
-    if (missingUserIds.length > 0) {
-      extraDbUsers = await prisma.userXp.findMany({
-        where: { guildId, userId: { in: missingUserIds } },
-        select: { userId: true, [column]: true }
-      });
+    // Tier B (Hot Path - Page 1): Fetch the Redis Buffer
+    const bufferRaw = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
+    if (Object.keys(bufferRaw).length === 0) {
+      return dbTop.slice(0, limit); // No active chatters, DB is perfectly accurate
     }
 
-    // 4. Merge
-    const combinedMap = new Map();
+    // 2. Merge Phase
+    const mergedMap = new Map();
     for (const u of dbTop) {
-      combinedMap.set(u.userId, u[column] || 0);
-    }
-    for (const u of extraDbUsers) {
-      combinedMap.set(u.userId, u[column] || 0);
+      mergedMap.set(u.userId, u[column]);
     }
 
-    for (const { userId, bufferXp } of bufferUsers) {
-      const current = combinedMap.get(userId) || 0;
-      combinedMap.set(userId, current + bufferXp);
+    // We need to fetch DB baselines for buffer users NOT in the initial Top 20
+    const missingUserIds = [];
+    for (const [bUserId, bXpStr] of Object.entries(bufferRaw)) {
+      const bXp = parseInt(bXpStr, 10);
+      if (mergedMap.has(bUserId)) {
+         mergedMap.set(bUserId, mergedMap.get(bUserId) + bXp);
+      } else {
+         missingUserIds.push(bUserId);
+      }
     }
 
-    // 5. Sort and take the final Top N
-    const combinedList = Array.from(combinedMap.entries())
-      .map(([userId, totalXp]) => {
-        const obj = { userId };
-        obj[column] = totalXp;
-        return obj;
-      })
-      .sort((a, b) => b[column] - a[column]);
+    // Fetch the missing active chatters from DB
+    if (missingUserIds.length > 0) {
+       const missingBaselines = await prisma.userXp.findMany({
+         where: { guildId, userId: { in: missingUserIds } },
+         select: { userId: true, [column]: true }
+       });
+       for (const b of missingBaselines) {
+          const bXp = parseInt(bufferRaw[b.userId] || '0', 10);
+          mergedMap.set(b.userId, b[column] + bXp);
+       }
+    }
 
-    return combinedList.slice(0, limit);
+    // 3. Sort and Slice in Javascript
+    const finalUsers = Array.from(mergedMap.entries())
+      .map(([uId, total]) => ({ userId: uId, [column]: total }))
+      .sort((a, b) => b[column] - a[column])
+      .slice(0, limit);
+
+    return finalUsers;
   }
 
   /**
@@ -250,22 +259,26 @@ class DatabaseService {
    * Tier A: Exact Rank Fetching (The Live Merge)
    * Calculates rank on the fly using DB + Buffer.
    */
+  /**
+   * O(1) Indexed Exact Rank Fetching (Stateless Hybrid)
+   */
   static async getUserRank(guildId, userId, type = 'lifetime') {
-    const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
-
-    // Get DB baseline + Buffer delta
+    // 1. Get their true live XP (DB + Redis Buffer)
     const liveStats = await this.getLiveUserStats(guildId, userId);
-    const trueXP = type === 'weekly' ? liveStats.weeklyXp : type === 'lifetime' ? liveStats.xp : liveStats.dailyXp;
+    const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
+    const targetXp = liveStats[column];
 
-    if (!trueXP || trueXP === 0) return 0;
+    if (targetXp <= 0) return 0; // Unranked
 
-    // Use Postgres COUNT to determine rank efficiently
-    const result = await prisma.$queryRaw`
-      SELECT COUNT(*) + 1 AS rank FROM "UserXp"
-      WHERE "guildId" = ${guildId} AND ${Prisma.raw(`"${column}"`)} > ${trueXP}
-    `;
+    // 2. Ask Postgres for the exact rank using the index
+    const higherRankedCount = await prisma.userXp.count({
+      where: {
+        guildId,
+        [column]: { gt: targetXp },
+      },
+    });
 
-    return result.length > 0 ? Number(result[0].rank) : 0;
+    return higherRankedCount + 1; // 0-indexed count to 1-indexed rank
   }
 
   /**

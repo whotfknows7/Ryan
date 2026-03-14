@@ -167,8 +167,8 @@ class QueueService {
     // Weekly Role Check - every 5 mins
     await addJob('weekly-role-check', '*/5 * * * *');
 
-    // XP Sync - every 30 seconds
-    await addJob('xp-sync', null, 30000);
+    // XP Sync - every 1 minute
+    await addJob('xp-sync', null, 60000);
   }
 
   async shutdown() {
