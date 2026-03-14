@@ -355,17 +355,25 @@ class XpService {
 
       if (xpToAdd <= 0) return;
 
-      // 2. Push to Micro-Batch (Zero Network Latency)
-      XpPipeline.push(message.guild.id, message.author.id, xpToAdd);
+      // 2. Synchronous State Capture
+      // We capture the current buffer value BEFORE the asynchronous database call.
+      // This ensures that even if the 1-second interval flushes the buffer during the await,
+      // we don't lose sight of the XP that was pending at the start of this message.
+      const key = `${message.guild.id}:${message.author.id}`;
+      const pendingXp = XpPipeline.buffer.get(key) || 0;
 
-      // 3. Check for role rewards using Live XP
+      // 3. Check for role rewards using Live XP (DB + Redis Buffer)
       const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
 
-      // Because we just added the XP to the local buffer, not Redis directly,
-      // we must ensure the role checker knows about the un-flushed XP.
-      const trueLiveXp = liveStats.xp + (XpPipeline.buffer.get(`${message.guild.id}:${message.author.id}`) || 0);
+      // 4. Calculate true live XP
+      // Total = DB/Redis Stats + Local Pending Stats + Current Message XP
+      const trueLiveXp = liveStats.xp + pendingXp + xpToAdd;
 
       await RoleRewardHandler.checkRoleRewards(message.guild, message.member, trueLiveXp);
+
+      // 5. Push current XP to Micro-Batch (Zero Network Latency)
+      // We do this AFTER the reward check to maintain the "pendingXp" logic correctly.
+      XpPipeline.push(message.guild.id, message.author.id, xpToAdd);
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);
     }
