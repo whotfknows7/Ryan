@@ -115,12 +115,15 @@ class LeaderboardUpdateService {
 
         // 3. Double-Check DB ID (In case it wasn't in the last 50 messages)
         if (ids.dailyLeaderboardMessageId) {
+          // logger.info(`[${guildId}] Attempting to delete old Daily LB: ${ids.dailyLeaderboardMessageId}`);
           try {
-            logger.debug(`[${guildId}] Deleting tracked old message (DB ID)...`);
-            await channel.messages.delete(ids.dailyLeaderboardMessageId);
-          } catch {
-            // Ignore valid errors like "Unknown Message"
+            await channel.client.rest.delete(Routes.channelMessage(channelId, ids.dailyLeaderboardMessageId));
+            // logger.info(`[${guildId}] Successfully deleted old Daily LB.`);
+          } catch (delError) {
+            logger.warn(`[${guildId}] Failed to delete old Daily LB: ${delError.message}`);
           }
+        } else {
+          logger.info(`[${guildId}] No old Daily LB ID tracked in DB.`);
         }
 
         // logger.info(`[${guildId}] Sending new leaderboard message...`);

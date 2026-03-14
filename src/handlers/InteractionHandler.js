@@ -5,7 +5,12 @@ const logger = require('../lib/logger');
 const { CustomRoleService } = require('../services/CustomRoleService');
 const { ConfigService } = require('../services/ConfigService');
 const { DatabaseService } = require('../services/DatabaseService');
-const { LeaderboardUpdateService } = require('../services/LeaderboardUpdateService');
+const {
+  LeaderboardUpdateService,
+  tempLeaderboards,
+  saveTempLeaderboard,
+  removeTempLeaderboard,
+} = require('../services/LeaderboardUpdateService');
 const { createGuildHelper } = require('../utils/GuildIdsHelper');
 const { checkCooldown } = require('../lib/cooldowns');
 
@@ -100,15 +105,11 @@ const handleInteraction = async (interaction) => {
       if (customId.startsWith('leaderboard_view:')) {
         const type = customId.split(':')[1]; // 'weekly' or 'lifetime'
 
-        const {
-          tempLeaderboards,
-          saveTempLeaderboard,
-          removeTempLeaderboard,
-        } = require('../services/LeaderboardUpdateService');
         const guildTemps = tempLeaderboards.get(guildId) || {};
 
         // Find ALL previous temp leaderboards of the SAME TYPE
         const oldMsgIds = Object.keys(guildTemps).filter((msgId) => guildTemps[msgId].type === type);
+        logger.info(`[TempLB] Found ${oldMsgIds.length} previous ${type} LBs to cleanup for guild ${guildId}`);
 
         let useFallback = false;
         try {
@@ -126,14 +127,18 @@ const handleInteraction = async (interaction) => {
         for (const prevTempId of oldMsgIds) {
           const prevTempEntry = guildTemps[prevTempId];
           try {
+            const delChannelId = prevTempEntry.channelId || interaction.channelId;
+            const channel = await guild.channels.fetch(delChannelId).catch(() => null);
+
             if (interaction.message && interaction.message.id === prevTempId) {
-              await interaction.message.delete();
-            } else {
-              const delChannelId = prevTempEntry.channelId || interaction.channelId;
-              await interaction.client.rest.delete(Routes.channelMessage(delChannelId, prevTempId));
+              await interaction.message.delete().catch(() => { });
+            } else if (channel) {
+              await channel.messages.delete(prevTempId).catch((err) => {
+                logger.warn(`[TempLB] Failed to delete msg ${prevTempId} in ${delChannelId}: ${err.message}`);
+              });
             }
           } catch (e) {
-            logger.warn(`Failed to delete previous temp leaderboard: ${e.message}`);
+            logger.warn(`[TempLB] Cleanup error for ${prevTempId}: ${e.message}`);
           }
           removeTempLeaderboard(guildId, prevTempId);
         }

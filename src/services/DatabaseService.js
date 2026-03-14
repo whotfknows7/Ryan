@@ -183,7 +183,7 @@ class DatabaseService {
     const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
 
     // 1. Fetch DB Baseline (Grab a few extra to account for buffer overtakes)
-    const fetchLimit = skip === 0 ? limit + 10 : limit; 
+    const fetchLimit = skip === 0 ? limit + 10 : limit;
     const dbTop = await prisma.userXp.findMany({
       where: { guildId, [column]: { gt: 0 } },
       orderBy: { [column]: 'desc' },
@@ -215,22 +215,22 @@ class DatabaseService {
     for (const [bUserId, bXpStr] of Object.entries(bufferRaw)) {
       const bXp = parseInt(bXpStr, 10);
       if (mergedMap.has(bUserId)) {
-         mergedMap.set(bUserId, mergedMap.get(bUserId) + bXp);
+        mergedMap.set(bUserId, mergedMap.get(bUserId) + bXp);
       } else {
-         missingUserIds.push(bUserId);
+        missingUserIds.push(bUserId);
       }
     }
 
     // Fetch the missing active chatters from DB
     if (missingUserIds.length > 0) {
-       const missingBaselines = await prisma.userXp.findMany({
-         where: { guildId, userId: { in: missingUserIds } },
-         select: { userId: true, [column]: true }
-       });
-       for (const b of missingBaselines) {
-          const bXp = parseInt(bufferRaw[b.userId] || '0', 10);
-          mergedMap.set(b.userId, b[column] + bXp);
-       }
+      const missingBaselines = await prisma.userXp.findMany({
+        where: { guildId, userId: { in: missingUserIds } },
+        select: { userId: true, [column]: true }
+      });
+      for (const b of missingBaselines) {
+        const bXp = parseInt(bufferRaw[b.userId] || '0', 10);
+        mergedMap.set(b.userId, b[column] + bXp);
+      }
     }
 
     // 3. Sort and Slice in Javascript
@@ -757,18 +757,6 @@ class DatabaseService {
     });
   }
 
-  static async updateLeaderboardState(guildId, ranksArray) {
-    return prisma.leaderboardState.upsert({
-      where: { guildId },
-      create: {
-        guildId,
-        lastRanks: ranksArray,
-      },
-      update: {
-        lastRanks: ranksArray,
-      },
-    });
-  }
 
   static async getAllTempLeaderboards() {
     return prisma.leaderboardState.findMany();
