@@ -17,7 +17,8 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 - **UDS Redis Connectivity:** Prefers Unix Domain Sockets (`/run/redis/redis-server.sock`) for ultra-low latency, with automatic TCP fallback.
 - **RAM Disk I/O:** Uses `/dev/shm` (Linux RAM Disk) for temporary file processing (GIF frames, icons), offering nanosecond latency vs standard SSD writes.
 - **Micro-Batch XP Pipeline:** XP gain is buffered in memory and flushed to Redis every 1,000ms to minimize network overhead.
-- **Write-Behind Synchronization:** XP is synced from Redis to PostgreSQL using an atomic "Rename-then-Process" strategy to ensure no data loss during flushes.
+- **Write-Behind Synchronization:** XP is synced from Redis to PostgreSQL every **60 seconds** using an atomic "Rename-then-Process" strategy to ensure no data loss.
+- **Live Leaderboard Updates:** Global leaderboard visuals and state are refreshed every **20 seconds** via a dedicated BullMQ cron worker.
 - **Worker Thread Isolation:** GIF generation is isolated to dedicated worker threads using `ffmpeg` and `gifsicle` to prevent event loop blocking.
 - **Self-Healing Architecture:** Automatic startup cleanup of stale renderer/chrome processes and port 3000 liberation.
 
@@ -51,14 +52,14 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 ## ⚙️ Service Architecture
 
 ### Core Services (`src/services/`)
-- **XpService.js:** scoring logic (Alpha: 1XP, Emoji/Sticker: 2XP) and keyword auto-reactions.
-- **DatabaseService.js:** Prisma client management and O(1) Redis ZSET leaderboard operations.
+- **XpService.js:** Scoring logic (Alpha: 1XP, Emoji/Sticker: 2XP) and automated role reward delivery (Channel Priority: Role Rewards > Leaderboard).
+- **DatabaseService.js:** Prisma client management and **Stateless Hybrid Leaderboards** combining DB baselines with Redis hot buffers in-memory.
 - **AssetService.js:** Handles storage and retrieval of assets via Discord message links.
-- **XpSyncService.js:** Manages the lifecycle of XP data moving from Redis buffers to Postgres.
+- **XpSyncService.js:** Manages the lifecycle of XP data moving from Redis buffers to Postgres (60s cycle).
 - **ResetService.js:** Unified 7-day cycle (Daily resets at 0:00, Weekly resets on Day 0).
 - **PunishmentService.js:** 8-tier strike system with progressive jail durations (30m to 4w/Ban).
 - **GifService.js:** Multi-vCPU GIF generation pipeline (Max 2 workers).
-- **MetricsService.js:** Prometheus collection for Node, Redis pipeline, and Discord latency.
+- **MetricsService.js:** Prometheus collection on port **9400** for Node, Redis pipeline, and Discord latency.
 - **CustomRoleService.js / WeeklyRoleService.js:** Management of user-owned and reward roles.
 
 ### Event Handling & Commands
