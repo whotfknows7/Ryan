@@ -36,11 +36,13 @@ class DatabaseService {
   }
 
   static async subtractUserXp(guildId, userId, amount) {
-    // Note: This only affects lifetime XP, not daily/weekly
-    // Daily/weekly should not be decremented as they track period activity
     const result = await prisma.$queryRaw`
       UPDATE "UserXp"
-      SET xp = GREATEST(0, xp - ${amount}), "updatedAt" = NOW()
+      SET 
+        xp = GREATEST(0, xp - ${amount}),
+        "dailyXp" = GREATEST(0, "dailyXp" - ${amount}),
+        "weeklyXp" = GREATEST(0, "weeklyXp" - ${amount}),
+        "updatedAt" = NOW()
       WHERE "guildId" = ${guildId} AND "userId" = ${userId}
       RETURNING xp, "dailyXp", "weeklyXp"
     `;
@@ -182,8 +184,9 @@ class DatabaseService {
   static async getLiveTopUsers(guildId, limit = 10, type = 'daily', skip = 0) {
     const column = type === 'weekly' ? 'weeklyXp' : type === 'lifetime' ? 'xp' : 'dailyXp';
 
-    // 1. Fetch DB Baseline (Grab a few extra to account for buffer overtakes)
-    const fetchLimit = skip === 0 ? limit + 10 : limit;
+    // 1. Fetch DB Baseline
+    // We fetch a larger window from the DB to increase the chance of catching users who moved rankings
+    const fetchLimit = limit + 20;
     const dbTop = await prisma.userXp.findMany({
       where: { guildId, [column]: { gt: 0 } },
       orderBy: { [column]: 'desc' },
@@ -192,16 +195,12 @@ class DatabaseService {
       select: { userId: true, [column]: true },
     });
 
-    // Tier C (Cold Path): If we are deep paginating, we assume LeaderboardUpdateService 
-    // already forced a buffer flush. No need to merge.
-    if (skip > 0) {
-      return dbTop.map(u => ({ userId: u.userId, [column]: u[column] })).slice(0, limit);
-    }
-
-    // Tier B (Hot Path - Page 1): Fetch the Redis Buffer
+    // Fetch the Redis Buffer
     const bufferRaw = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
+
+    // If buffer is empty, rely on DB (but still apply skip/limit correctly)
     if (Object.keys(bufferRaw).length === 0) {
-      return dbTop.slice(0, limit); // No active chatters, DB is perfectly accurate
+      return dbTop.slice(0, limit).map(u => ({ userId: u.userId, [column]: u[column] }));
     }
 
     // 2. Merge Phase
@@ -210,30 +209,47 @@ class DatabaseService {
       mergedMap.set(u.userId, u[column]);
     }
 
-    // We need to fetch DB baselines for buffer users NOT in the initial Top 20
-    const missingUserIds = [];
-    for (const [bUserId, bXpStr] of Object.entries(bufferRaw)) {
-      const bXp = parseInt(bXpStr, 10);
-      if (mergedMap.has(bUserId)) {
-        mergedMap.set(bUserId, mergedMap.get(bUserId) + bXp);
-      } else {
-        missingUserIds.push(bUserId);
+    // We need the DB baselines for buffer users NOT in the current dbTop slice.
+    // However, if we are deep paginating (skip > 0), many buffer users might be on Page 1.
+    // We should fetch baselines for ALL buffer users to be safe, regardless of whether they
+    // were in the current dbTop slice, because their LIVE rank might put them on this page.
+    const bufferUserIds = Object.keys(bufferRaw);
+    const missingFromSlice = bufferUserIds.filter(id => !mergedMap.has(id));
+
+    if (missingFromSlice.length > 0) {
+      const missingBaselines = await prisma.userXp.findMany({
+        where: { guildId, userId: { in: missingFromSlice } },
+        select: { userId: true, [column]: true }
+      });
+
+      const foundIds = new Set();
+      for (const b of missingBaselines) {
+        foundIds.add(b.userId);
+        const redisXp = parseInt(bufferRaw[b.userId] || '0', 10);
+        mergedMap.set(b.userId, b[column] + redisXp);
+      }
+
+      // Brand new users only in buffer
+      for (const bUserId of missingFromSlice) {
+        if (!foundIds.has(bUserId)) {
+          mergedMap.set(bUserId, parseInt(bufferRaw[bUserId] || '0', 10));
+        }
       }
     }
 
-    // Fetch the missing active chatters from DB
-    if (missingUserIds.length > 0) {
-      const missingBaselines = await prisma.userXp.findMany({
-        where: { guildId, userId: { in: missingUserIds } },
-        select: { userId: true, [column]: true }
-      });
-      for (const b of missingBaselines) {
-        const bXp = parseInt(bufferRaw[b.userId] || '0', 10);
-        mergedMap.set(b.userId, b[column] + bXp);
+    // Update those who WERE in the slice with their buffer delta
+    for (const bUserId of bufferUserIds) {
+      if (!missingFromSlice.includes(bUserId)) {
+        const redisXp = parseInt(bufferRaw[bUserId] || '0', 10);
+        mergedMap.set(bUserId, mergedMap.get(bUserId) + redisXp);
       }
     }
 
     // 3. Sort and Slice in Javascript
+    // IMPORTANT: Since we only have a slice of the DB + the buffer, 
+    // we return the top `limit` items of the merged set.
+    // If skip > 0, we still only return the items that fall into this page's range.
+
     const finalUsers = Array.from(mergedMap.entries())
       .map(([uId, total]) => ({ userId: uId, [column]: total }))
       .sort((a, b) => b[column] - a[column])
@@ -270,7 +286,8 @@ class DatabaseService {
 
     if (targetXp <= 0) return 0; // Unranked
 
-    // 2. Ask Postgres for the exact rank using the index
+    // 2. Ask Postgres for the baseline rank using the index
+    // This counts users whose DB XP is strictly greater than the target's Live XP
     const higherRankedCount = await prisma.userXp.count({
       where: {
         guildId,
@@ -278,7 +295,42 @@ class DatabaseService {
       },
     });
 
-    return higherRankedCount + 1; // 0-indexed count to 1-indexed rank
+    // 3. Buffer Overtake Delta
+    // We must find active chatters in Redis whose un-synced XP pushes their true Live XP
+    // past our target user, but who were missed by the DB query because their Cold DB XP <= targetXp.
+    let bufferOvertakes = 0;
+    const bufferRaw = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
+
+    // Filter out the target user themselves
+    const bufferUserIds = Object.keys(bufferRaw).filter((id) => id !== userId);
+
+    if (bufferUserIds.length > 0) {
+      // Fetch DB baselines only for the active chatters in the buffer
+      const bufferUsersDb = await prisma.userXp.findMany({
+        where: { guildId, userId: { in: bufferUserIds } },
+        select: { userId: true, [column]: true },
+      });
+
+      // Map their DB XP for O(1) lookup
+      const dbXpMap = new Map();
+      for (const u of bufferUsersDb) {
+        dbXpMap.set(u.userId, u[column] || 0);
+      }
+
+      // Calculate the true Live XP of each buffer user
+      for (const bUserId of bufferUserIds) {
+        const dbXp = dbXpMap.get(bUserId) || 0; // Default to 0 if they aren't in the DB yet
+        const redisXp = parseInt(bufferRaw[bUserId] || '0', 10);
+        const liveXp = dbXp + redisXp;
+
+        // The exact mathematical condition for an overtake:
+        if (dbXp <= targetXp && liveXp > targetXp) {
+          bufferOvertakes++;
+        }
+      }
+    }
+
+    return higherRankedCount + bufferOvertakes + 1; // 0-indexed count to 1-indexed rank
   }
 
   /**
@@ -395,15 +447,25 @@ class DatabaseService {
     // Since clanUpdates might be large, we should batch it or usage Promise.all
     // But since this is a background job usually, loop is fine for now or we can use a raw query case statement.
 
-    // Let's use a loop with parallel promises for now, or transaction.
-    const updates = clanUpdates.map((u) =>
+    // Group updates by clanId to execute fewer updateMany queries and avoid N+1 lock
+    const clanGroups = {};
+    for (const u of clanUpdates) {
+      if (!clanGroups[u.clanId]) {
+        clanGroups[u.clanId] = [];
+      }
+      clanGroups[u.clanId].push(u.userId);
+    }
+
+    const updates = Object.entries(clanGroups).map(([clanId, userIds]) =>
       prisma.userXp.updateMany({
-        where: { guildId, userId: u.userId },
-        data: { clanId: u.clanId },
+        where: {
+          guildId,
+          userId: { in: userIds },
+        },
+        data: { clanId: Number(clanId) },
       })
     );
 
-    await prisma.$transaction(updates);
     await prisma.$transaction(updates);
   }
 

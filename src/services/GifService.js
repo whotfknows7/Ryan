@@ -117,6 +117,7 @@ class GifService {
 
       // Final optimization with Gifsicle
       const finalPath = path.join(process.cwd(), `final_${Date.now()}.gif`);
+      tempFiles.push(finalPath);
       await new Promise((res, rej) => {
         execFile(gifsicle, ['-O3', '--no-warnings', '-i', outputPath, '-o', finalPath], (e) => (e ? rej(e) : res()));
       });

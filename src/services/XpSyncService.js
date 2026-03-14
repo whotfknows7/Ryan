@@ -45,14 +45,10 @@ class XpSyncService {
     const guildId = key.split(':')[1];
     if (!guildId) return;
 
+    const tempKey = `xp_buffer_processing:${guildId}:${Date.now()}`;
+    let data = null;
+
     try {
-      // Get all fields and values, then delete the key (atomic-ish enough for this use case if we accept a tiny race,
-      // but strictly we should use a pipeline or Lua. For simplicity/performance balance:
-      // We will rename the key to a temp key, process that, then delete it.
-      // If new writes come in, they go to the original key (which is now empty/new).
-
-      const tempKey = `xp_buffer_processing:${guildId}:${Date.now()}`;
-
       // Rename is atomic. If key missing (already processed), it throws, which we catch.
       try {
         await defaultRedis.rename(key, tempKey);
@@ -62,7 +58,7 @@ class XpSyncService {
       }
 
       // Now fetch from tempKey
-      const data = await defaultRedis.hgetall(tempKey);
+      data = await defaultRedis.hgetall(tempKey);
 
       if (!data || Object.keys(data).length === 0) {
         await defaultRedis.del(tempKey);
@@ -84,9 +80,32 @@ class XpSyncService {
       // Cleanup temp key
       await defaultRedis.del(tempKey);
     } catch (error) {
-      logger.error(`Failed to process XP buffer for ${guildId}:`, error);
-      // Failsafe: If processing failed, we might want to restore the data or leave it in tempKey?
-      // For now, logging effectively. In a rigid system, we'd move it back or retry.
+      logger.error(`Failed to process XP buffer for ${guildId}. Attempting rollback:`, error);
+
+      try {
+        // Rollback mechanism: Merge failed data back into the active buffer
+        // If data wasn't fetched yet, try to fetch it now
+        if (!data) {
+          data = await defaultRedis.hgetall(tempKey);
+        }
+
+        if (data && Object.keys(data).length > 0) {
+          const pipeline = defaultRedis.pipeline();
+          for (const [userId, xpStr] of Object.entries(data)) {
+            const xp = parseInt(xpStr, 10);
+            if (!isNaN(xp)) {
+              pipeline.hincrby(key, userId, xp);
+            }
+          }
+          await pipeline.exec();
+          logger.info(`Successfully rolled back ${Object.keys(data).length} XP entries for guild ${guildId}`);
+        }
+
+        // Always attempt to delete the temp key to prevent stale processing keys
+        await defaultRedis.del(tempKey);
+      } catch (rollbackError) {
+        logger.error(`CRITICAL: Rollback failed for guild ${guildId}:`, rollbackError);
+      }
     }
   }
 }
