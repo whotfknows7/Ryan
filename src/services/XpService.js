@@ -269,7 +269,7 @@ class RoleRewardHandler {
           const baseBuffer = await AssetService.fetchAssetFromLink(guild.client, reward.assetMessageLink);
           if (baseBuffer) {
             const finalBuffer = await ImageService.generateFinalReward(baseBuffer, member.user.username);
-            files = [{ attachment: finalBuffer, name: 'reward.png' }];
+            files = [{ data: finalBuffer, name: 'reward.png' }];
             embed.setImage('attachment://reward.png');
           }
         } catch (e) {

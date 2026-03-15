@@ -29,7 +29,7 @@ class AssetService {
 
       const rawMessage = await client.rest.post(Routes.channelMessages(channelId), {
         body: { content: `**[Asset Storage]** ${contextText} (${filename})` },
-        files: [{ attachment: fileData, name: filename }],
+        files: [{ data: fileData, name: filename }],
       });
 
       return `https://discord.com/channels/${channel.guild?.id || '@me'}/${channelId}/${rawMessage.id}`;

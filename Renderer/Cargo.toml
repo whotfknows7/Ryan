@@ -28,6 +28,7 @@ metrics-util = "0.16"
 futures = "0.3.32"
 ttf-parser = "0.25.1"
 moka = { version = "0.12", features = ["future"] }
+image = { version = "0.25.10", features = ["png", "jpeg", "webp", "gif"] }
 
 [profile.release]
 opt-level = 3

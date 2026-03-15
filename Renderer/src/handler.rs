@@ -3,6 +3,24 @@ use reqwest::Client;
 use base64::{engine::general_purpose, Engine as _};
 use usvg::{Options, Tree, TreeParsing, TreePostProc};
 use tiny_skia::Pixmap;
+use std::io::Cursor;
+
+fn to_png_b64(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return "".to_string();
+    }
+    match image::load_from_memory(bytes) {
+        Ok(img) => {
+            let mut buf = Cursor::new(Vec::new());
+            if img.write_to(&mut buf, image::ImageFormat::Png).is_ok() {
+                general_purpose::STANDARD.encode(&buf.into_inner())
+            } else {
+                "".to_string()
+            }
+        }
+        Err(_) => "".to_string(),
+    }
+}
 
 use crate::models::{RankCardRequest, RoleRewardBaseRequest};
 use crate::template::{RankCardTemplate, RoleRewardBaseTemplate};
@@ -33,11 +51,7 @@ pub async fn render_rank_card(
             }
         };
         
-        let b64 = if avatar_bytes.is_empty() {
-            "".to_string()
-        } else {
-            general_purpose::STANDARD.encode(&avatar_bytes)
-        };
+        let b64 = to_png_b64(&avatar_bytes);
         
         if !payload.avatar_url.is_empty() && !b64.is_empty() {
             state.avatar_cache.insert(payload.avatar_url.clone(), b64.clone()).await;
@@ -134,8 +148,10 @@ pub async fn render_leaderboard(
                         if bytes.is_empty() {
                             "".to_string()
                         } else {
-                            let b64 = general_purpose::STANDARD.encode(&bytes);
-                            cache.insert(url, b64.clone()).await;
+                            let b64 = to_png_b64(&bytes);
+                            if !b64.is_empty() {
+                                cache.insert(url.clone(), b64.clone()).await;
+                            }
                             b64
                         }
                     },
@@ -244,7 +260,7 @@ pub async fn render_leaderboard(
                 path = format!("../assets/emojis/{}.png", emoji.hex);
             }
             let b64 = match tokio::fs::read(&path).await {
-                Ok(bytes) => general_purpose::STANDARD.encode(&bytes),
+                Ok(bytes) => to_png_b64(&bytes),
                 Err(_) => "".to_string(),
             };
             if !b64.is_empty() {
@@ -377,11 +393,13 @@ pub async fn render_role_reward_base(
                 match client.get(url).send().await {
                     Ok(res) if res.status().is_success() => {
                         let bytes = res.bytes().await.unwrap_or_default().to_vec();
-                        if bytes.is_empty() { 
-                            String::new() 
-                        } else { 
-                            let b64 = general_purpose::STANDARD.encode(&bytes);
-                            state.avatar_cache.insert(url.clone(), b64.clone()).await;
+                        if bytes.is_empty() {
+                            String::new()
+                        } else {
+                            let b64 = to_png_b64(&bytes);
+                            if !b64.is_empty() {
+                                state.avatar_cache.insert(url.clone(), b64.clone()).await;
+                            }
                             b64
                         }
                     }
@@ -401,7 +419,7 @@ pub async fn render_role_reward_base(
     let template = RoleRewardBaseTemplate {
         template_b64,
         icon_b64,
-        role_name: escape_xml(&payload.role_name),
+        role_name: payload.role_name.clone(),
         role_color: payload.role_color.clone(),
         canvas_width,
         canvas_height,
@@ -478,7 +496,7 @@ pub async fn render_role_reward_final(
     // 2. Build the SVG — embed base image + draw username text
     let template = crate::template::RoleRewardFinalTemplate {
         base_b64: payload.base_image_b64.clone(),
-        username: escape_xml(&payload.username),
+        username: payload.username.clone(),
         canvas_width,
         canvas_height,
         text_x: 298,
