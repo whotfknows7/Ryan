@@ -4,7 +4,7 @@ const { defaultRedis } = require('../config/redis');
 
 const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
-const { ImageService } = require('./ImageService');
+const ImageService = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
 const { getIds, getFullConfig, hasRole, hasPermission } = require('../utils/GuildIdsHelper');
 const MetricsService = require('./MetricsService');

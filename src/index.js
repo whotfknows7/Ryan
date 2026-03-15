@@ -135,8 +135,6 @@ async function gracefulShutdown(signal) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT')); // Ctrl+C
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // kill command
 
-
-
 async function main() {
   // 0. Cleanup stale processes from previous sessions
   cleanupStaleProcesses();

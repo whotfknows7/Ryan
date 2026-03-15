@@ -3,14 +3,14 @@ const { redisConfig } = require('../config/redis');
 const logger = require('../lib/logger');
 
 // Services needed for jobs
-const { DatabaseService } = require('./DatabaseService');
 const { PunishmentService } = require('./PunishmentService');
 const { ResetService } = require('./ResetService');
 const { LeaderboardUpdateService } = require('./LeaderboardUpdateService');
 
 const { WeeklyRoleService } = require('./WeeklyRoleService');
-const { cleanExpiredResetRoles } = require('../commands/admin/ResetRoleCommands');
+const { cleanExpiredResetRoles, processMassRoleRemoval } = require('../commands/admin/ResetRoleCommands');
 const { XpSyncService } = require('./XpSyncService');
+const { ReactionHandler } = require('../handlers/ReactionHandler');
 
 class QueueService {
   constructor() {
@@ -71,12 +71,10 @@ class QueueService {
         try {
           if (job.name === 'mass-role-removal') {
             const { guildId, roleId, memberIds } = job.data;
-            const { processMassRoleRemoval } = require('../commands/admin/ResetRoleCommands');
             await processMassRoleRemoval(this.client, guildId, roleId, memberIds);
             logger.info(`✅ mass-role-removal job completed for guild ${guildId} and role ${roleId}`);
           } else if (job.name === 'member-release') {
             const { guildId, userId, log } = job.data;
-            const { PunishmentService } = require('./PunishmentService');
             await PunishmentService.releaseMember(this.client, guildId, userId, log);
           }
         } catch (error) {
@@ -93,7 +91,6 @@ class QueueService {
       async (job) => {
         try {
           const { action, payload } = job.data;
-          const { ReactionHandler } = require('../handlers/ReactionHandler');
 
           if (action === 'add') {
             await ReactionHandler.handleReactionAdd(this.client, payload);

@@ -11,7 +11,7 @@ const {
   ComponentType,
 } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
-const { ImageService } = require('../../services/ImageService');
+const ImageService = require('../../services/ImageService');
 const { AssetService } = require('../../services/AssetService');
 const logger = require('../../lib/logger');
 
@@ -78,16 +78,32 @@ module.exports = {
           }
 
           const role = rolesArray[currentIndex];
+          const guildConfig = await DatabaseService.getFullGuildConfig(guildId);
+          const configData = guildConfig.config || {};
+          const announcementRoles = configData.announcement_roles || {};
+          const isConfigured = announcementRoles[role.id] && announcementRoles[role.id].xp > 0;
 
           const btnRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('nav_prev')
+              .setLabel('◀')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(currentIndex === 0),
             new ButtonBuilder()
               .setCustomId(`config_btn_${role.id}`)
               .setLabel(`Configure @${role.name} (${currentIndex + 1}/${totalRoles})`)
               .setStyle(ButtonStyle.Primary)
-              .setEmoji('⚙️')
+              .setEmoji('⚙️'),
+            new ButtonBuilder()
+              .setCustomId('nav_next')
+              .setLabel('▶')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(currentIndex === totalRoles - 1 || !isConfigured)
           );
 
-          logger.info(`[SetupRoleRewards] Showing config button for role: ${role.name} (${currentIndex + 1}/${totalRoles})`);
+          logger.info(
+            `[SetupRoleRewards] Showing config button for role: ${role.name} (${currentIndex + 1}/${totalRoles})`
+          );
 
           const content = `**Step ${currentIndex + 1}/${totalRoles}:** Configuring ${role}\nClick the button below to set XP, Message, and Icon.`;
 
@@ -112,16 +128,37 @@ module.exports = {
         });
 
         buttonCollector.on('collect', async (btnInteraction) => {
+          if (btnInteraction.customId === 'nav_prev') {
+            currentIndex--;
+            await btnInteraction.deferUpdate();
+            return showConfigButton(btnInteraction);
+          }
+
+          if (btnInteraction.customId === 'nav_next') {
+            currentIndex++;
+            await btnInteraction.deferUpdate();
+            return showConfigButton(btnInteraction);
+          }
+
           const role = rolesArray[currentIndex];
 
+          // Fetch latest config to pre-fill
+          const currentGuildConfig = await DatabaseService.getFullGuildConfig(guildId);
+          const currentAnnouncementRoles = currentGuildConfig?.config?.announcement_roles || {};
+          const currentRoleConfig = currentAnnouncementRoles[role.id] || {};
+          const isCurrentCustom = currentGuildConfig?.ids?.customRoleEligibilityId === role.id;
+
           // Open Modal
-          const modal = new ModalBuilder().setCustomId(`modal_${role.id}`).setTitle(`Config: ${role.name.slice(0, 20)}`);
+          const modal = new ModalBuilder()
+            .setCustomId(`modal_${role.id}`)
+            .setTitle(`Config: ${role.name.slice(0, 20)}`);
 
           const xpInput = new TextInputBuilder()
             .setCustomId('xp_threshold')
             .setLabel('XP Threshold (Number)')
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('e.g. 1000')
+            .setValue(currentRoleConfig.xp ? currentRoleConfig.xp.toString() : '')
             .setRequired(true);
 
           const msgInput = new TextInputBuilder()
@@ -129,6 +166,7 @@ module.exports = {
             .setLabel('Announcement Message (Empty = Silent)')
             .setStyle(TextInputStyle.Paragraph)
             .setPlaceholder('Congrats {user}! You got {role}!')
+            .setValue(currentRoleConfig.message || '')
             .setRequired(false);
 
           const imgInput = new TextInputBuilder()
@@ -136,6 +174,7 @@ module.exports = {
             .setLabel('Role Icon URL (Optional)')
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('https://example.com/icon.png')
+            .setValue(currentRoleConfig.iconUrl || '')
             .setRequired(false);
 
           const customRoleInput = new TextInputBuilder()
@@ -143,6 +182,7 @@ module.exports = {
             .setLabel('Unlock Custom Role Command? (yes/no)')
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('no')
+            .setValue(isCurrentCustom ? 'yes' : 'no')
             .setRequired(false);
 
           modal.addComponents(
@@ -158,7 +198,7 @@ module.exports = {
           try {
             const modalSubmit = await btnInteraction.awaitModalSubmit({
               filter: (i) => i.customId === `modal_${role.id}`,
-              time: 300000, // 5 mins per role
+              time: 900000, // 15 mins per role
             });
 
             // Defer immediately to allow time for Image Gen & DB Save
@@ -208,6 +248,7 @@ module.exports = {
               roleId: role.id,
               roleName: role.name,
               roleColor: role.color,
+              iconUrl: iconUrl || null,
             };
 
             configData.announcement_roles = announcementRoles;
@@ -215,10 +256,12 @@ module.exports = {
             const updatePayload = { config: configData };
 
             // Handle Custom Role Eligibility ID
+            const idsData = guildConfig.ids || {};
             if (isCustom) {
-              // Merge into IDs object
-              const idsData = guildConfig.ids || {};
               idsData.customRoleEligibilityId = role.id;
+              updatePayload.ids = idsData;
+            } else if (idsData.customRoleEligibilityId === role.id) {
+              delete idsData.customRoleEligibilityId;
               updatePayload.ids = idsData;
             }
 
@@ -232,7 +275,11 @@ module.exports = {
             currentIndex++;
             await showConfigButton(modalSubmit);
           } catch (err) {
-            console.error('Modal Error or Timeout:', err);
+            if (err.code === 'InteractionCollectorError') {
+              logger.info(`[SetupRoleRewards] Modal timed out for user ${btnInteraction.user.id} (Role: ${role.name})`);
+            } else {
+              logger.error(`[SetupRoleRewards] Unexpected modal error:`, err);
+            }
           }
         });
       } catch (err) {

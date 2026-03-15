@@ -200,7 +200,7 @@ class DatabaseService {
 
     // If buffer is empty, rely on DB (but still apply skip/limit correctly)
     if (Object.keys(bufferRaw).length === 0) {
-      return dbTop.slice(0, limit).map(u => ({ userId: u.userId, [column]: u[column] }));
+      return dbTop.slice(0, limit).map((u) => ({ userId: u.userId, [column]: u[column] }));
     }
 
     // 2. Merge Phase
@@ -214,12 +214,12 @@ class DatabaseService {
     // We should fetch baselines for ALL buffer users to be safe, regardless of whether they
     // were in the current dbTop slice, because their LIVE rank might put them on this page.
     const bufferUserIds = Object.keys(bufferRaw);
-    const missingFromSlice = bufferUserIds.filter(id => !mergedMap.has(id));
+    const missingFromSlice = bufferUserIds.filter((id) => !mergedMap.has(id));
 
     if (missingFromSlice.length > 0) {
       const missingBaselines = await prisma.userXp.findMany({
         where: { guildId, userId: { in: missingFromSlice } },
-        select: { userId: true, [column]: true }
+        select: { userId: true, [column]: true },
       });
 
       const foundIds = new Set();
@@ -246,7 +246,7 @@ class DatabaseService {
     }
 
     // 3. Sort and Slice in Javascript
-    // IMPORTANT: Since we only have a slice of the DB + the buffer, 
+    // IMPORTANT: Since we only have a slice of the DB + the buffer,
     // we return the top `limit` items of the merged set.
     // If skip > 0, we still only return the items that fall into this page's range.
 
@@ -818,7 +818,6 @@ class DatabaseService {
       where: { guildId },
     });
   }
-
 
   static async getAllTempLeaderboards() {
     return prisma.leaderboardState.findMany();

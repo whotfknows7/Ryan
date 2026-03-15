@@ -15,7 +15,10 @@ const { createGuildHelper } = require('../utils/GuildIdsHelper');
 const { checkCooldown } = require('../lib/cooldowns');
 
 const handleInteraction = async (interaction) => {
-  logger.info(`[Interaction] Incoming: ${interaction.type} (isCommand: ${interaction.isChatInputCommand()}, isButton: ${interaction.isButton()}, isSelect: ${interaction.isAnySelectMenu()})`);
+  const { customId, user, guildId, guild } = interaction;
+  logger.info(
+    `[Interaction] Incoming: ${interaction.type} (isCommand: ${interaction.isChatInputCommand()}, isButton: ${interaction.isButton()}, isSelect: ${interaction.isAnySelectMenu()})`
+  );
   // 1. SLASH COMMANDS
   if (interaction.isChatInputCommand()) {
     const command = interaction.client.commands.get(interaction.commandName);
@@ -47,10 +50,13 @@ const handleInteraction = async (interaction) => {
 
   // 2. BUTTON INTERACTIONS
   if (interaction.isButton()) {
-    const { customId, guildId, guild, user } = interaction;
-
     // --- BUTTON COOLDOWN (3 Seconds) ---
     // Simple in-memory map to prevent spam/race conditions
+    const HANDLED_BUTTON_PREFIXES = ['leaderboard_', 'vote_release:', 'custom_role_'];
+
+    const isGlobalButton = HANDLED_BUTTON_PREFIXES.some((px) => customId.startsWith(px));
+    if (!isGlobalButton) return;
+
     if (!global.buttonCooldowns) global.buttonCooldowns = new Map();
     const now = Date.now();
     const cooldownEnd = global.buttonCooldowns.get(user.id) || 0;
@@ -131,7 +137,7 @@ const handleInteraction = async (interaction) => {
             const channel = await guild.channels.fetch(delChannelId).catch(() => null);
 
             if (interaction.message && interaction.message.id === prevTempId) {
-              await interaction.message.delete().catch(() => { });
+              await interaction.message.delete().catch(() => {});
             } else if (channel) {
               await channel.messages.delete(prevTempId).catch((err) => {
                 logger.warn(`[TempLB] Failed to delete msg ${prevTempId} in ${delChannelId}: ${err.message}`);
@@ -297,8 +303,8 @@ const handleInteraction = async (interaction) => {
     } catch (error) {
       logger.error(`Error handling button ${customId}:`, error);
       const errorMsg = { content: '❌ An error occurred while processing this action.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => { });
-      else await interaction.reply(errorMsg).catch(() => { });
+      if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
+      else await interaction.reply(errorMsg).catch(() => {});
     }
     return;
   }
