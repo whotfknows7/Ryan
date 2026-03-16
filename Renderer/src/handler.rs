@@ -426,24 +426,10 @@ pub async fn render_role_reward_base(
     let text_y = payload.text_y.unwrap_or(500);
 
     let mut template_emojis = Vec::new();
+    let mut current_emoji_x = text_x as f64;
+    let emoji_size = font_size as f64;
+
     if let Some(emojis) = &payload.emojis {
-        let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
-        let face = ttf_parser::Face::parse(font_data, 0).unwrap();
-        let units_per_em = face.units_per_em() as f64;
-        let scale = (font_size as f64) / units_per_em;
-
-        let mut text_width = 0.0;
-        for c in role_name.chars() {
-            if let Some(glyph_id) = face.glyph_index(c) {
-                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
-                    text_width += advance as f64 * scale;
-                }
-            }
-        }
-
-        let emoji_size = font_size as f64;
-        let mut current_emoji_x = text_x as f64 + text_width + 15.0;
-
         for emoji in emojis {
             let mut path = format!("./assets/emojis/{}.png", emoji.hex);
             if !std::path::Path::new(&path).exists() {
@@ -463,6 +449,8 @@ pub async fn render_role_reward_base(
         }
     }
 
+    let text_x_after_emojis = current_emoji_x as u32;
+
     let template = RoleRewardBaseTemplate {
         template_b64,
         icon_b64,
@@ -474,7 +462,7 @@ pub async fn render_role_reward_base(
         icon_x,
         icon_y,
         icon_size,
-        text_x,
+        text_x: text_x_after_emojis,
         text_y, // Pulls the bottom line up significantly
         font_size,
         emoji_y: text_y as f64 - font_size as f64 + (font_size as f64 * 0.15),
@@ -544,24 +532,10 @@ pub async fn render_role_reward_final(
     let text_y = payload.text_y.unwrap_or(340);
 
     let mut template_emojis = Vec::new();
+    let mut current_emoji_x = text_x as f64;
+    let emoji_size = font_size as f64;
+
     if let Some(emojis) = &payload.emojis {
-        let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
-        let face = ttf_parser::Face::parse(font_data, 0).unwrap();
-        let units_per_em = face.units_per_em() as f64;
-        let scale = (font_size as f64) / units_per_em;
-
-        let mut text_width = 0.0;
-        for c in payload.username.chars() {
-            if let Some(glyph_id) = face.glyph_index(c) {
-                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
-                    text_width += advance as f64 * scale;
-                }
-            }
-        }
-
-        let emoji_size = font_size as f64;
-        let mut current_emoji_x = text_x as f64 + text_width + 15.0;
-
         for emoji in emojis {
             let mut path = format!("./assets/emojis/{}.png", emoji.hex);
             if !std::path::Path::new(&path).exists() {
@@ -581,6 +555,8 @@ pub async fn render_role_reward_final(
         }
     }
 
+    let text_x_after_emojis = current_emoji_x as u32;
+
     // 2. Build the SVG — embed base image + draw username text
     let template = crate::template::RoleRewardFinalTemplate {
         base_b64: payload.base_image_b64.clone(),
@@ -588,7 +564,7 @@ pub async fn render_role_reward_final(
         emojis: template_emojis,
         canvas_width,
         canvas_height,
-        text_x,
+        text_x: text_x_after_emojis,
         text_y, // Pulls the top line up to stack cleanly
         font_size,
         emoji_y: text_y as f64 - font_size as f64 + (font_size as f64 * 0.15),
