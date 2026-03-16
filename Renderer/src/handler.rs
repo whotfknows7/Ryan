@@ -413,9 +413,9 @@ pub async fn render_role_reward_base(
         String::new()
     };
 
-    // 3. Build the Askama SVG — exact geometry from the original Node.js canvas code:
-    //    icon: x=74, y=67, size=171×172, circle centre=(74+85, 67+86)=(159,153), r=85
-    //    role name: x=298, y=(111+48)=159 baseline, font-size=50
+    // Canvas is 3041x894. We want a large left avatar and nicely stacked text next to it.
+    // Avatar: size 600, centered vertically (894-600)/2 = 147. Margin left 200.
+    // Text: nicely stacked next to the avatar. x=950.
     let template = RoleRewardBaseTemplate {
         template_b64,
         icon_b64,
@@ -423,15 +423,15 @@ pub async fn render_role_reward_base(
         role_color: payload.role_color.clone(),
         canvas_width,
         canvas_height,
-        icon_x: 74,
-        icon_y: 67,
-        icon_size: 171,
-        icon_cx: 74 + 85,  // 159
-        icon_cy: 67 + 86,  // 153
-        icon_radius: 85,
-        text_x: 298,
-        text_y: 111 + 48,  // 159
-        font_size: 50,
+        icon_x: 200,
+        icon_y: 147,
+        icon_size: 600,
+        icon_cx: 500,
+        icon_cy: 447,
+        icon_radius: 300,
+        text_x: 1132,
+        text_y: 780, // Role name baseline (bottom line)
+        font_size: 190,
     };
 
     let svg_string = match template.render() {
@@ -473,7 +473,7 @@ pub async fn render_role_reward_base(
 
 /// POST /render/role-reward/final
 /// Overlays the username onto the pre-rendered base image.
-///   username: x=298, y=(206+35)=241 baseline, font-size=40 — exact match to generateFinalReward
+///   username: x=1132, y=480 baseline, font-size=160 (stacked above role name)
 pub async fn render_role_reward_final(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<crate::models::RoleRewardFinalRequest>,
@@ -499,9 +499,9 @@ pub async fn render_role_reward_final(
         username: payload.username.clone(),
         canvas_width,
         canvas_height,
-        text_x: 298,
-        text_y: 206 + 35, // 241 — matches Node.js yBaseline
-        font_size: 40,
+        text_x: 1132,
+        text_y: 480, // Username baseline (top line, stacked above role name)
+        font_size: 160,
     };
 
     let svg_string = match template.render() {
@@ -541,11 +541,4 @@ pub async fn render_role_reward_final(
     ).into_response()
 }
 
-// XML-escape helper to prevent malformed SVG when role names contain <, >, &, etc.
-fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-     .replace('<', "&lt;")
-     .replace('>', "&gt;")
-     .replace('"', "&quot;")
-     .replace('\'', "&apos;")
-}
+// Removed escape_xml as it is no longer used.

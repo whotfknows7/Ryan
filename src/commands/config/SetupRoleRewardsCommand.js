@@ -144,9 +144,7 @@ module.exports = {
         const currentRoleConfig = currentAnnouncementRoles[role.id] || {};
         const isCurrentCustom = currentGuildConfig?.ids?.customRoleEligibilityId === role.id;
 
-        const modal = new ModalBuilder()
-          .setCustomId(`modal_${role.id}`)
-          .setTitle(`Config: ${role.name.slice(0, 20)}`);
+        const modal = new ModalBuilder().setCustomId(`modal_${role.id}`).setTitle(`Config: ${role.name.slice(0, 20)}`);
 
         const xpInput = new TextInputBuilder()
           .setCustomId('xp_threshold')
@@ -259,7 +257,9 @@ module.exports = {
           if (err.code === 'InteractionCollectorError') {
             logger.info(`[SetupRoleRewards] Modal timed out for user ${btnInteraction.user.id} (Role: ${role.name})`);
           } else if (err.code === 10062) {
-            logger.warn(`[SetupRoleRewards] Modal interaction expired (Unknown interaction) for user ${btnInteraction.user.id}`);
+            logger.warn(
+              `[SetupRoleRewards] Modal interaction expired (Unknown interaction) for user ${btnInteraction.user.id}`
+            );
           } else {
             logger.error(`[SetupRoleRewards] Unexpected modal error:`, err);
           }
