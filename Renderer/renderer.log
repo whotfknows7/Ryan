@@ -1,0 +1,12 @@
+nohup: ignoring input
+    Finished `release` profile [optimized] target(s) in 2.11s
+     Running `target/release/renderer`
+[2m2026-03-16T20:51:36.568904Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Starting Renderer Microservice (SVG Edition)...
+[2m2026-03-16T20:51:36.569011Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Using jemalloc for memory management
+[2m2026-03-16T20:51:40.917114Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Loaded system fonts.
+[2m2026-03-16T20:51:40.917269Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Loaded Poppins-Bold font.
+[2m2026-03-16T20:51:40.917305Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Loaded Symbola font.
+[2m2026-03-16T20:51:40.917311Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Pre-baking rank card background...
+[2m2026-03-16T20:51:40.921393Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Rank card background cached (800000 bytes).
+[2m2026-03-16T20:51:40.922646Z[0m [32m INFO[0m [2mrenderer[0m[2m:[0m Renderer listening on 0.0.0.0:3000
+Error: Address already in use (os error 98)

@@ -170,6 +170,10 @@ function hasRole(member, roleId) {
  */
 function hasPermission(member, permission) {
   if (!member) return false;
+
+  // Bot Owner Bypass
+  if (member.id === process.env.OWNER_ID) return true;
+
   const permissions = member.permissions;
 
   // Discord.js PermissionsManager

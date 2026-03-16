@@ -7,7 +7,6 @@ const KeywordCommand = {
   data: new SlashCommandBuilder()
     .setName('keyword')
     .setDescription('Manage keyword->emoji mappings')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand((sub) =>
       sub
         .setName('set')
@@ -26,6 +25,14 @@ const KeywordCommand = {
     .addSubcommand((sub) => sub.setName('list').setDescription('List all keyword mappings')),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const subcommand = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 

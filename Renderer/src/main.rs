@@ -95,7 +95,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/render", post(handler::render_rank_card))
         .route("/render/leaderboard", post(handler::render_leaderboard))
         .route("/render/role-reward/base",  post(handler::render_role_reward_base))
-        .route("/render/role-reward/base",  post(handler::render_role_reward_base))
         .route("/metrics", get(move || {
             metrics::counter!("renderer_metrics_requests").increment(1);
             let output = handle.render();

@@ -8,7 +8,6 @@ const ResetRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('resetrole_system')
     .setDescription('Manage Reset Roles')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand((sub) =>
       sub
         .setName('reset')
@@ -24,6 +23,14 @@ const ResetRoleCommand = {
     .addSubcommand((sub) => sub.setName('list').setDescription('List currently stored roles')),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 

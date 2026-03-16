@@ -7,7 +7,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Configure essential bot settings and role hierarchies.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption((opt) =>
       opt.setName('leaderboard_channel').setDescription('Channel for Level-Up alerts and Public Announcements.')
     )
@@ -44,6 +43,14 @@ module.exports = {
     .addRoleOption((opt) => opt.setName('weekly_best_chatter_role').setDescription('Role for the top weekly chatter')),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const guildId = interaction.guildId;
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

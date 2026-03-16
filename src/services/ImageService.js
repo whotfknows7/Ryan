@@ -202,7 +202,6 @@ class ImageService {
     }
   }
 
-
   async preloadAssets() {
     try {
       console.log('[ImageService] Assets preloaded successfully');

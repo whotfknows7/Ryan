@@ -21,10 +21,17 @@ const { defaultRedis } = require('../../config/redis');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup_role_rewards')
-    .setDescription('Configure role rewards, announcements, and custom role eligibility.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Configure role rewards, announcements, and custom role eligibility.'),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        ephemeral: true
+      });
+    }
+
     const guildId = interaction.guildId;
     const guildConfig = await DatabaseService.getFullGuildConfig(guildId);
     const configData = guildConfig?.config || {};

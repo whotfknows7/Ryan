@@ -6,12 +6,19 @@ const RemoveClanRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('remove_clan_role')
     .setDescription('Remove a clan role setup by Message ID')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption((opt) =>
       opt.setName('message_id').setDescription('The ID of the message to remove').setRequired(true)
     ),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const messageId = interaction.options.getString('message_id', true);
     const guildId = interaction.guildId;
 

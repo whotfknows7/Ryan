@@ -7,10 +7,17 @@ const logger = require('../../lib/logger');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('skip-cycle')
-    .setDescription('Force skip the current day/cycle and reset the timer to NOW.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Force skip the current day/cycle and reset the timer to NOW.'),
 
   async execute(interaction) {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        ephemeral: true
+      });
+    }
+
     if (!interaction.guildId) {
       return interaction.reply({ content: 'This command can only be used in a server.', ephemeral: true });
     }
@@ -25,12 +32,12 @@ module.exports = {
         .setColor(0x00ff00)
         .setDescription(
           `**Action Successful!**\n` +
-            `The current cycle has been finalized manually.\n\n` +
-            `**Details:**\n` +
-            `• **Type:** ${result.isWeekly ? '🏆 WEEKLY RESET (Leaderboard Sent)' : '📅 DAILY RESET'}\n` +
-            `• **New Cycle Day:** ${result.newCycle} / 7\n` +
-            `• **New Reset Time:** Set to **${new Date().toLocaleTimeString()}**\n` +
-            `• **Next Reset:** <t:${Math.floor(result.nextReset.getTime() / 1000)}:R>`
+          `The current cycle has been finalized manually.\n\n` +
+          `**Details:**\n` +
+          `• **Type:** ${result.isWeekly ? '🏆 WEEKLY RESET (Leaderboard Sent)' : '📅 DAILY RESET'}\n` +
+          `• **New Cycle Day:** ${result.newCycle} / 7\n` +
+          `• **New Reset Time:** Set to **${new Date().toLocaleTimeString()}**\n` +
+          `• **Next Reset:** <t:${Math.floor(result.nextReset.getTime() / 1000)}:R>`
         )
         .setTimestamp();
 

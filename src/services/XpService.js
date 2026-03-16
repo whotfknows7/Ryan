@@ -4,7 +4,6 @@ const { defaultRedis } = require('../config/redis');
 
 const { DatabaseService } = require('./DatabaseService');
 const { AssetService } = require('./AssetService');
-const ImageService = require('./ImageService');
 const { ConfigService } = require('./ConfigService');
 const { getIds, getFullConfig, hasRole, hasPermission } = require('../utils/GuildIdsHelper');
 const MetricsService = require('./MetricsService');
@@ -181,17 +180,12 @@ class RoleRewardHandler {
    * Stateless: Fetches config from DB (or simple service cache) each time
    */
   static async checkRoleRewards(guild, member, currentXp) {
-    console.log(`[TRACE 1] checkRoleRewards started for XP: ${currentXp}`);
-
     if (!member) {
-      console.log(`[TRACE 2] ❌ ABORTED: member object is undefined!`);
       return;
     }
 
     const guildConfig = await getFullConfig(guild.id);
     const rewardsMap = guildConfig?.config?.announcement_roles || {};
-
-    console.log(`[TRACE 3] Rewards Map from DB:`, Object.keys(rewardsMap));
 
     const rewards = Object.values(rewardsMap)
       .map((r) => ({
@@ -205,19 +199,13 @@ class RoleRewardHandler {
       .filter((r) => r.xp > 0)
       .sort((a, b) => b.xp - a.xp);
 
-    console.log(`[TRACE 4] Valid filtered rewards:`, rewards.length);
-
     if (rewards.length === 0) {
-      console.log(`[TRACE 5] ❌ ABORTED: rewards array is empty!`);
       return;
     }
-
-    console.log(`[TRACE 6] ✅ Passed gatekeepers. Checking if user qualifies...`);
 
     for (const reward of rewards) {
       if (currentXp >= reward.xp) {
         const userHasRole = hasRole(member, reward.roleId);
-        console.log(`[TRACE 7] Target passed XP threshold for role ${reward.roleId}. Has Role?: ${userHasRole}`);
 
         if (!userHasRole) {
           try {
@@ -264,7 +252,7 @@ class RoleRewardHandler {
 
       // Build embed
       const embed = new EmbedBuilder()
-        .setDescription(description)
+        .setDescription(`## ${description}`)
         .setColor(roleColor)
         .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 256 }))
         .setTimestamp();
@@ -285,7 +273,10 @@ class RoleRewardHandler {
       }
 
       await guild.client.rest.post(Routes.channelMessages(channelId), {
-        body: { embeds: [embed.toJSON()] },
+        body: {
+          content: `# ${member} You have achieved a New Milestone`,
+          embeds: [embed.toJSON()],
+        },
         files,
       });
       logger.info(`Sent reward announcement for ${member.user.tag} - ${roleName}`);

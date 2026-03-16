@@ -5,12 +5,19 @@ const SetClanRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('set_clan_role')
     .setDescription('Setup a reaction role message for clans')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption((opt) => opt.setName('message').setDescription('Message content').setRequired(true))
     .addStringOption((opt) => opt.setName('emoji').setDescription('Reaction Emoji').setRequired(true))
     .addRoleOption((opt) => opt.setName('role').setDescription('Role to assign').setRequired(true)),
 
   execute: async (interaction) => {
+    const { hasPermission } = require('../../utils/GuildIdsHelper');
+    if (!hasPermission(interaction.member, 'Administrator')) {
+      return interaction.reply({
+        content: '❌ This command is restricted to server administrators.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const messageContent = interaction.options.getString('message', true);
     const emoji = interaction.options.getString('emoji', true);
     const role = interaction.options.getRole('role', true);
