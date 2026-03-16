@@ -181,15 +181,18 @@ class RoleRewardHandler {
    * Stateless: Fetches config from DB (or simple service cache) each time
    */
   static async checkRoleRewards(guild, member, currentXp) {
-    if (!member) return;
+    console.log(`[TRACE 1] checkRoleRewards started for XP: ${currentXp}`);
 
-    // 1. Fetch Rewards Config directly (Stateless)
-    // We expect ConfigService or DatabaseService to handle any necessary low-level caching
-    // purely for performance, but logically we treat it as "fetch from source".
+    if (!member) {
+      console.log(`[TRACE 2] ❌ ABORTED: member object is undefined!`);
+      return;
+    }
+
     const guildConfig = await getFullConfig(guild.id);
     const rewardsMap = guildConfig?.config?.announcement_roles || {};
 
-    // Convert to array and sort by XP descending
+    console.log(`[TRACE 3] Rewards Map from DB:`, Object.keys(rewardsMap));
+
     const rewards = Object.values(rewardsMap)
       .map((r) => ({
         roleId: r.roleId || r.id,
@@ -202,20 +205,25 @@ class RoleRewardHandler {
       .filter((r) => r.xp > 0)
       .sort((a, b) => b.xp - a.xp);
 
-    if (rewards.length === 0) return;
+    console.log(`[TRACE 4] Valid filtered rewards:`, rewards.length);
 
-    // 2. Check & Grant
-    // We trust message.member.roles.cache as the snapshot of user's roles
+    if (rewards.length === 0) {
+      console.log(`[TRACE 5] ❌ ABORTED: rewards array is empty!`);
+      return;
+    }
+
+    console.log(`[TRACE 6] ✅ Passed gatekeepers. Checking if user qualifies...`);
+
     for (const reward of rewards) {
-      // If user qualifies for this role
       if (currentXp >= reward.xp) {
-        // Check if they already have it
-        if (!hasRole(member, reward.roleId)) {
+        const userHasRole = hasRole(member, reward.roleId);
+        console.log(`[TRACE 7] Target passed XP threshold for role ${reward.roleId}. Has Role?: ${userHasRole}`);
+
+        if (!userHasRole) {
           try {
             await member.roles.add(reward.roleId, 'XP Role Reward');
             logger.info(`Awarded Role ${reward.roleId} to ${member.user.tag} at ${currentXp} XP`);
 
-            // Send announcement
             if (reward.message) {
               await this.sendAnnouncement(guild, member, reward, currentXp);
             }
@@ -263,13 +271,12 @@ class RoleRewardHandler {
 
       let files = [];
 
-      // Hybrid Image Generation: Fetch Base -> Generate Final
+      // Direct Image Fetch: Fetch pre-rendered Base Image and send it directly
       if (reward.assetMessageLink) {
         try {
           const baseBuffer = await AssetService.fetchAssetFromLink(guild.client, reward.assetMessageLink);
           if (baseBuffer) {
-            const finalBuffer = await ImageService.generateFinalReward(baseBuffer, member.user.username);
-            files = [{ data: finalBuffer, name: 'reward.png' }];
+            files = [{ data: baseBuffer, name: 'reward.png' }];
             embed.setImage('attachment://reward.png');
           }
         } catch (e) {

@@ -95,14 +95,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/render", post(handler::render_rank_card))
         .route("/render/leaderboard", post(handler::render_leaderboard))
         .route("/render/role-reward/base",  post(handler::render_role_reward_base))
-        .route("/render/role-reward/final", post(handler::render_role_reward_final))
+        .route("/render/role-reward/base",  post(handler::render_role_reward_base))
         .route("/metrics", get(move || {
             metrics::counter!("renderer_metrics_requests").increment(1);
             let output = handle.render();
             std::future::ready(output)
         }))
-        // 20MB global limit: /render/role-reward/final sends a base image as base64
-        // (~4-5MB). All other routes send only a few KB so this is safe.
+        // 20MB global limit. All other routes send only a few KB so this is safe.
         .layer(DefaultBodyLimit::max(20 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

@@ -45,12 +45,3 @@ pub struct RoleRewardBaseRequest {
     pub font_size: Option<u32>,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct RoleRewardFinalRequest {
-    pub base_image_b64: String, // base64-encoded PNG of the pre-rendered base image
-    pub username: String,
-    pub emojis: Option<Vec<EmojiData>>,
-    pub text_x: Option<u32>,
-    pub text_y: Option<u32>,
-    pub font_size: Option<u32>,
-}

@@ -74,18 +74,3 @@ pub struct RoleRewardBaseTemplate {
     pub emoji_y: f64,
 }
 
-/// Renders the pre-baked base image + username text overlay.
-/// Username: x=298, y=241 (baseline), font-size=40 — matches generateFinalReward.
-#[derive(Template)]
-#[template(path = "role_reward_final.svg", escape = "xml")]
-pub struct RoleRewardFinalTemplate {
-    pub base_b64: String,
-    pub username: String,
-    pub emojis: Vec<TemplateEmojiData>,
-    pub canvas_width: u32,
-    pub canvas_height: u32,
-    pub text_x: u32,
-    pub text_y: u32,
-    pub font_size: u32,
-    pub emoji_y: f64,
-}

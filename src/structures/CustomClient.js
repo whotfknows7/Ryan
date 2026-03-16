@@ -28,7 +28,7 @@ class CustomClient extends Client {
         MessageManager: 20,
         ReactionManager: 0,
         UserManager: 0,
-        GuildMemberManager: 0,
+        GuildMemberManager: 100,
         PresenceManager: 0,
         ThreadManager: 0,
         VoiceStateManager: 0,

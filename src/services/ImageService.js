@@ -202,30 +202,6 @@ class ImageService {
     }
   }
 
-  async generateFinalReward(baseImageBuffer, username) {
-    try {
-      const { username: cleanUsername, emojis } = await this.prepareNameWithEmojis(username);
-      const payload = {
-        base_image_b64: baseImageBuffer.toString('base64'),
-        username: cleanUsername,
-        emojis,
-      };
-      const url = this.rendererUrl.replace('/render', '/render/role-reward/final');
-      const timer = MetricsService.rendererRequestDuration.startTimer();
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000),
-      });
-      timer();
-      if (!response.ok) throw new Error(`Role reward final renderer error: ${response.status}`);
-      return Buffer.from(await response.arrayBuffer());
-    } catch (error) {
-      console.error('[ImageService] generateFinalReward failed:', error.message);
-      throw error;
-    }
-  }
 
   async preloadAssets() {
     try {
