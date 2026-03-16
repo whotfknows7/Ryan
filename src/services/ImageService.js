@@ -178,8 +178,10 @@ class ImageService {
 
   async generateBaseReward(roleName, roleColorHex, iconUrl) {
     try {
+      const { username: cleanRoleName, emojis } = await this.prepareNameWithEmojis(roleName);
       const payload = {
-        role_name: roleName,
+        role_name: cleanRoleName,
+        emojis,
         role_color: roleColorHex || '#FFFFFF',
         icon_url: iconUrl || null,
       };
@@ -202,9 +204,11 @@ class ImageService {
 
   async generateFinalReward(baseImageBuffer, username) {
     try {
+      const { username: cleanUsername, emojis } = await this.prepareNameWithEmojis(username);
       const payload = {
         base_image_b64: baseImageBuffer.toString('base64'),
-        username,
+        username: cleanUsername,
+        emojis,
       };
       const url = this.rendererUrl.replace('/render', '/render/role-reward/final');
       const timer = MetricsService.rendererRequestDuration.startTimer();

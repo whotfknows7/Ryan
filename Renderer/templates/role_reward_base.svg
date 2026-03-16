@@ -1,9 +1,6 @@
 <svg width="{{ canvas_width }}" height="{{ canvas_height }}" viewBox="0 0 {{ canvas_width }} {{ canvas_height }}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <!-- Template background image -->
-    <clipPath id="icon-clip">
-      <circle cx="{{ icon_cx }}" cy="{{ icon_cy }}" r="{{ icon_radius }}"/>
-    </clipPath>
     <filter id="text-shadow" x="-10%" y="-10%" width="120%" height="120%">
       <feDropShadow dx="2" dy="2" stdDeviation="7" flood-color="#000000" flood-opacity="0.8"/>
     </filter>
@@ -12,10 +9,9 @@
   <!-- Template background PNG (embedded as base64) -->
   <image x="0" y="0" width="{{ canvas_width }}" height="{{ canvas_height }}" href="data:image/png;base64,{{ template_b64 }}"/>
 
-  <!-- Role Icon (circle-clipped) -->
+  <!-- Role Icon (square) -->
   {% if icon_b64 != "" %}
   <image x="{{ icon_x }}" y="{{ icon_y }}" width="{{ icon_size }}" height="{{ icon_size }}"
-         clip-path="url(#icon-clip)"
          href="data:image/png;base64,{{ icon_b64 }}"/>
   {% endif %}
 
@@ -30,4 +26,9 @@
         stroke="black"
         stroke-width="5"
         stroke-linejoin="round">{{ role_name }}</text>
+
+  <!-- Emojis -->
+  {% for emoji in emojis %}
+  <image x="{{ emoji.x_offset }}" y="{{ emoji_y }}" width="{{ font_size }}" height="{{ font_size }}" href="data:image/png;base64,{{ emoji.b64 }}"/>
+  {% endfor %}
 </svg>

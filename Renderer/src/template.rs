@@ -58,6 +58,7 @@ pub struct RoleRewardBaseTemplate {
     pub template_b64: String,
     pub icon_b64: String,
     pub role_name: String,
+    pub emojis: Vec<TemplateEmojiData>,
     pub role_color: String,
     // canvas
     pub canvas_width: u32,
@@ -66,13 +67,11 @@ pub struct RoleRewardBaseTemplate {
     pub icon_x: u32,
     pub icon_y: u32,
     pub icon_size: u32,
-    pub icon_cx: u32, // clip-path circle centre
-    pub icon_cy: u32,
-    pub icon_radius: u32,
     // text geometry
     pub text_x: u32,
     pub text_y: u32,
     pub font_size: u32,
+    pub emoji_y: f64,
 }
 
 /// Renders the pre-baked base image + username text overlay.
@@ -82,9 +81,11 @@ pub struct RoleRewardBaseTemplate {
 pub struct RoleRewardFinalTemplate {
     pub base_b64: String,
     pub username: String,
+    pub emojis: Vec<TemplateEmojiData>,
     pub canvas_width: u32,
     pub canvas_height: u32,
     pub text_x: u32,
     pub text_y: u32,
     pub font_size: u32,
+    pub emoji_y: f64,
 }

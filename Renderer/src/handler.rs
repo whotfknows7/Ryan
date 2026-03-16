@@ -416,22 +416,68 @@ pub async fn render_role_reward_base(
     // Canvas is 3041x894. We want a large left avatar and nicely stacked text next to it.
     // Avatar: size 600, centered vertically (894-600)/2 = 147. Margin left 200.
     // Text: nicely stacked next to the avatar. x=950.
+    let icon_x = payload.icon_x.unwrap_or(180);
+    let icon_y = payload.icon_y.unwrap_or(147);
+    let icon_size = payload.icon_size.unwrap_or(600);
+
+    let role_name = payload.role_name.clone().unwrap_or_else(|| "HOMOSAPIEN".to_string());
+    let font_size = payload.font_size.unwrap_or(190);
+    let text_x = payload.text_x.unwrap_or(885);
+    let text_y = payload.text_y.unwrap_or(500);
+
+    let mut template_emojis = Vec::new();
+    if let Some(emojis) = &payload.emojis {
+        let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
+        let face = ttf_parser::Face::parse(font_data, 0).unwrap();
+        let units_per_em = face.units_per_em() as f64;
+        let scale = (font_size as f64) / units_per_em;
+
+        let mut text_width = 0.0;
+        for c in role_name.chars() {
+            if let Some(glyph_id) = face.glyph_index(c) {
+                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
+                    text_width += advance as f64 * scale;
+                }
+            }
+        }
+
+        let emoji_size = font_size as f64;
+        let mut current_emoji_x = text_x as f64 + text_width + 15.0;
+
+        for emoji in emojis {
+            let mut path = format!("./assets/emojis/{}.png", emoji.hex);
+            if !std::path::Path::new(&path).exists() {
+                path = format!("../assets/emojis/{}.png", emoji.hex);
+            }
+            let b64 = match tokio::fs::read(&path).await {
+                Ok(bytes) => to_png_b64(&bytes),
+                Err(_) => "".to_string(),
+            };
+            if !b64.is_empty() {
+                template_emojis.push(crate::template::TemplateEmojiData {
+                    b64,
+                    x_offset: current_emoji_x,
+                });
+                current_emoji_x += emoji_size + 15.0;
+            }
+        }
+    }
+
     let template = RoleRewardBaseTemplate {
         template_b64,
         icon_b64,
-        role_name: payload.role_name.clone(),
+        role_name,
+        emojis: template_emojis,
         role_color: payload.role_color.clone(),
         canvas_width,
         canvas_height,
-        icon_x: 200,
-        icon_y: 147,
-        icon_size: 600,
-        icon_cx: 500,
-        icon_cy: 447,
-        icon_radius: 300,
-        text_x: 1132,
-        text_y: 780, // Role name baseline (bottom line)
-        font_size: 190,
+        icon_x,
+        icon_y,
+        icon_size,
+        text_x,
+        text_y, // Pulls the bottom line up significantly
+        font_size,
+        emoji_y: text_y as f64 - font_size as f64 + (font_size as f64 * 0.15),
     };
 
     let svg_string = match template.render() {
@@ -493,15 +539,59 @@ pub async fn render_role_reward_final(
     let canvas_width  = base_pixmap.width();
     let canvas_height = base_pixmap.height();
 
+    let font_size = payload.font_size.unwrap_or(160);
+    let text_x = payload.text_x.unwrap_or(1132);
+    let text_y = payload.text_y.unwrap_or(340);
+
+    let mut template_emojis = Vec::new();
+    if let Some(emojis) = &payload.emojis {
+        let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
+        let face = ttf_parser::Face::parse(font_data, 0).unwrap();
+        let units_per_em = face.units_per_em() as f64;
+        let scale = (font_size as f64) / units_per_em;
+
+        let mut text_width = 0.0;
+        for c in payload.username.chars() {
+            if let Some(glyph_id) = face.glyph_index(c) {
+                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
+                    text_width += advance as f64 * scale;
+                }
+            }
+        }
+
+        let emoji_size = font_size as f64;
+        let mut current_emoji_x = text_x as f64 + text_width + 15.0;
+
+        for emoji in emojis {
+            let mut path = format!("./assets/emojis/{}.png", emoji.hex);
+            if !std::path::Path::new(&path).exists() {
+                path = format!("../assets/emojis/{}.png", emoji.hex);
+            }
+            let b64 = match tokio::fs::read(&path).await {
+                Ok(bytes) => to_png_b64(&bytes),
+                Err(_) => "".to_string(),
+            };
+            if !b64.is_empty() {
+                template_emojis.push(crate::template::TemplateEmojiData {
+                    b64,
+                    x_offset: current_emoji_x,
+                });
+                current_emoji_x += emoji_size + 15.0;
+            }
+        }
+    }
+
     // 2. Build the SVG — embed base image + draw username text
     let template = crate::template::RoleRewardFinalTemplate {
         base_b64: payload.base_image_b64.clone(),
         username: payload.username.clone(),
+        emojis: template_emojis,
         canvas_width,
         canvas_height,
-        text_x: 1132,
-        text_y: 480, // Username baseline (top line, stacked above role name)
-        font_size: 160,
+        text_x,
+        text_y, // Pulls the top line up to stack cleanly
+        font_size,
+        emoji_y: text_y as f64 - font_size as f64 + (font_size as f64 * 0.15),
     };
 
     let svg_string = match template.render() {

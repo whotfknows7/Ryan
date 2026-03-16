@@ -19,4 +19,9 @@
         stroke="black"
         stroke-width="5"
         stroke-linejoin="round">{{ username }}</text>
+
+  <!-- Emojis -->
+  {% for emoji in emojis %}
+  <image x="{{ emoji.x_offset }}" y="{{ emoji_y }}" width="{{ font_size }}" height="{{ font_size }}" href="data:image/png;base64,{{ emoji.b64 }}"/>
+  {% endfor %}
 </svg>
