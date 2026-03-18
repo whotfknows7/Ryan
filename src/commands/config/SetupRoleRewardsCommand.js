@@ -1,6 +1,5 @@
 const {
   SlashCommandBuilder,
-  PermissionFlagsBits,
   ActionRowBuilder,
   RoleSelectMenuBuilder,
   ModalBuilder,
@@ -28,7 +27,7 @@ module.exports = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        ephemeral: true
+        ephemeral: true,
       });
     }
 

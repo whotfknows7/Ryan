@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { ConfigService } = require('../../services/ConfigService');
 const { clearCache } = require('../../utils/GuildIdsHelper');
 
@@ -15,7 +15,7 @@ const RemoveClanRoleCommand = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 

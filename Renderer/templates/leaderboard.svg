@@ -31,7 +31,7 @@
     <text x="{{ user.separator_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">|</text>
 
     <!-- Username -->
-    <text x="{{ user.username_x_start }}" y="{{ user.y_pos + 40 }}" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">{{ user.username }}</text>
+    <text x="{{ user.username_x_start }}" y="{{ user.y_pos + 40 }}" font-family="{% if user.use_system_font %}DejaVu Sans, Noto Sans, sans-serif{% else %}Poppins, sans-serif{% endif %}" font-size="30" font-weight="bold" fill="#ffffff" filter="url(#shadow)" paint-order="stroke fill" stroke="black" stroke-width="5">{{ user.username }}</text>
 
     <!-- Emojis -->
     {% for emoji in user.emojis %}

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { ConfigService } = require('../../services/ConfigService');
 const emojiRegex = require('emoji-regex');
 const { defaultRedis } = require('../../config/redis');
@@ -29,7 +29,7 @@ const KeywordCommand = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 

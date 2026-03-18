@@ -1,6 +1,6 @@
 // src/commands/admin/SkipCycleCommand.js
 
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { ResetService } = require('../../services/ResetService');
 const logger = require('../../lib/logger');
 
@@ -14,7 +14,7 @@ module.exports = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        ephemeral: true
+        ephemeral: true,
       });
     }
 

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { invalidate } = require('../../utils/GuildIdsHelper');
 const { defaultRedis } = require('../../config/redis');
@@ -47,7 +47,7 @@ module.exports = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 

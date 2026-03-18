@@ -22,6 +22,51 @@ fn to_png_b64(bytes: &[u8]) -> String {
     }
 }
 
+/// Normalizes fancy mathematical alphanumeric characters back to standard Latin characters
+fn normalize_discord_name(input: &str) -> String {
+    input.chars().map(|c| {
+        let u = c as u32;
+        match u {
+            // Mathematical Bold Capital (A-Z) -> 𝐆, 𝐅, etc.
+            0x1D400..=0x1D419 => std::char::from_u32(u - 0x1D400 + 0x0041).unwrap_or(c),
+            // Mathematical Bold Small (a-z)
+            0x1D41A..=0x1D433 => std::char::from_u32(u - 0x1D41A + 0x0061).unwrap_or(c),
+            // Mathematical Italic Capital
+            0x1D434..=0x1D44D => std::char::from_u32(u - 0x1D434 + 0x0041).unwrap_or(c),
+            // Mathematical Italic Small
+            0x1D44E..=0x1D467 => std::char::from_u32(u - 0x1D44E + 0x0061).unwrap_or(c),
+            // Mathematical Script Capital (e.g., 𝓨)
+            0x1D49C..=0x1D4B5 => std::char::from_u32(u - 0x1D49C + 0x0041).unwrap_or(c),
+            // Mathematical Script Small (e.g., 𝓮, 𝓸, 𝓵)
+            0x1D4B6..=0x1D4CF => std::char::from_u32(u - 0x1D4B6 + 0x0061).unwrap_or(c),
+            // Mathematical Fraktur Capital (e.g., 𝔐)
+            0x1D504..=0x1D51D => std::char::from_u32(u - 0x1D504 + 0x0041).unwrap_or(c),
+            // Mathematical Fraktur Small (e.g., 𝔞, 𝔰, 𝔥)
+            0x1D51E..=0x1D537 => std::char::from_u32(u - 0x1D51E + 0x0061).unwrap_or(c),
+            _ => c,
+        }
+    }).collect()
+}
+
+/// Detects if a string contains complex scripts (CJK, Arabic, Thai, Indic, etc.)
+/// that require a unified system font to avoid the "Frankenstein" font effect.
+fn requires_system_font(text: &str) -> bool {
+    text.chars().any(|c| {
+        let u = c as u32;
+        // CJK Ideographs & Kana & Hangul
+        (0x4E00..=0x9FFF).contains(&u) || 
+        (0x3400..=0x4DBF).contains(&u) || 
+        (0x3040..=0x30FF).contains(&u) || 
+        (0xAC00..=0xD7AF).contains(&u) || 
+        // Thai
+        (0x0E00..=0x0E7F).contains(&u) ||
+        // Indic (Devanagari, Bengali, Telugu, Tamil, etc.)
+        (0x0900..=0x0DFF).contains(&u) ||
+        // Arabic
+        (0x0600..=0x06FF).contains(&u)
+    })
+}
+
 use crate::models::{RankCardRequest, RoleRewardBaseRequest};
 use crate::template::{RankCardTemplate, RoleRewardBaseTemplate};
 use crate::state::AppState;
@@ -69,14 +114,18 @@ pub async fn render_rank_card(
     let progress_width = (progress_percent * 500.0).clamp(0.0, 500.0);
 
     // 3. Populate Askama SVG Template (dynamic layer only — no bg rect, no trough)
+    let normalized_username = normalize_discord_name(&payload.username);
+    let use_system_font = requires_system_font(&normalized_username);
+
     let template = RankCardTemplate {
-        username: payload.username,
+        username: normalized_username,
         avatar_b64,
         current_xp: payload.current_xp,
         next_xp: payload.next_xp,
         rank: payload.rank,
         clan_color: payload.clan_color,
         progress_width,
+        use_system_font,
     };
     let svg_string = match template.render() {
         Ok(s) => s,
@@ -208,7 +257,22 @@ pub async fn render_leaderboard(
     // 4. Bulletproof measuring closure
     let measure_text = |text: &str| -> f64 {
         text.chars().map(|c| {
-            // Try Poppins First
+            let u = c as u32;
+
+            // 1. HARD OVERRIDES (Execute BEFORE font parsing to prevent bad metrics)
+            // Em Space, Em Quad, Ideographic Space
+            if u == 0x2001 || u == 0x2003 || u == 0x3000 { return 30.0; } 
+            // En Space, En Quad
+            if u == 0x2000 || u == 0x2002 { return 15.0; } 
+            // Standard Space & NBSP
+            if u == 0x0020 || u == 0x00A0 { return 8.0; } 
+            
+            // CJK Ideographs (Force full-width 1em since they use fallback fonts)
+            if (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u) || (0xFF00..=0xFFEF).contains(&u) {
+                return 30.0; 
+            }
+
+            // 2. Try Poppins First
             if let Some(glyph_id) = poppins_face.glyph_index(c) {
                 if glyph_id.0 != 0 { // Explicitly ignore the .notdef missing box
                     if let Some(advance) = poppins_face.glyph_hor_advance(glyph_id) {
@@ -216,7 +280,7 @@ pub async fn render_leaderboard(
                     }
                 }
             }
-            // Try Math Font Fallback
+            // 3. Try Math Font Fallback
             if let Some(glyph_id) = math_face.glyph_index(c) {
                 if glyph_id.0 != 0 {
                     if let Some(advance) = math_face.glyph_hor_advance(glyph_id) {
@@ -224,7 +288,7 @@ pub async fn render_leaderboard(
                     }
                 }
             }
-            // Try Symbola Fallback
+            // 4. Try Symbola Fallback
             if let Some(glyph_id) = symbola_face.glyph_index(c) {
                 if glyph_id.0 != 0 {
                     if let Some(advance) = symbola_face.glyph_hor_advance(glyph_id) {
@@ -233,9 +297,8 @@ pub async fn render_leaderboard(
                 }
             }
             
-            // Hard Fallbacks
-            if c == ' ' { return 8.0; } 
-            22.0 // A wider default guess for unmapped special characters
+            // 5. Ultimate Fallback for unmapped characters (e.g., Thai)
+            24.0 
         }).sum()
     };
 
@@ -269,7 +332,8 @@ pub async fn render_leaderboard(
         let max_content_end = 775.0 - xp_width - 18.0 - separator_width - 20.0 - emoji_total_width;
         let max_username_width = max_content_end - username_x_start;
 
-        let mut display_username = user.username.clone();
+        // Normalize fancy fonts before measuring or rendering
+        let mut display_username = normalize_discord_name(&user.username);
 
         let mut username_width = measure_text(&display_username);
 
@@ -311,6 +375,8 @@ pub async fn render_leaderboard(
         let separator2_x_start = content_end_x + 20.0;
         let xp_x_start = separator2_x_start + separator_width + 18.0;
 
+        let use_system_font = requires_system_font(&display_username);
+
         template_users.push(crate::template::TemplateUserData {
             username: display_username,
             avatar_b64,
@@ -324,6 +390,7 @@ pub async fn render_leaderboard(
             bg_color: get_bg_color(user.rank, is_highlighted),
             y_pos,
             xp_x_start,
+            use_system_font,
         });
 
         y_pos += 60;

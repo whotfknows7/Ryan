@@ -16,6 +16,7 @@ pub struct RankCardTemplate {
     pub rank: i32,
     pub clan_color: String,
     pub progress_width: f64,
+    pub use_system_font: bool,
 }
 
 pub struct TemplateEmojiData {
@@ -36,6 +37,7 @@ pub struct TemplateUserData {
     pub bg_color: String,
     pub y_pos: i32,
     pub xp_x_start: f64,
+    pub use_system_font: bool,
 }
 
 #[derive(Template)]

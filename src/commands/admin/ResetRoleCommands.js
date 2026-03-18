@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
 const { prisma } = require('../../lib/prisma');
 const { addMinutes } = require('date-fns');
@@ -27,7 +27,7 @@ const ResetRoleCommand = {
     if (!hasPermission(interaction.member, 'Administrator')) {
       return interaction.reply({
         content: '❌ This command is restricted to server administrators.',
-        flags: MessageFlags.Ephemeral
+        flags: MessageFlags.Ephemeral,
       });
     }
 
