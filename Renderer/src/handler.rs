@@ -48,22 +48,33 @@ fn normalize_discord_name(input: &str) -> String {
     }).collect()
 }
 
-/// Detects if a string contains complex scripts (CJK, Arabic, Thai, Indic, etc.)
-/// that require a unified system font to avoid the "Frankenstein" font effect.
+/// Detects if a string contains non-standard scripts (including Latin Extended) 
+/// that require a unified system font to avoid the "Frankenstein" effect.
 fn requires_system_font(text: &str) -> bool {
     text.chars().any(|c| {
         let u = c as u32;
-        // CJK Ideographs & Kana & Hangul
-        (0x4E00..=0x9FFF).contains(&u) || 
-        (0x3400..=0x4DBF).contains(&u) || 
-        (0x3040..=0x30FF).contains(&u) || 
+        
+        // 1. Latin Extended (Catches Ş, æ, ø, ğ, ł, á, etc.)
+        (0x0080..=0x02AF).contains(&u) ||
+        
+        // 2. Greek, Cyrillic, Arabic, Indic, Thai, etc.
+        (0x0370..=0x1FFF).contains(&u) || 
+        
+        // 3. CJK Ideographs & Kana
+        (0x2E80..=0x9FFF).contains(&u) || 
+        
+        // 4. Hangul (Korean)
         (0xAC00..=0xD7AF).contains(&u) || 
-        // Thai
-        (0x0E00..=0x0E7F).contains(&u) ||
-        // Indic (Devanagari, Bengali, Telugu, Tamil, etc.)
-        (0x0900..=0x0DFF).contains(&u) ||
-        // Arabic
-        (0x0600..=0x06FF).contains(&u)
+        
+        // 5. CJK Compatibility & Arabic Presentation
+        (0xF900..=0xFDFF).contains(&u) ||
+        (0xFE70..=0xFEFF).contains(&u) ||
+        
+        // 6. Fullwidth Forms
+        (0xFF00..=0xFFEF).contains(&u) ||
+        
+        // 7. CJK Extensions
+        (0x20000..=0x2FA1F).contains(&u)
     })
 }
 

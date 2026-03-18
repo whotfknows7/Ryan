@@ -273,8 +273,8 @@ class LeaderboardUpdateService {
               if (!member) {
                 try {
                   const user = await guild.client.users.fetch(uId);
-                  displayName = user.globalName || user.username;
-                  avatarUrl = user.displayAvatarURL({ extension: 'png' });
+                  displayName = user.username; // Use username instead of globalName
+                  avatarUrl = user.defaultAvatarURL; // Use default avatar URL
                 } catch (err) {
                   logger.debug(`[LeaderboardCache] Failed to fetch user ${uId}: ${err.message}`);
                 }
@@ -335,8 +335,8 @@ class LeaderboardUpdateService {
             if (!member) {
               try {
                 const user = await guild.client.users.fetch(u.userId);
-                displayName = user.globalName || user.username;
-                avatarUrl = user.displayAvatarURL({ extension: 'png' });
+                displayName = user.username; // Use username instead of globalName
+                avatarUrl = user.defaultAvatarURL; // Use default avatar URL
               } catch (err) {
                 logger.debug(`[LeaderboardUpdate] Failed to fetch user ${u.userId}: ${err.message}`);
               }
@@ -361,7 +361,7 @@ class LeaderboardUpdateService {
           rank: skip + index + 1,
           userId: u.userId,
           username: 'Unknown (Left)',
-          avatarUrl: null,
+          avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
           xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp,
         }));
     }

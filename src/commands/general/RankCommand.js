@@ -29,8 +29,8 @@ module.exports = {
 
     // 2. Prepare Data for Image Service
     const rankData = {
-      username: inGuild ? targetUser.username : `${targetUser.username} (Left)`, // Display name or username
-      avatarUrl: targetUser.displayAvatarURL({ extension: 'png', size: 512 }),
+      username: targetUser.username,
+      avatarUrl: inGuild ? targetUser.displayAvatarURL({ extension: 'png', size: 512 }) : targetUser.defaultAvatarURL,
       // Pill 1 Data
       weeklyXp: stats.weeklyXp,
       allTimeXp: stats.xp,
