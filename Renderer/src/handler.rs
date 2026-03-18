@@ -208,31 +208,54 @@ pub async fn render_leaderboard(
     // 4. Bulletproof measuring closure
     let measure_text = |text: &str| -> f64 {
         text.chars().map(|c| {
-            // Try Poppins First
+            let cp = c as u32;
+
+            // 1. Try Poppins First (Standard text usually shapes perfectly)
             if let Some(glyph_id) = poppins_face.glyph_index(c) {
-                if glyph_id.0 != 0 { // Explicitly ignore the .notdef missing box
+                if glyph_id.0 != 0 { 
                     if let Some(advance) = poppins_face.glyph_hor_advance(glyph_id) {
-                        return advance as f64 * poppins_scale;
+                        return (advance as f64 * poppins_scale) + 12.0;
                     }
                 }
             }
-            // Try Math Font Fallback
+            // 2. Try Math Font Fallback
             if let Some(glyph_id) = math_face.glyph_index(c) {
                 if glyph_id.0 != 0 {
                     if let Some(advance) = math_face.glyph_hor_advance(glyph_id) {
-                        return advance as f64 * math_scale;
+                        return (advance as f64 * math_scale) + 12.0; 
                     }
                 }
             }
-            // Try Symbola Fallback
+            // 3. Try Symbola Fallback
             if let Some(glyph_id) = symbola_face.glyph_index(c) {
                 if glyph_id.0 != 0 {
                     if let Some(advance) = symbola_face.glyph_hor_advance(glyph_id) {
-                        return advance as f64 * symbola_scale;
+                        return (advance as f64 * symbola_scale) + 12.0; 
                     }
                 }
             }
             
+            // 4. Smart Unicode Fallbacks
+            // Check for Unicode Space characters (EMQUAD, etc.) - usually 1em wide (30px)
+            if (0x2000..=0x200B).contains(&cp) || cp == 0x202F || cp == 0x205F || cp == 0x3000 {
+                return 12.0;
+            }
+
+            // Check for CJK Unified Ideographs (Common Chinese characters like 苏)
+            if (0x4E00..=0x9FFF).contains(&cp) || (0x3400..=0x4DBF).contains(&cp) {
+                return 12.0; 
+            }
+
+            // Check for Mathematical Alphanumeric Symbols (Commonly used for "bold" names)
+            if (0x1D400..=0x1D7FF).contains(&cp) {
+                return 12.0; 
+            }
+
+            // Check for Thai Range (e.g., น)
+            if (0x0E00..=0x0E7F).contains(&cp) {
+                return 12.0;
+            }
+
             // Hard Fallbacks
             if c == ' ' { return 8.0; } 
             22.0 // A wider default guess for unmapped special characters

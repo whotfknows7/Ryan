@@ -267,9 +267,22 @@ class LeaderboardUpdateService {
               const pIndex = missingIndices[j];
               const member = fetchedMembers.get(uId);
 
+              let displayName = member ? member.displayName : 'Unknown (Left)';
+              let avatarUrl = member?.displayAvatarURL({ extension: 'png' }) || null;
+
+              if (!member) {
+                try {
+                  const user = await guild.client.users.fetch(uId);
+                  displayName = user.globalName || user.username;
+                  avatarUrl = user.displayAvatarURL({ extension: 'png' });
+                } catch (err) {
+                  logger.debug(`[LeaderboardCache] Failed to fetch user ${uId}: ${err.message}`);
+                }
+              }
+
               const profileBase = {
-                displayName: member ? member.displayName : 'Unknown (Left)',
-                avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
+                displayName,
+                avatarUrl,
               };
 
               profiles[pIndex] = {
@@ -312,17 +325,33 @@ class LeaderboardUpdateService {
           members = await guild.members.fetch({ user: userIds }).catch(() => new Map());
         }
 
-        usersForImage = topUsers.map((u, index) => {
-          const member = members.get(u.userId);
-          const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
-          return {
-            rank: skip + index + 1,
-            userId: u.userId,
-            username: member ? member.displayName : 'Unknown (Left)',
-            avatarUrl: member?.displayAvatarURL({ extension: 'png' }) || null,
-            xp: xpVal,
-          };
-        });
+        usersForImage = await Promise.all(
+          topUsers.map(async (u, index) => {
+            const member = members.get(u.userId);
+
+            let displayName = member ? member.displayName : 'Unknown (Left)';
+            let avatarUrl = member?.displayAvatarURL({ extension: 'png' }) || null;
+
+            if (!member) {
+              try {
+                const user = await guild.client.users.fetch(u.userId);
+                displayName = user.globalName || user.username;
+                avatarUrl = user.displayAvatarURL({ extension: 'png' });
+              } catch (err) {
+                logger.debug(`[LeaderboardUpdate] Failed to fetch user ${u.userId}: ${err.message}`);
+              }
+            }
+
+            const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
+            return {
+              rank: skip + index + 1,
+              userId: u.userId,
+              username: displayName,
+              avatarUrl: avatarUrl,
+              xp: xpVal,
+            };
+          })
+        );
       }
     } catch (e) {
       logger.error(`Failed to generate member data for leaderboard:`, e);
