@@ -11,7 +11,7 @@ const { defaultRedis } = require('../config/redis');
 // =================================================================
 // CRITICAL: This variable must be defined HERE (Top Level Scope)
 // =================================================================
-const previousTopUsersJSON = new Map();
+// const previousTopUsersJSON = new Map(); // Removed: No longer needed with Redis marker system
 const updatingGuilds = new Set();
 const lastUpdateTimes = new Map();
 const tempLeaderboards = new Map(); // guildId -> { weekly: msgId, lifetime: msgId }
@@ -59,18 +59,38 @@ function removeTempLeaderboard(guildId, messageId) {
 
 class LeaderboardUpdateService {
   static async updateLiveLeaderboard(client) {
-    logger.debug('Starting updateLiveLeaderboard...');
-    for (const [guildId, guild] of client.guilds.cache) {
-      // 0. Concurrency Lock & Rate Limit
-      if (updatingGuilds.has(guildId)) {
-        logger.warn(`[${guildId}] Leaderboard update skipped: Already in progress.`);
+    // 0. Fetch the list of "dirty" guilds that actually need an update
+    let dirtyGuildIds;
+    try {
+      dirtyGuildIds = await defaultRedis.smembers('lb_dirty_guilds');
+    } catch (err) {
+      logger.error('Failed to fetch dirty guilds from Redis:', err);
+      return;
+    }
+
+    if (dirtyGuildIds.length === 0) {
+      // logger.debug('No dirty guilds. Skipping leaderboard update.');
+      return;
+    }
+
+    // logger.debug(`Starting updateLiveLeaderboard for ${dirtyGuildIds.length} dirty guilds...`);
+
+    for (const guildId of dirtyGuildIds) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) {
+        // Cleaning up stale guild markers if they don't exist in cache anymore
+        await defaultRedis.srem('lb_dirty_guilds', guildId);
         continue;
       }
 
-      // THROTTLE: Don't update more than once every 15 seconds per guild
+      // Concurrency Lock & Rate Limit
+      if (updatingGuilds.has(guildId)) {
+        continue;
+      }
+
+      // THROTTLE: Don't update more than once every 20 seconds per guild
       const lastUpdate = lastUpdateTimes.get(guildId) || 0;
       if (Date.now() - lastUpdate < 20000) {
-        // logger.debug(`[${guildId}] Throttled.`);
         continue;
       }
 
@@ -82,51 +102,33 @@ class LeaderboardUpdateService {
 
         if (!channelId) {
           logger.debug(`[${guildId}] No leaderboard channel configured.`);
+          // Remove from dirty set to avoid redundant checks
+          await defaultRedis.srem('lb_dirty_guilds', guildId);
           continue;
         }
 
         const channel = await guild.channels.fetch(channelId).catch(() => null);
         if (!channel?.isTextBased()) {
           logger.debug(`[${guildId}] Leaderboard channel not found or not text-based.`);
+          // Remove from dirty set to avoid redundant checks
+          await defaultRedis.srem('lb_dirty_guilds', guildId);
           continue;
         }
 
-        // 1. Fetch Top 10 for display (Fast - uses Redis ZSETs)
+        // 1. Fetch Top 10 for display (Hybrid DB + Redis Buffer)
         const topUsers = await DatabaseService.getLiveTopUsers(guildId, 10, 'daily');
 
-        // Optimization: Skip if the data hasn't changed
-        const currentJSON = JSON.stringify(topUsers);
-
-        // Check map existence safely
-        if (previousTopUsersJSON.has(guildId) && currentJSON === previousTopUsersJSON.get(guildId)) {
-          // Even if content didn't change, we might want to ensure the message exists?
-          // But strict optimization says skip.
-          logger.debug(`[${guildId}] Leaderboard data unchanged. Skipping.`);
-          continue;
-        }
-
-        // logger.info(`Updating leaderboard for guild ${guildId}... (Data changed)`);
-
         // 2. Generate Payload
-        // logger.info(`[${guildId}] Generating payload...`);
-        // Pass topUsers as prefetchedData
         const payload = await this.generateLeaderboardPayload(guild, 'daily', 1, null, true, topUsers);
-        // logger.info(`[${guildId}] Payload generated.`);
 
         // 3. Double-Check DB ID (In case it wasn't in the last 50 messages)
         if (ids.dailyLeaderboardMessageId) {
-          // logger.info(`[${guildId}] Attempting to delete old Daily LB: ${ids.dailyLeaderboardMessageId}`);
           try {
             await channel.client.rest.delete(Routes.channelMessage(channelId, ids.dailyLeaderboardMessageId));
-            // logger.info(`[${guildId}] Successfully deleted old Daily LB.`);
           } catch (delError) {
             logger.warn(`[${guildId}] Failed to delete old Daily LB: ${delError.message}`);
           }
-        } else {
-          logger.info(`[${guildId}] No old Daily LB ID tracked in DB.`);
         }
-
-        // logger.info(`[${guildId}] Sending new leaderboard message...`);
 
         // Retry logic for unstable connections
         let newMessage;
@@ -147,25 +149,18 @@ class LeaderboardUpdateService {
             break; // Success!
           } catch (sendError) {
             if (i === maxRetries - 1) throw sendError; // Rethrow if last attempt
-            logger.warn(
-              `[${guildId}] Failed to send message (Attempt ${i + 1}/${maxRetries}): ${sendError.message}. Retrying...`
-            );
+            logger.warn(`[${guildId}] Failed to send message (Attempt ${i + 1}/${maxRetries}): ${sendError.message}`);
             await new Promise((r) => setTimeout(r, 1000)); // Wait 1s
           }
         }
 
-        // logger.info(`[${guildId}] Leaderboard updated. Message ID: ${newMessage.id}`);
-
-        // Update State
-        previousTopUsersJSON.set(guildId, currentJSON);
+        // Update State & Clear Marker
         lastUpdateTimes.set(guildId, Date.now());
         await DatabaseService.updateGuildIds(guildId, { dailyLeaderboardMessageId: newMessage.id });
+        await defaultRedis.srem('lb_dirty_guilds', guildId);
         invalidate(guildId);
       } catch (e) {
         logger.error(`Failed to update leaderboard for guild ${guildId}: ${e.message}`, e);
-        if (e.name === 'AbortError' || e.code === 'UND_ERR_SOCKET') {
-          logger.error(`[${guildId}] Network/Socket Error detected. Request failed.`);
-        }
       } finally {
         updatingGuilds.delete(guildId);
       }
@@ -514,7 +509,9 @@ class LeaderboardUpdateService {
 }
 
 function invalidateGuildLeaderboardCache(guildId) {
-  previousTopUsersJSON.delete(guildId);
+  defaultRedis.sadd('lb_dirty_guilds', guildId).catch((err) => {
+    logger.error(`[LeaderboardCache] Failed to manually invalidate (SADD) for ${guildId}: ${err.message}`);
+  });
 }
 
 module.exports = {

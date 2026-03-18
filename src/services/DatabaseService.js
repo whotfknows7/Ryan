@@ -130,18 +130,28 @@ class DatabaseService {
    * [NEW] Fetch Live User Stats (DB + Redis Delta)
    */
   static async getLiveUserStats(guildId, userId) {
-    const [dbStats, redisDelta] = await Promise.all([
+    // 1. Fetch DB Baseline and all potential Redis buffers (active + processing)
+    const [dbStats, activeDelta, processingKeys] = await Promise.all([
       this.getUserStats(guildId, userId),
       defaultRedis.hget(`xp_buffer:${guildId}`, userId),
+      defaultRedis.keys(`xp_buffer_processing:${guildId}:*`),
     ]);
 
-    const delta = redisDelta ? parseInt(redisDelta, 10) : 0;
+    let totalDelta = activeDelta ? parseInt(activeDelta, 10) : 0;
+
+    // 2. Sum any processing buffers (covers the sync window flicker)
+    if (processingKeys.length > 0) {
+      const processingValues = await Promise.all(processingKeys.map((key) => defaultRedis.hget(key, userId)));
+      for (const val of processingValues) {
+        if (val) totalDelta += parseInt(val, 10);
+      }
+    }
 
     return {
       ...dbStats,
-      xp: (dbStats.xp || 0) + delta,
-      dailyXp: (dbStats.dailyXp || 0) + delta,
-      weeklyXp: (dbStats.weeklyXp || 0) + delta,
+      xp: (dbStats.xp || 0) + totalDelta,
+      dailyXp: (dbStats.dailyXp || 0) + totalDelta,
+      weeklyXp: (dbStats.weeklyXp || 0) + totalDelta,
     };
   }
 
@@ -195,10 +205,24 @@ class DatabaseService {
       select: { userId: true, [column]: true },
     });
 
-    // Fetch the Redis Buffer
-    const bufferRaw = await defaultRedis.hgetall(`xp_buffer:${guildId}`);
+    // Fetch the Redis Buffer(s)
+    const [bufferRaw, processingKeys] = await Promise.all([
+      defaultRedis.hgetall(`xp_buffer:${guildId}`),
+      defaultRedis.keys(`xp_buffer_processing:${guildId}:*`),
+    ]);
 
-    // If buffer is empty, rely on DB (but still apply skip/limit correctly)
+    // Merge all processing buffers into bufferRaw
+    if (processingKeys.length > 0) {
+      for (const pKey of processingKeys) {
+        const pData = await defaultRedis.hgetall(pKey);
+        for (const [uId, xpStr] of Object.entries(pData)) {
+          const current = parseInt(bufferRaw[uId] || '0', 10);
+          bufferRaw[uId] = (current + parseInt(xpStr, 10)).toString();
+        }
+      }
+    }
+
+    // If all buffers are empty, rely on DB (but still apply skip/limit correctly)
     if (Object.keys(bufferRaw).length === 0) {
       return dbTop.slice(0, limit).map((u) => ({ userId: u.userId, [column]: u[column] }));
     }

@@ -75,6 +75,9 @@ class XpSyncService {
       if (updates.length > 0) {
         await DatabaseService.processXpBatch(guildId, updates);
         // logger.info(`Synced ${updates.length} users' XP for guild ${guildId}`);
+
+        // Mark guild as dirty so the 20s checker refreshes the leaderboard to match DB state
+        await defaultRedis.sadd('lb_dirty_guilds', guildId);
       }
 
       // Cleanup temp key

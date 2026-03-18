@@ -95,6 +95,9 @@ class XpPipeline {
 
         // 1. Buffer for the Postgres sync (Hot Buffer)
         pipeline.hincrby(`xp_buffer:${guildId}`, userId, xpToAdd);
+
+        // 2. Mark guild as dirty for leaderboard update
+        pipeline.sadd('lb_dirty_guilds', guildId);
       }
 
       await pipeline.exec().catch((err) => logger.error('Redis Pipeline Error:', err));
