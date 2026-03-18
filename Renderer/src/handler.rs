@@ -85,7 +85,7 @@ pub async fn render_rank_card(
 
     // 4. Setup resvg & Font options
     let mut opt = Options::default();
-    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Symbola, sans-serif".to_string();
+    opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Noto Sans Math, Symbola, sans-serif".to_string();
 
     // 5. Render SVG to PNG Bytes
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
@@ -172,7 +172,7 @@ pub async fn render_leaderboard(
         }
         match rank {
             1 => "#FFD700".to_string(),
-            2 => "#E6E8FA".to_string(),
+            2 => "#CECECE".to_string(),
             3 => "#CD7F32".to_string(),
             _ => "#36393e".to_string(),
         }
@@ -190,20 +190,52 @@ pub async fn render_leaderboard(
         }
     };
 
-    let font_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
-    let face = ttf_parser::Face::parse(font_data, 0).unwrap();
-    let units_per_em = face.units_per_em() as f64;
-    let scale = 30.0 / units_per_em;
+    // 1. Load Poppins
+    let poppins_data = include_bytes!("../../assets/fonts/Poppins-Bold.ttf");
+    let poppins_face = ttf_parser::Face::parse(poppins_data, 0).unwrap();
+    let poppins_scale = 30.0 / poppins_face.units_per_em() as f64;
 
+    // 2. Load Math Font
+    let math_data = include_bytes!("../../assets/fonts/NotoSansMath-Regular.ttf");
+    let math_face = ttf_parser::Face::parse(math_data, 0).unwrap();
+    let math_scale = 30.0 / math_face.units_per_em() as f64;
+
+    // 3. Load Symbola
+    let symbola_data = include_bytes!("../../assets/fonts/Symbola.ttf");
+    let symbola_face = ttf_parser::Face::parse(symbola_data, 0).unwrap();
+    let symbola_scale = 30.0 / symbola_face.units_per_em() as f64;
+
+    // 4. Bulletproof measuring closure
     let measure_text = |text: &str| -> f64 {
         text.chars().map(|c| {
-            if let Some(glyph_id) = face.glyph_index(c) {
-                if let Some(advance) = face.glyph_hor_advance(glyph_id) {
-                    return advance as f64 * scale;
+            // Try Poppins First
+            if let Some(glyph_id) = poppins_face.glyph_index(c) {
+                if glyph_id.0 != 0 { // Explicitly ignore the .notdef missing box
+                    if let Some(advance) = poppins_face.glyph_hor_advance(glyph_id) {
+                        return advance as f64 * poppins_scale;
+                    }
                 }
             }
-            if c == ' ' { return 8.0; } // Fallback for spaces if needed
-            0.0
+            // Try Math Font Fallback
+            if let Some(glyph_id) = math_face.glyph_index(c) {
+                if glyph_id.0 != 0 {
+                    if let Some(advance) = math_face.glyph_hor_advance(glyph_id) {
+                        return advance as f64 * math_scale;
+                    }
+                }
+            }
+            // Try Symbola Fallback
+            if let Some(glyph_id) = symbola_face.glyph_index(c) {
+                if glyph_id.0 != 0 {
+                    if let Some(advance) = symbola_face.glyph_hor_advance(glyph_id) {
+                        return advance as f64 * symbola_scale;
+                    }
+                }
+            }
+            
+            // Hard Fallbacks
+            if c == ' ' { return 8.0; } 
+            22.0 // A wider default guess for unmapped special characters
         }).sum()
     };
 
@@ -475,7 +507,7 @@ pub async fn render_role_reward_base(
 
     // 4. Render SVG → PNG
     let mut opt = Options::default();
-    opt.font_family = "Poppins, DejaVu Sans, sans-serif".to_string();
+     opt.font_family = "Poppins, DejaVu Sans, Noto Color Emoji, Noto Sans Math, Symbola, sans-serif".to_string();
 
     let mut rtree = match Tree::from_str(&svg_string, &opt) {
         Ok(t) => t,

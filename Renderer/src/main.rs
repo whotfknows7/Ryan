@@ -67,6 +67,11 @@ async fn main() -> anyhow::Result<()> {
     fontdb.load_font_data(symbola_data.to_vec());
     tracing::info!("Loaded Symbola font.");
 
+    // ADD THESE LINES: Load the math font explicitly
+    let math_data = include_bytes!("../../assets/fonts/NotoSansMath-Regular.ttf");
+    fontdb.load_font_data(math_data.to_vec());
+    tracing::info!("Loaded Noto Sans Math font.");
+
     // Pre-bake the static rank card background once.
     tracing::info!("Pre-baking rank card background...");
     let rank_card_bg = build_rank_card_bg(&fontdb)?;
