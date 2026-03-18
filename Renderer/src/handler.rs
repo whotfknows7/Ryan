@@ -53,28 +53,9 @@ fn normalize_discord_name(input: &str) -> String {
 fn requires_system_font(text: &str) -> bool {
     text.chars().any(|c| {
         let u = c as u32;
-        
-        // 1. Latin Extended (Catches Ş, æ, ø, ğ, ł, á, etc.)
-        (0x0080..=0x02AF).contains(&u) ||
-        
-        // 2. Greek, Cyrillic, Arabic, Indic, Thai, etc.
-        (0x0370..=0x1FFF).contains(&u) || 
-        
-        // 3. CJK Ideographs & Kana
-        (0x2E80..=0x9FFF).contains(&u) || 
-        
-        // 4. Hangul (Korean)
-        (0xAC00..=0xD7AF).contains(&u) || 
-        
-        // 5. CJK Compatibility & Arabic Presentation
-        (0xF900..=0xFDFF).contains(&u) ||
-        (0xFE70..=0xFEFF).contains(&u) ||
-        
-        // 6. Fullwidth Forms
-        (0xFF00..=0xFFEF).contains(&u) ||
-        
-        // 7. CJK Extensions
-        (0x20000..=0x2FA1F).contains(&u)
+        // Trigger for ANY character that is not standard ASCII (u > 0x7E)
+        // We skip emojis (u > 0x1F000) so they don't force a font change themselves
+        u > 0x007E && u < 0x1F000
     })
 }
 
