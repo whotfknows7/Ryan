@@ -10,16 +10,15 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 
 ### Hybrid System Design
 **Two-Process Architecture** running concurrently:
-- **Discord Bot Core (Node.js 20+, discord.js v14):** Handles Discord events, commands, background jobs, and database interactions.
+- **Discord Bot Core (Node.js 22+, discord.js v14):** Handles Discord events, commands, background jobs, and database interactions.
 - **Rust Rendering Engine (Axum + resvg):** High-performance SVG-to-PNG conversion via a native Rust pipeline (offloading CPU-intensive work from the Node.js event loop).
 
 ### Performance Optimizations
 - **UDS Redis Connectivity:** Prefers Unix Domain Sockets (`/run/redis/redis-server.sock`) for ultra-low latency, with automatic TCP fallback.
 - **RAM Disk I/O:** Uses `/dev/shm` (Linux RAM Disk) for temporary file processing (GIF frames, icons), offering nanosecond latency vs standard SSD writes.
 - **Micro-Batch XP Pipeline:** XP gain is buffered in memory and flushed to Redis every 1,000ms to minimize network overhead.
-- **Write-Behind Synchronization:** XP is synced from Redis to PostgreSQL every **60 seconds** using an atomic "Rename-then-Process" strategy to ensure no data loss.
-- **Live Leaderboard Updates:** Global leaderboard visuals and state are refreshed every **20 seconds** via a dedicated BullMQ cron worker.
-- **Worker Thread Isolation:** GIF generation is isolated to dedicated worker threads using `ffmpeg` and `gifsicle` to prevent event loop blocking.
+- **Marker-Based Sync Strategy:** Uses a Redis Set (`lb_dirty_guilds`) to track guilds needing updates, replacing broad polling with a high-efficiency targeted refresh loop.
+- **Stateless Profile Cache:** High-speed Redis Hash (`member_cache`) stores top 10 profiles, reducing Discord API overhead by 90% for high-traffic leaderboards.
 - **Self-Healing Architecture:** Automatic startup cleanup of stale renderer/chrome processes and port 3000 liberation.
 
 ---
@@ -27,86 +26,114 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 ## 🚀 Core Technology Stack
 
 ### Bot Technologies (Node.js)
-- **Runtime:** Node.js 20+ (Strictly enforced).
+- **Runtime:** Node.js 22+ (Latest LTS recommended).
 - **Framework:** `discord.js v14.25.1`.
 - **Database:** PostgreSQL with **Prisma ORM (v7.4.0)**.
 - **Caching & State:** **Redis (v5.9.3)** using `ioredis`.
 - **Image Processing:** `sharp` (0.34.5) & System `ffmpeg`/`gifsicle`.
 - **Queue Management:** `BullMQ` (5.69.2) for reliable scheduled background jobs.
-- **Validation:** `Zod` (4.3.6) for environment variables.
+- **Validation:** `Zod` (4.3.6) for environment variables and service integrity.
 - **Monitoring:** `prom-client` (15.1.3) exposing metrics on port **9400**.
 
 ### Rust Rendering Service (Renderer/)
 - **Framework:** `Axum` web server listening on port **3000**.
-- **Engine:** `resvg` / `usvg` / `tiny-skia` with `Poppins-Bold` and `Symbola` fonts.
-- **Memory:** `tikv-jemallocator` for long-term stability.
-- **API Endpoints:**
-    - `POST /render`: Rank Card generation.
-    - `POST /render/leaderboard`: High-fidelity leaderboard visuals.
-    - `POST /render/role-reward/base`: Reward template creation.
-    - `POST /render/role-reward/final`: Personalized reward card delivery.
-    - `GET /metrics`: Prometheus performance metrics.
+- **Engine:** `resvg` / `usvg` / `tiny-skia` with native `ttf-parser` integration.
+- **Fonts:** Multi-layer fallback system: `Poppins-Bold`, `DejaVu Sans`, `NotoSansMath`, `Symbola`.
+- **Memory:** `tikv-jemallocator` for extreme long-term memory stability.
+- **Advanced Features:**
+    - **Unicode Normalization:** Standardizes mathematical alphanumeric characters (𝐆, 𝓨, 𝔐) to Latin for layout consistency.
+    - **Dynamic Measuring:** Character-level width calculations for pixel-perfect HUD alignment.
+    - **System Font Detection:** Automatic fallback for complex scripts (CJK, Arabic, Greek, Cyrillic).
+
+---
+
+## 📊 Data Lifecycle & Sync Strategy
+
+Ryan implements a **Write-Behind Synchronization** strategy to handle massive burst traffic without database contention.
+
+### 1. The Micro-Batching Loop (1s)
+- XP gain is captured in an **In-Memory Buffer** (Map).
+- Every **1,000ms**, the buffer is flushed to Redis using a high-speed pipeline.
+- Redis increments the `xp_buffer:{guildId}` hash and marks the guild as dirty in `lb_dirty_guilds`.
+
+### 2. The Persistence Loop (60s)
+- `XpSyncService.js` scans for active `xp_buffer` keys.
+- **Atomic Rename:** Buffers are renamed to `xp_buffer_processing:{timestamp}` to allow new XP to accumulate while processing.
+- **Bulk Upsert:** Prisma performs a single bulk transaction to update `UserXp` in PostgreSQL.
+- **Self-Healing Rollback:** If the DB update fails, the processing data is merged back into the active Redis buffer.
+
+---
+
+## ⚔️ Clan Warfare & GIF Engine
+
+The Clan Warfare system is a visual-first competition powered by a distributed GIF generation pipeline.
+
+### Architectural Flow
+1. **Trigger**: An XP event or timer triggers a leaderboard refresh.
+2. **Analysis**: `GifService.js` checks if the current leaderboard state (rankings/XP) matches a cached hash in `GifCache`.
+3. **Queue**: If a miss occurs, a job is pushed to **BullMQ**.
+4. **Worker**: `gifWorker.js` spawns an isolated process to handle intensive visual frames using `ffmpeg` and `gifsicle`.
+5. **Storage**: The final GIF is uploaded to a Discord asset channel, and the message link is cached in the DB for instant reuse.
+
+### Assets Mapping
+- Clans are defined in `GuildConfig.clans`.
+- Individual clan icons/banners are stored in `ClanAsset` (id: `guildId:roleId`) and fetched via `AssetService.js`.
+
+---
+
+## ⛓️ The Torture Chamber (Moderation)
+
+A progressive, anti-toxic strike system that integrates directly with the XP engine.
+
+### The 8-Tier Strike System
+| Tier | Punishment | Duration |
+| :--- | :--- | :--- |
+| 1-2 | Warning | Instant |
+| 3 | Short Jail | 30 Minutes |
+| 4 | Mid Jail | 2 Hours |
+| 5 | Long Jail | 12 Hours |
+| 6 | Heavy Jail | 1 Week |
+| 7 | Super Jail | 4 Weeks |
+| 8 | Execution | Permanent Ban |
+
+### Jail Mechanics
+- **State Capture:** `JailLog` stores the user's status, case ID, and offences.
+- **XP Suppression:** Jailed users are blocked from gaining XP at the service layer.
+- **Vote to Release:** Fellow members can vote to release a prisoner if the server configuration allows it.
 
 ---
 
 ## ⚙️ Service Architecture
 
 ### Core Services (`src/services/`)
-- **XpService.js:** Scoring logic (Alpha: 1XP, Emoji/Sticker: 2XP) and automated role reward delivery (Channel Priority: Role Rewards > Leaderboard).
-- **DatabaseService.js:** Prisma client management and **Stateless Hybrid Leaderboards** combining DB baselines with Redis hot buffers in-memory.
-- **AssetService.js:** Handles storage and retrieval of assets via Discord message links.
-- **XpSyncService.js:** Manages the lifecycle of XP data moving from Redis buffers to Postgres (60s cycle).
-- **ResetService.js:** Unified 7-day cycle (Daily resets at 0:00, Weekly resets on Day 0).
-- **PunishmentService.js:** 8-tier strike system with progressive jail durations (30m to 4w/Ban).
-- **GifService.js:** Multi-vCPU GIF generation pipeline (Max 2 workers).
-- **MetricsService.js:** Prometheus collection on port **9400** for Node, Redis pipeline, and Discord latency.
-- **CustomRoleService.js / WeeklyRoleService.js:** Management of user-owned and reward roles.
-
-### Event Handling & Commands
-- **Command Architecture:** `CommandHandler.js` preloads slash commands.
-- **Interactions:** `InteractionHandler.js` routes commands and validates permissions.
-- **Profiles:** `RawProfileUpdateHandler.js` intercepts raw WebSocket packets to detect avatar/name changes instantly.
-- **Reactions:** `ReactionHandler.js` implements stateless clan role switching via BullMQ.
+- **XpService.js:** "True Live XP" logic (DB + Redis + Local Buffer). Scoring: Alpha (1XP), Emoji/Sticker (2XP).
+- **DatabaseService.js:** Centralized Prisma client and hybrid leaderboard generation.
+- **LeaderboardUpdateService.js:** Uses Redis markers (`lb_dirty_guilds`) to refresh visuals every 20s (if dirty).
+- **CustomRoleService.js:** Manages user-owned roles with weekly maintenance cycles.
+- **ResetService.js:** Per-guild UTC reset management (Daily @ 0:00, Weekly @ Sunday).
 
 ---
 
-## 📜 Key Command List
+## 🗃️ Database Schema Overview
+
+| Model | Purpose |
+| :--- | :--- |
+| `UserXp` | Multi-interval XP storage (Daily, Weekly, Lifetime) + Clan mapping. |
+| `GuildConfig` | JSON-driven store for configuration, IDs, clans, and reaction roles. |
+| `JailLog` | Tracks criminal history, active jail status, and community votes. |
+| `ResetCycle` | Stores per-guild maintenance windows for XP resets. |
+| `GifCache` | Maps rank state hashes to pre-generated Discord message links. |
+
+---
+
+## 📜 Key Commands
 
 | Category | Commands |
 | :--- | :--- |
-| **Admin** | `reset-role`, `skip-cycle` |
-| **Config** | `keyword`, `remove-clan-role`, `set-clan-role`, `setup-clan-icon`, `setup`, `setup-role-rewards` |
-| **General** | `clans`, `help`, `hi`, `live`, `rank`, `reconnect`, `repeat` |
-| **Mod** | `crime`, `jail`, `set-xp` |
-| **Owner** | `setup-gif` |
-
----
-
-## ⚔️ Key Systems & Features
-
-### XP Engagement Core
-- **Smart Scoring:** Alpha chars (**1 XP**), Emojis/Stickers (**2 XP**), URLs (**0 XP**) to prioritize quality.
-- **Unified 7-Day Cycle:** Centralized management of Daily and Weekly XP resets across all servers simultaneously.
-- **Alpha Pipeline:** Micro-batched Redis updates with DB verification guards to prevent data loss.
-
-### Clan Wars Conquest
-- **4-Faction Competition:** Dynamic visuals combining customized icons with high-octane backgrounds.
-- **Stateless Participation:** Roles are mapped to clans via DB, allowing instant switching via reactions.
-- **GIF Cache:** Hash-based caching system; reuses pre-generated GIFs if the leaderboard state is unchanged.
-
-### The Torture Chamber
-- **8-Tier Progression:** Punishments scale from 30 minutes to 4 weeks, culminating in a permanent ban.
-- **Community Redemption:** Community-driven "Vote to Release" system for jailed members.
-
----
-
-## ⚙️ Configuration (Env Vars)
-
-- `DISCORD_BOT_TOKEN`, `CLIENT_ID`, `DATABASE_URL`: **Required**.
-- `REGISTER_COMMANDS_GLOBALLY`: Boolean (default `false`).
-- `DEV_GUILD_IDS`: Comma-separated list of test servers.
-- `REDIS_SOCKET`: Unix socket path (optional, defaults to `/run/redis/redis-server.sock`).
-- `REDIS_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`: TCP fallback configuration.
+| **Admin** | `/reset-role`, `/skip-cycle` |
+| **Config** | `/custom-role`, `/keyword`, `/setup`, `/setup-clan-icon`, `/setup-role-rewards` |
+| **General** | `/clans`, `/hi`, `/live`, `/rank`, `/repeat` |
+| **Mod** | `/crime`, `/jail`, `/set-xp` |
 
 ---
 
