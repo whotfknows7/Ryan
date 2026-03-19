@@ -12,6 +12,7 @@ const {
 const { DatabaseService } = require('../../services/DatabaseService');
 const ImageService = require('../../services/ImageService');
 const { AssetService } = require('../../services/AssetService');
+const { XpHelper } = require('../../utils/XpHelper');
 const logger = require('../../lib/logger');
 
 const { invalidate } = require('../../utils/GuildIdsHelper');
@@ -152,12 +153,14 @@ module.exports = {
 
         const modal = new ModalBuilder().setCustomId(`modal_${role.id}`).setTitle(`Config: ${role.name.slice(0, 20)}`);
 
-        const xpInput = new TextInputBuilder()
-          .setCustomId('xp_threshold')
-          .setLabel('XP Threshold (Number)')
+        const currentLevelStr = currentRoleConfig.xp ? XpHelper.getLevelFromXp(currentRoleConfig.xp).toString() : '';
+
+        const levelInput = new TextInputBuilder()
+          .setCustomId('level_threshold')
+          .setLabel('Required Level (Number)')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('e.g. 1000')
-          .setValue(currentRoleConfig.xp ? currentRoleConfig.xp.toString() : '')
+          .setPlaceholder('e.g. 5')
+          .setValue(currentLevelStr)
           .setRequired(true);
 
         const msgInput = new TextInputBuilder()
@@ -185,7 +188,7 @@ module.exports = {
           .setRequired(false);
 
         modal.addComponents(
-          new ActionRowBuilder().addComponents(xpInput),
+          new ActionRowBuilder().addComponents(levelInput),
           new ActionRowBuilder().addComponents(msgInput),
           new ActionRowBuilder().addComponents(imgInput),
           new ActionRowBuilder().addComponents(customRoleInput)
@@ -201,15 +204,20 @@ module.exports = {
 
           await modalSubmit.deferUpdate();
 
-          const xp = parseInt(modalSubmit.fields.getTextInputValue('xp_threshold').replace(/,/g, ''));
+          const level = parseInt(modalSubmit.fields.getTextInputValue('level_threshold').replace(/,/g, ''));
           const message = modalSubmit.fields.getTextInputValue('announcement_msg');
           const iconUrl = modalSubmit.fields.getTextInputValue('icon_url');
           const isCustom = modalSubmit.fields.getTextInputValue('is_custom_role').toLowerCase().includes('yes');
 
-          if (isNaN(xp)) {
-            await modalSubmit.followUp({ content: '❌ XP Threshold must be a valid number.', ephemeral: true });
+          if (isNaN(level) || level < 0) {
+            await modalSubmit.followUp({
+              content: '❌ Required Level must be a valid positive number.',
+              ephemeral: true,
+            });
             return;
           }
+
+          const xp = XpHelper.getXpFromLevel(level);
 
           let assetMessageId = null;
           if (message) {

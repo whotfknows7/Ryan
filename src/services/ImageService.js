@@ -46,6 +46,7 @@ class ImageService {
         current_xp: data.currentXp,
         next_xp: data.requiredXp,
         rank: data.rank,
+        level: data.level,
         clan_color: data.hexColor,
       };
 
@@ -92,6 +93,7 @@ class ImageService {
               avatar_url: user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png',
               xp: user.xp,
               rank: user.rank,
+              level: user.level,
             };
           })
         ),

@@ -7,6 +7,7 @@ pub struct RankCardRequest {
     pub current_xp: i32,
     pub next_xp: i32,
     pub rank: i32,
+    pub level: i32,
     pub clan_color: String,
 }
 
@@ -23,6 +24,7 @@ pub struct LeaderboardUser {
     pub avatar_url: String,
     pub xp: i32,
     pub rank: i32,
+    pub level: i32,
 }
 
 #[derive(Deserialize, Debug)]

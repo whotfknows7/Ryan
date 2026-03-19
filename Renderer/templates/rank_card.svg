@@ -16,8 +16,8 @@
   <!-- Username (dynamic) -->
   <text x="250" y="100" font-family="{% if use_system_font %}'Noto Sans', 'DejaVu Sans', sans-serif{% else %}Poppins, sans-serif{% endif %}" font-size="42" font-weight="bold" fill="#ffffff">{{ username }}</text>
 
-  <!-- Rank (dynamic) -->
-  <text x="750" y="90" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="28" fill="#a0a0a0" text-anchor="end">RANK <tspan fill="#ffffff" font-size="42">#{{ rank }}</tspan></text>
+  <!-- Rank & Level (dynamic) -->
+  <text x="750" y="90" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="28" fill="#a0a0a0" text-anchor="end">LVL <tspan fill="#ffffff" font-size="42">{{ level }}</tspan><tspan dx="15" fill="#a0a0a0" font-size="28">RANK</tspan> <tspan fill="#ffffff" font-size="42">#{{ rank }}</tspan></text>
 
   <!-- XP values (dynamic) -->
   <text x="750" y="160" font-family="Poppins, DejaVu Sans, Noto Color Emoji, sans-serif" font-size="24" fill="#a0a0a0" text-anchor="end">{{ current_xp }} / {{ next_xp }} XP</text>

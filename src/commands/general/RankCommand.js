@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 const { DatabaseService } = require('../../services/DatabaseService');
 const ImageService = require('../../services/ImageService');
+const { XpHelper } = require('../../utils/XpHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -27,13 +28,20 @@ module.exports = {
     const weeklyRank = await DatabaseService.getUserRank(guildId, targetUser.id, 'weekly');
     const allTimeRank = await DatabaseService.getUserRank(guildId, targetUser.id, 'lifetime');
 
-    // 2. Prepare Data for Image Service
+    // 2. Calculate Level and Progress
+    const progress = XpHelper.getLevelProgress(stats.xp);
+
+    // 3. Prepare Data for Image Service
     const rankData = {
       username: targetUser.username,
       avatarUrl: inGuild ? targetUser.displayAvatarURL({ extension: 'png', size: 512 }) : targetUser.defaultAvatarURL,
       // Pill 1 Data
       weeklyXp: stats.weeklyXp,
       allTimeXp: stats.xp,
+      // Level Data
+      level: progress.level,
+      currentXp: progress.progressXp,
+      requiredXp: progress.requiredXp,
       // Pill 2 Data
       weeklyRank: weeklyRank,
       allTimeRank: allTimeRank,
@@ -41,7 +49,7 @@ module.exports = {
       hexColor: interaction.member.displayHexColor,
     };
 
-    // 3. Generate Card
+    // 4. Generate Card
     try {
       const imageBuffer = await ImageService.generateRankCard(rankData);
       const attachment = new AttachmentBuilder(imageBuffer, { name: 'rank.png' });
