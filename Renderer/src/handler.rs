@@ -330,7 +330,7 @@ pub async fn render_leaderboard(
         let username_x_start = separator_x_start + separator_width + 20.0;
 
         // Measure the xp width
-        let xp_str = format!("Lvl {} • XP: {} pts", user.level, format_xp(user.xp));
+        let xp_str = format!("XP: {} pts", format_xp(user.xp));
         let xp_width = measure_text(&xp_str);
 
         // Emoji total width
@@ -393,7 +393,6 @@ pub async fn render_leaderboard(
             username: display_username,
             avatar_b64,
             rank: user.rank,
-            level: user.level,
             formatted_xp: format_xp(user.xp),
             emojis: template_emojis,
             rank_x_start,

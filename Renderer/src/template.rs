@@ -29,7 +29,6 @@ pub struct TemplateUserData {
     pub username: String,
     pub avatar_b64: String,
     pub rank: i32,
-    pub level: i32,
     pub formatted_xp: String,
     pub emojis: Vec<TemplateEmojiData>,
     pub rank_x_start: f64,

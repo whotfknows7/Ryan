@@ -93,7 +93,6 @@ class ImageService {
               avatar_url: user.avatarUrl || 'https://cdn.discordapp.com/embed/avatars/0.png',
               xp: user.xp,
               rank: user.rank,
-              level: user.level,
             };
           })
         ),

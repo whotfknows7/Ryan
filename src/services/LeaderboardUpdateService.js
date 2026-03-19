@@ -305,14 +305,12 @@ class LeaderboardUpdateService {
         usersForImage = topUsers.map((u, index) => {
           const profile = profiles[index];
           const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
-          const level = XpHelper.getLevelFromXp(xpVal);
           return {
             rank: skip + index + 1,
             userId: profile.userId,
             username: profile.displayName,
             avatarUrl: profile.avatarUrl,
             xp: xpVal,
-            level: level,
           };
         });
       } else {
@@ -341,14 +339,12 @@ class LeaderboardUpdateService {
             }
 
             const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
-            const level = XpHelper.getLevelFromXp(xpVal);
             return {
               rank: skip + index + 1,
               userId: u.userId,
               username: displayName,
               avatarUrl: avatarUrl,
               xp: xpVal,
-              level: level,
             };
           })
         );
@@ -357,17 +353,13 @@ class LeaderboardUpdateService {
       logger.error(`Failed to generate member data for leaderboard:`, e);
       // Fallback empty array to prevent complete failure
       if (usersForImage.length === 0)
-        usersForImage = topUsers.map((u, index) => {
-          const xpVal = type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp;
-          return {
-            rank: skip + index + 1,
-            userId: u.userId,
-            username: 'Unknown (Left)',
-            avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
-            xp: xpVal,
-            level: XpHelper.getLevelFromXp(xpVal),
-          };
-        });
+        usersForImage = topUsers.map((u, index) => ({
+          rank: skip + index + 1,
+          userId: u.userId,
+          username: 'Unknown (Left)',
+          avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
+          xp: type === 'weekly' ? u.weeklyXp : type === 'lifetime' ? u.xp : u.dailyXp,
+        }));
     }
 
     // 3. Generate Image (with highlight support)
