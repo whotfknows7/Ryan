@@ -498,9 +498,17 @@ class DatabaseService {
    * Used for stateless reaction role switching.
    */
   static async setUserClan(guildId, userId, clanId) {
-    return await prisma.userXp.updateMany({
-      where: { guildId, userId },
-      data: { clanId },
+    return await prisma.userXp.upsert({
+      where: { guildId_userId: { guildId, userId } },
+      create: {
+        guildId,
+        userId,
+        clanId,
+        xp: 0,
+        dailyXp: 0,
+        weeklyXp: 0,
+      },
+      update: { clanId },
     });
   }
 
