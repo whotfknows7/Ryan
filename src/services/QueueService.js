@@ -139,7 +139,11 @@ class QueueService {
 
     // Helper to add repeatable job
     const addJob = async (name, pattern, everyMs = null) => {
-      const options = { repeat: {} };
+      const options = {
+        repeat: {},
+        removeOnComplete: true,
+        removeOnFail: 100,
+      };
       if (everyMs) options.repeat.every = everyMs;
       else options.repeat.pattern = pattern;
 

@@ -6,134 +6,97 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 
 ---
 
-## 🏛️ Technical Architecture
+## 🏛️ Technical Architecture: The 3-Layer Rule
 
-### Hybrid System Design
-**Two-Process Architecture** running concurrently:
-- **Discord Bot Core (Node.js 22+, discord.js v14):** Handles Discord events, commands, background jobs, and database interactions.
-- **Rust Rendering Engine (Axum + resvg):** High-performance SVG-to-PNG conversion via a native Rust pipeline (offloading CPU-intensive work from the Node.js event loop).
+To ensure system determinism and reliability, Ryan follows a strict 3-layer architectural hierarchy.
 
-### Performance Optimizations
-- **UDS Redis Connectivity:** Prefers Unix Domain Sockets (`/run/redis/redis-server.sock`) for ultra-low latency, with automatic TCP fallback.
-- **RAM Disk I/O:** Uses `/dev/shm` (Linux RAM Disk) for temporary file processing (GIF frames, icons), offering nanosecond latency vs standard SSD writes.
-- **Micro-Batch XP Pipeline:** XP gain is buffered in memory and flushed to Redis every 1,000ms to minimize network overhead.
-- **Marker-Based Sync Strategy:** Uses a Redis Set (`lb_dirty_guilds`) to track guilds needing updates, replacing broad polling with a high-efficiency targeted refresh loop.
-- **Stateless Profile Cache:** High-speed Redis Hash (`member_cache`) stores top 10 profiles, reducing Discord API overhead by 90% for high-traffic leaderboards.
-- **Self-Healing Architecture:** Automatic startup cleanup of stale renderer/chrome processes and port 3000 liberation.
+### Layer 1: Entrypoints (Interactions & Events)
+- **Paths**: `src/handlers/`, `src/commands/`, `src/events/`
+- **Constraint**: Thin routers. They parse Discord inputs and pass them to Services. **Strictly no database calls or complex business logic here.**
 
----
+### Layer 2: The Service Layer (The Logic Core)
+- **Paths**: `src/services/` (e.g., `XpService.js`, `PunishmentService.js`)
+- **Constraint**: Logic must be composable and cohesive. Feature-specific logic (XP counting, jail mechanics, etc.) belongs here.
 
-## 🚀 Core Technology Stack
-
-### Bot Technologies (Node.js)
-- **Runtime:** Node.js 22+ (Latest LTS recommended).
-- **Framework:** `discord.js v14.25.1`.
-- **Database:** PostgreSQL with **Prisma ORM (v7.4.0)**.
-- **Caching & State:** **Redis (v5.9.3)** using `ioredis`.
-- **Image Processing:** `sharp` (0.34.5) & System `ffmpeg`/`gifsicle`.
-- **Queue Management:** `BullMQ` (5.69.2) for reliable scheduled background jobs.
-- **Validation:** `Zod` (4.3.6) for environment variables and service integrity.
-- **Monitoring:** `prom-client` (15.1.3) exposing metrics on port **9400**.
-
-### Rust Rendering Service (Renderer/)
-- **Framework:** `Axum` web server listening on port **3000**.
-- **Engine:** `resvg` / `usvg` / `tiny-skia` with native `ttf-parser` integration.
-- **Fonts:** Multi-layer fallback system: `Poppins-Bold`, `DejaVu Sans`, `NotoSansMath`, `Symbola`.
-- **Memory:** `tikv-jemallocator` for extreme long-term memory stability.
-- **Advanced Features:**
-    - **Unicode Normalization:** Standardizes mathematical alphanumeric characters (𝐆, 𝓨, 𝔐) to Latin for layout consistency.
-    - **Dynamic Measuring:** Character-level width calculations for pixel-perfect HUD alignment.
-    - **System Font Detection:** Automatic fallback for complex scripts (CJK, Arabic, Greek, Cyrillic).
+### Layer 3: Data & Infrastructure
+- **Database**: Prisma (`schema.prisma`) is the single source of truth.
+- **State**: Redis for atomic operations and high-speed caching.
+- **Rendering**: Rust/Axum microservice (`Renderer/`) handles SVG-to-PNG offloading.
 
 ---
 
-## 📊 Data Lifecycle & Sync Strategy
+## 🗺️ System Memory Map
 
-Ryan implements a **Write-Behind Synchronization** strategy to handle massive burst traffic without database contention.
+| Component | Path | Description |
+| :--- | :--- | :--- |
+| **Entrypoints** | `src/handlers/` | Interaction & Message routing |
+| **Features Logic** | `src/services/` | XP, Leaderboards, Punishments |
+| **Visuals** | `Renderer/src/` | Rust/Axum high-performance rendering |
+| **Persistence** | `schema.prisma` | Database schema & Prisma client |
+| **Workers** | `src/workers/` | Background jobs (Gifs, DB Sync) |
 
-### 1. The Micro-Batching Loop (1s)
-- XP gain is captured in an **In-Memory Buffer** (Map).
-- Every **1,000ms**, the buffer is flushed to Redis using a high-speed pipeline.
-- Redis increments the `xp_buffer:{guildId}` hash and marks the guild as dirty in `lb_dirty_guilds`.
+---
 
-### 2. The Persistence Loop (60s)
-- `XpSyncService.js` scans for active `xp_buffer` keys.
-- **Atomic Rename:** Buffers are renamed to `xp_buffer_processing:{timestamp}` to allow new XP to accumulate while processing.
-- **Bulk Upsert:** Prisma performs a single bulk transaction to update `UserXp` in PostgreSQL.
-- **Self-Healing Rollback:** If the DB update fails, the processing data is merged back into the active Redis buffer.
+## ⚡ Scaling for 10,000+ Servers
+
+Ryan is engineered for extreme scale, utilizing low-level optimizations to maintain sub-100ms response times even under heavy load.
+
+- **UDS Redis Connectivity**: Prefers Unix Domain Sockets (`/run/redis/redis-server.sock`) for ultra-low latency, bypassing the TCP stack.
+- **RAM Disk /dev/shm**: Uses Linux Shared Memory for temporary image processing (GIF frames, icons), offering nanosecond I/O.
+- **Micro-Batch XP Pipeline**: XP events are buffered in-memory (Node.js) and flushed to Redis every **1,000ms** to prevent network congestion.
+- **Marker-Based Rank Sync**: Uses a Redis Set (`lb_dirty_guilds`) to signal which guilds require a visual refresh, eliminating wasteful polling.
+
+---
+
+## 📈 The XP Engine
+
+### The Linear Formula
+Ryan uses a deterministic linear progression model for leveling and role rewards:
+**`XP(L) = 238L + 179`**
+- **Level from XP**: `L = floor((XP - 179) / 238)`
+- **Standard Rewards**: Messages (1XP per alpha char), Emojis/Stickers (2XP).
+
+### Data Lifecycle
+1. **The Buffer (1s)**: XP is collected in a local Map.
+2. **The Cache (Redis)**: Every second, the buffer is pushed to a Redis Hash.
+3. **The Persistence (60s)**: `XpSyncService.js` performs a bulk Prisma upsert to PostgreSQL.
+
+---
+
+## 🎨 Rust Rendering Engine (`Renderer/`)
+
+A dedicated high-performance service built with **Axum** and **resvg** to handle complex visual generation.
+
+- **Multi-Layer Font Fallback**: Supports `Poppins-Bold`, `DejaVu Sans`, `NotoSansMath`, and `Symbola`.
+- **Unicode Normalization**: Automatically standardizes mathematically styled names (e.g., 𝐆𝐎𝐊𝐔 → GOKU) to ensure layout consistency.
+- **Tikv-Jemalloc**: Optimized memory allocation for long-running, CPU-intensive rendering tasks.
 
 ---
 
 ## ⚔️ Clan Warfare & GIF Engine
 
-The Clan Warfare system is a visual-first competition powered by a distributed GIF generation pipeline.
-
-### Architectural Flow
-1. **Trigger**: An XP event or timer triggers a leaderboard refresh.
-2. **Analysis**: `GifService.js` checks if the current leaderboard state (rankings/XP) matches a cached hash in `GifCache`.
-3. **Queue**: If a miss occurs, a job is pushed to **BullMQ**.
-4. **Worker**: `gifWorker.js` spawns an isolated process to handle intensive visual frames using `ffmpeg` and `gifsicle`.
-5. **Storage**: The final GIF is uploaded to a Discord asset channel, and the message link is cached in the DB for instant reuse.
-
-### Assets Mapping
-- Clans are defined in `GuildConfig.clans`.
-- Individual clan icons/banners are stored in `ClanAsset` (id: `guildId:roleId`) and fetched via `AssetService.js`.
+Powered by a distributed background job system using **BullMQ**.
+- **GifService.js**: Computes rank state hashes; if a hash changes, it triggers a re-render.
+- **gifWorker.js**: Isolated worker processes using `ffmpeg` and `gifsicle` to generate high-fidelity competition GIFs.
 
 ---
 
 ## ⛓️ The Torture Chamber (Moderation)
 
-A progressive, anti-toxic strike system that integrates directly with the XP engine.
-
-### The 8-Tier Strike System
-| Tier | Punishment | Duration |
-| :--- | :--- | :--- |
-| 1-2 | Warning | Instant |
-| 3 | Short Jail | 30 Minutes |
-| 4 | Mid Jail | 2 Hours |
-| 5 | Long Jail | 12 Hours |
-| 6 | Heavy Jail | 1 Week |
-| 7 | Super Jail | 4 Weeks |
-| 8 | Execution | Permanent Ban |
-
-### Jail Mechanics
-- **State Capture:** `JailLog` stores the user's status, case ID, and offences.
-- **XP Suppression:** Jailed users are blocked from gaining XP at the service layer.
-- **Vote to Release:** Fellow members can vote to release a prisoner if the server configuration allows it.
+An 8-tier progressive punishment system integrated with the XP engine.
+- **Jail Mechanics**: Users in jail are suppressed from gaining XP.
+- **Community Redemption**: Servers can enable "Vote to Release" for jailed members.
 
 ---
 
-## ⚙️ Service Architecture
+## 🗃️ Services Overview
 
-### Core Services (`src/services/`)
-- **XpService.js:** "True Live XP" logic (DB + Redis + Local Buffer). Scoring: Alpha (1XP), Emoji/Sticker (2XP).
-- **DatabaseService.js:** Centralized Prisma client and hybrid leaderboard generation.
-- **LeaderboardUpdateService.js:** Uses Redis markers (`lb_dirty_guilds`) to refresh visuals every 20s (if dirty).
-- **CustomRoleService.js:** Manages user-owned roles with weekly maintenance cycles.
-- **ResetService.js:** Per-guild UTC reset management (Daily @ 0:00, Weekly @ Sunday).
-
----
-
-## 🗃️ Database Schema Overview
-
-| Model | Purpose |
+| Service | Primary Responsibility |
 | :--- | :--- |
-| `UserXp` | Multi-interval XP storage (Daily, Weekly, Lifetime) + Clan mapping. |
-| `GuildConfig` | JSON-driven store for configuration, IDs, clans, and reaction roles. |
-| `JailLog` | Tracks criminal history, active jail status, and community votes. |
-| `ResetCycle` | Stores per-guild maintenance windows for XP resets. |
-| `GifCache` | Maps rank state hashes to pre-generated Discord message links. |
-
----
-
-## 📜 Key Commands
-
-| Category | Commands |
-| :--- | :--- |
-| **Admin** | `/reset-role`, `/skip-cycle` |
-| **Config** | `/custom-role`, `/keyword`, `/setup`, `/setup-clan-icon`, `/setup-role-rewards` |
-| **General** | `/clans`, `/hi`, `/live`, `/rank`, `/repeat` |
-| **Mod** | `/crime`, `/jail`, `/set-xp` |
+| `XpService.js` | Live XP calculation and reward distribution. |
+| `DatabaseService.js` | High-speed leaderboard queries and JSON config parsing. |
+| `XpSyncService.js` | Atomic write-behind sync from Redis to Postgres. |
+| `AssetService.js` | Discord-backed asset delivery for custom icons. |
 
 ---
 
