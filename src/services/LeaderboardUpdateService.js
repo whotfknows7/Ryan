@@ -5,7 +5,6 @@ const { getIds, invalidate } = require('../utils/GuildIdsHelper');
 const { DatabaseService } = require('./DatabaseService');
 const { XpSyncService } = require('./XpSyncService');
 const ImageService = require('./ImageService');
-const { XpHelper } = require('../utils/XpHelper');
 const logger = require('../lib/logger');
 const { defaultRedis } = require('../config/redis');
 

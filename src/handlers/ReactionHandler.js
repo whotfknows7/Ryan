@@ -28,7 +28,10 @@ class ReactionHandler {
 
       let roleConfig = null;
       for (const config of Object.values(reactionRoles)) {
-        if (config.messageId === messageId && (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)) {
+        if (
+          config.messageId === messageId &&
+          (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)
+        ) {
           roleConfig = config;
           break;
         }
@@ -44,8 +47,10 @@ class ReactionHandler {
 
       // EXCLUSIVITY LOGIC: Check for existing clan/unique roles
       if (roleConfig.isClanRole || roleConfig.uniqueRoles) {
-        for (const [otherMsgId, otherConfig] of Object.entries(reactionRoles)) {
-          if (otherMsgId === messageId) continue; // Skip the current reaction
+        for (const otherConfig of Object.values(reactionRoles)) {
+          // CRITICAL FIX: Skip ONLY the exact role the user just clicked.
+          // We no longer skip by messageId since all clan roles share one message.
+          if (otherConfig.roleId === roleConfig.roleId) continue;
 
           if (otherConfig.isClanRole || otherConfig.uniqueRoles) {
             if (hasRole(member, otherConfig.roleId)) {
@@ -111,7 +116,10 @@ class ReactionHandler {
 
       let roleConfig = null;
       for (const config of Object.values(reactionRoles)) {
-        if (config.messageId === messageId && (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)) {
+        if (
+          config.messageId === messageId &&
+          (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)
+        ) {
           roleConfig = config;
           break;
         }
