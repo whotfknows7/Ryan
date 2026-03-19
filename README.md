@@ -8,20 +8,22 @@ Ryan doesn't just manage a server; it creates a living, breathing world through 
 
 ## 🏛️ Technical Architecture: The 3-Layer Rule
 
-To ensure system determinism and reliability, Ryan follows a strict 3-layer architectural hierarchy.
+To maintain 100% system reliability and developer clarity, Ryan enforces a strict 3-tier hierarchy. Any deviation from these boundaries is considered a critical architectural failure.
 
 ### Layer 1: Entrypoints (Interactions & Events)
 - **Paths**: `src/handlers/`, `src/commands/`, `src/events/`
-- **Constraint**: Thin routers. They parse Discord inputs and pass them to Services. **Strictly no database calls or complex business logic here.**
+- **Responsibility**: Thin routers. They parse Discord `Interaction` or `Message` inputs, extract relevant data, and delegate to the Service Layer.
+- **Constraint**: **Zero-Logic Zone.** No direct `prisma` calls or complex business math allowed here.
 
 ### Layer 2: The Service Layer (The Logic Core)
-- **Paths**: `src/services/` (e.g., `XpService.js`, `PunishmentService.js`)
-- **Constraint**: Logic must be composable and cohesive. Feature-specific logic (XP counting, jail mechanics, etc.) belongs here.
+- **Paths**: `src/services/` (e.g., `XpService.js`, `PunishmentService.js`, `XpSyncService.js`)
+- **Responsibility**: The brain of the bot. Handles XP calculations, leveling logic, jail timers, and role synchronization.
+- **Integration**: Communicates with Redis for hot state and Prisma for long-term persistence.
 
 ### Layer 3: Data & Infrastructure
-- **Database**: Prisma (`schema.prisma`) is the single source of truth.
-- **State**: Redis for atomic operations and high-speed caching.
-- **Rendering**: Rust/Axum microservice (`Renderer/`) handles SVG-to-PNG offloading.
+- **Persistence**: **PostgreSQL** via Prisma ORM for relational truth.
+- **Hot Cache**: **Redis** for atomic increments (XP) and dirty-state markers.
+- **Visuals**: **Rust/Axum** rendering microservice (`Renderer/`) for CPU-bound SVG-to-PNG operations.
 
 ---
 
@@ -29,74 +31,152 @@ To ensure system determinism and reliability, Ryan follows a strict 3-layer arch
 
 | Component | Path | Description |
 | :--- | :--- | :--- |
-| **Entrypoints** | `src/handlers/` | Interaction & Message routing |
-| **Features Logic** | `src/services/` | XP, Leaderboards, Punishments |
-| **Visuals** | `Renderer/src/` | Rust/Axum high-performance rendering |
-| **Persistence** | `schema.prisma` | Database schema & Prisma client |
-| **Workers** | `src/workers/` | Background jobs (Gifs, DB Sync) |
+| **Interactions** | `src/handlers/` | Command & Component routing |
+| **Logic** | `src/services/` | XP, Leaderboards, Punishments |
+| **Visuals** | `Renderer/src/` | Rust high-performance rendering |
+| **Persistence** | `schema.prisma` | DB schema & Prisma client |
+| **Workers** | `src/workers/` | Background BullMQ jobs (Gifs, Sync) |
+| **Lib** | `src/lib/` | Logger, Redis config, Prisma client |
 
 ---
 
-## ⚡ Scaling for 10,000+ Servers
+## ⚡ Performance Deep-Dive: Scaling to 10k Servers
 
-Ryan is engineered for extreme scale, utilizing low-level optimizations to maintain sub-100ms response times even under heavy load.
+Ryan is engineered to handle extreme burst traffic without sacrificing responsiveness.
 
-- **UDS Redis Connectivity**: Prefers Unix Domain Sockets (`/run/redis/redis-server.sock`) for ultra-low latency, bypassing the TCP stack.
-- **RAM Disk /dev/shm**: Uses Linux Shared Memory for temporary image processing (GIF frames, icons), offering nanosecond I/O.
-- **Micro-Batch XP Pipeline**: XP events are buffered in-memory (Node.js) and flushed to Redis every **1,000ms** to prevent network congestion.
-- **Marker-Based Rank Sync**: Uses a Redis Set (`lb_dirty_guilds`) to signal which guilds require a visual refresh, eliminating wasteful polling.
+### 1. UDS Redis Connectivity
+By default, the bot connects to Redis via **Unix Domain Sockets** (`/run/redis/redis-server.sock`). 
+- **Benefit**: Bypasses the entire TCP/IP stack, reducing latency by ~30% and eliminating port exhaustion issues under high concurrency.
+
+### 2. RAM Disk I/O (`/dev/shm`)
+For high-frequency visual operations (e.g., rendering thousands of avatar frames or clan icons), Ryan utilizes the **Linux RAM Disk**.
+- **Benefit**: Nanosecond write speeds and zero wear-and-tear on SSDs.
+
+### 3. Micro-Batching XP Pipeline
+XP gain is never written to the DB in real-time. Instead, it follows a high-efficiency flush cycle:
+1. **In-Memory Buffer**: Messages are tallied in a Node.js `Map`.
+2. **Redis Flush (1s)**: The buffer is piped to Redis using `HINCRBY`.
+3. **Postgres Sync (60s)**: `XpSyncService` performs an atomic `RENAME` on the Redis key and executes a bulk Prisma transaction.
 
 ---
 
-## 📈 The XP Engine
+## 📊 Data Flow Visuals
 
-### The Linear Formula
-Ryan uses a deterministic linear progression model for leveling and role rewards:
-**`XP(L) = 238L + 179`**
-- **Level from XP**: `L = floor((XP - 179) / 238)`
-- **Standard Rewards**: Messages (1XP per alpha char), Emojis/Stickers (2XP).
+### XP Synchronization Strategy
+```mermaid
+sequenceDiagram
+    participant D as Discord Event
+    participant B as In-Memory Buffer
+    participant R as Redis (Hot State)
+    participant P as PostgreSQL (Truth)
 
-### Data Lifecycle
-1. **The Buffer (1s)**: XP is collected in a local Map.
-2. **The Cache (Redis)**: Every second, the buffer is pushed to a Redis Hash.
-3. **The Persistence (60s)**: `XpSyncService.js` performs a bulk Prisma upsert to PostgreSQL.
+    D ->> B: Message Sent (+1 XP)
+    Note over B: Batches for 1000ms
+    B ->> R: pipeline.hincrby()
+    Note over R: Marked as 'Dirty'
+    R ->> P: XpSyncService (every 60s)
+    P -->> R: Atomic Clear
+```
+
+### Live Leaderboard Merging (The Hybrid Query)
+To show "Live" rankings, Ryan merges two data sources in real-time:
+```mermaid
+graph TD
+    A[Request Leaderboard] --> B{Service Layer}
+    B --> C[Fetch DB Top-20]
+    B --> D[Fetch Redis Hot Buffer]
+    C --> E[In-Memory Merge & Sort]
+    D --> E
+    E --> F[Final Rendered HUD]
+```
+
+---
+
+## 📈 The XP Engine internals
+
+### The Quadratic Progression
+Ryan uses a cumulative quadratic model to ensure that leveling remains challenging and rewarding over time.
+**`TotalXP(Level) = 119 * Level² + 298 * Level`**
+
+- **Inversion**: `Level = floor((-298 + sqrt(298² + 4 * 119 * XP)) / 238)`
+- **Progression**: The XP required to reach the next level increases linearly by **238** per level (starting from 417 for Level 1).
+
+### Scoring Metrics
+- **Alpha Characters**: 1 XP per character.
+- **Emojis & Stickers**: 2 XP per item.
+- **Anti-Spam**: XP is suppressed for jailed users or during specific cooldown windows.
 
 ---
 
 ## 🎨 Rust Rendering Engine (`Renderer/`)
 
-A dedicated high-performance service built with **Axum** and **resvg** to handle complex visual generation.
+A standalone service built in **Rust** designed to offload visual debt from the Node.js event loop.
 
-- **Multi-Layer Font Fallback**: Supports `Poppins-Bold`, `DejaVu Sans`, `NotoSansMath`, and `Symbola`.
-- **Unicode Normalization**: Automatically standardizes mathematically styled names (e.g., 𝐆𝐎𝐊𝐔 → GOKU) to ensure layout consistency.
-- **Tikv-Jemalloc**: Optimized memory allocation for long-running, CPU-intensive rendering tasks.
+### Advanced Rendering Features
+- **Unicode Normalization**: Automatically standardizes mathematically styled names (e.g., 𝐆𝐎𝐊𝐔 → GOKU) to prevent font-width miscalculations.
+- **Multi-Layer Font Fallback**:
+  1. `Poppins-Bold` (Primary Branding)
+  2. `DejaVu Sans` (Standard Unicode)
+  3. `NotoSansMath` (Scientific/Fancy symbols)
+  4. `Symbola` (Legacy Emoji/Symbols)
+- **Tikv-Jemalloc**: Uses a low-fragmentation allocator for extreme long-term stability in high-memory environments.
 
 ---
 
-## ⚔️ Clan Warfare & GIF Engine
+## ⚔️ Clan Warfare: The Motion Compiler
 
-Powered by a distributed background job system using **BullMQ**.
-- **GifService.js**: Computes rank state hashes; if a hash changes, it triggers a re-render.
-- **gifWorker.js**: Isolated worker processes using `ffmpeg` and `gifsicle` to generate high-fidelity competition GIFs.
+The Clan Warfare system is a visual competition powered by a distributed GIF generation pipeline.
+
+### The motion logic
+Instead of static images, `gifWorker.js` uses a **Motion Compiler** to translate `coords.json` into complex FFmpeg mathematical expressions.
+- **FFmpeg Math**: `[0:v][1:v]overlay=x='between(n,0,10)*100+between(n,11,20)*150':y=...`
+- **Dynamic Visibility**: Clans only appear on the HUD during their specific "action frames" defined in the template.
 
 ---
 
 ## ⛓️ The Torture Chamber (Moderation)
 
-An 8-tier progressive punishment system integrated with the XP engine.
-- **Jail Mechanics**: Users in jail are suppressed from gaining XP.
-- **Community Redemption**: Servers can enable "Vote to Release" for jailed members.
+A progressive, anti-toxic strike system that integrates directly with the XP engine.
+
+### The 8-Tier Punishment Table
+| Tier | Punishment | Duration | XP Gain? |
+| :--- | :--- | :--- | :--- |
+| **1-2** | Warning | Instant | ✅ |
+| **3** | Short Jail | 30 Minutes | ❌ |
+| **4** | Mid Jail | 2 Hours | ❌ |
+| **5** | Long Jail | 12 Hours | ❌ |
+| **6** | Heavy Jail | 1 Week | ❌ |
+| **7** | Super Jail | 4 Weeks | ❌ |
+| **8** | Execution | Permanent Ban | ❌ |
 
 ---
 
-## 🗃️ Services Overview
+## 🗃️ Database Schema Overview
 
-| Service | Primary Responsibility |
-| :--- | :--- |
-| `XpService.js` | Live XP calculation and reward distribution. |
-| `DatabaseService.js` | High-speed leaderboard queries and JSON config parsing. |
-| `XpSyncService.js` | Atomic write-behind sync from Redis to Postgres. |
-| `AssetService.js` | Discord-backed asset delivery for custom icons. |
+| Model | Purpose | Key Fields |
+| :--- | :--- | :--- |
+| `UserXp` | Multi-interval XP storage | `userId`, `guildId`, `dailyXp`, `weeklyXp`, `xp` |
+| `GuildConfig` | JSON-driven configuration | `ids`, `config`, `clans`, `reactionRoles` |
+| `JailLog` | Tracks criminal history | `offences`, `punishmentEnd`, `status`, `votes` |
+| `ResetCycle` | Maintenance windows | `lastResetUtc`, `resetHour`, `resetMinute` |
+| `GifCache` | Visual asset deduplication | `rankHash`, `messageLink` |
+
+---
+
+## 🛠️ Development & Deployment
+
+### Build the Rust Renderer
+```bash
+cd Renderer
+cargo build --release
+./target/release/renderer
+```
+
+### Start the Bot (Production)
+```bash
+pm2 start ecosystem.config.js
+pm2 logs
+```
 
 ---
 

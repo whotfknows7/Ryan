@@ -3,24 +3,26 @@
 class XpHelper {
   /**
    * Calculates the total cumulative XP required to reach a specific level.
-   * Based on the linear formula: XP(L) = 238L + 179
+   * Based on the cumulative sum of the linear progression (238i + 179):
+   * TotalXP(L) = 119L² + 298L
    * @param {number} level
    * @returns {number} The total XP required
    */
   static getXpFromLevel(level) {
-    if (level <= 0) return 0; // Baseline level 0 starts at 0 XP
-    return 238 * level + 179;
+    if (level <= 0) return 0;
+    return 119 * level * level + 298 * level;
   }
 
   /**
    * Calculates the current level based on total cumulative XP.
-   * Inverse of the linear formula: L = (XP - 179) / 238
+   * Inverse of the quadratic formula: L = (-298 + sqrt(298² + 4 * 119 * XP)) / (2 * 119)
    * @param {number} xp
    * @returns {number} The current level (floored integer)
    */
   static getLevelFromXp(xp) {
-    if (xp < 417) return 0; // Level 1 starts at 417 XP based on the formula at L=1
-    const level = (xp - 179) / 238;
+    if (xp < 417) return 0; // Level 1 starts at 417 XP (119 + 298)
+    // Solving 119L² + 298L - XP = 0
+    const level = (-298 + Math.sqrt(298 * 298 + 4 * 119 * xp)) / (2 * 119);
     return Math.floor(level);
   }
 
