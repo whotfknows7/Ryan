@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { prisma } = require('../lib/prisma');
 const { XpSyncService } = require('./XpSyncService');
+const { WeeklyRoleService } = require('./WeeklyRoleService');
 
 class ResetService {
   static DAYS_IN_CYCLE = 7;
@@ -37,9 +38,9 @@ class ResetService {
   static async getOrInitializeCycle(guildId) {
     let cycle = await DatabaseService.getResetCycle(guildId);
     if (!cycle) {
-      await DatabaseService.initResetCycle(guildId);
+      cycle = await DatabaseService.initResetCycle(guildId);
       logger.info(`Initialized reset cycle for guild ${guildId}`);
-      return null;
+      return cycle;
     }
     return cycle;
   }
@@ -136,11 +137,6 @@ class ResetService {
         logger.info(`Daily winner for guild ${guildId}: User ${topDaily[0].userId} with ${topDaily[0].dailyXp} XP`);
       }
 
-      // 2. Update Clan War (Syncs current XP to Clan DB)
-      // Automatically manages dailyXp in the unified 7-day loop.
-      const clanUpdates = await this.calculateClanUpdates(client, guildId);
-      await DatabaseService.syncUserClanRoles(guildId, clanUpdates);
-
       // 3. Reset ONLY the dailyXp column (The "Daily" part of the reset)
       await DatabaseService.resetDailyXp(guildId);
 
@@ -174,15 +170,12 @@ class ResetService {
         logger.info(`Weekly winner for guild ${guildId}: User ${topWeekly[0].userId} with ${topWeekly[0].weeklyXp} XP`);
       }
 
-      // 2. Final Clan War Sync
-      const clanUpdates = await this.calculateClanUpdates(client, guildId);
-      await DatabaseService.syncUserClanRoles(guildId, clanUpdates);
-
       this.wipeAssetCache();
       const finalTotals = await DatabaseService.getClanTotalXp(guildId);
 
       // 3. Reset ONLY the weeklyXp column
       // Preserving Lifetime XP for everyone in the unified 7-day loop.
+      await WeeklyRoleService.checkWeeklyRole(client, guildId);
       await DatabaseService.resetWeeklyXp(guildId);
 
       // 4. Reset ClanXP (New war starts next week)
@@ -209,15 +202,6 @@ class ResetService {
     } catch {
       /* best-effort wipe */
     }
-  }
-
-  /*
-   * [REMOVED] calculateClanUpdates
-   * We no longer sync from Roles -> DB. The DB is now the source of truth for Clan IDs.
-   * ReactionHandler updates DB on every change.
-   */
-  static async calculateClanUpdates() {
-    return [];
   }
 
   // =================================================================
