@@ -608,9 +608,9 @@ class DatabaseService {
   static async getClanXp(guildId, clanId) {
     const result = await prisma.userXp.aggregate({
       where: { guildId, clanId },
-      _sum: { xp: true },
+      _sum: { weeklyXp: true },
     });
-    return result._sum.xp ?? 0;
+    return result._sum.weeklyXp ?? 0;
   }
 
   static async getClanTotalXp(guildId) {
@@ -620,11 +620,11 @@ class DatabaseService {
         guildId,
         clanId: { gt: 0 }, // exclude no clan
       },
-      _sum: { xp: true },
+      _sum: { weeklyXp: true },
     });
     const clanTotals = {};
     results.forEach((r) => {
-      if (r.clanId) clanTotals[r.clanId] = r._sum.xp || 0;
+      if (r.clanId) clanTotals[r.clanId] = r._sum.weeklyXp || 0;
     });
     return clanTotals;
   }

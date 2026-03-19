@@ -26,20 +26,64 @@ class ReactionHandler {
       const reactionRoles = await ConfigService.getReactionRoles(guildId);
       if (!reactionRoles) return;
 
-      const roleConfig = reactionRoles[messageId];
+      let roleConfig = null;
+      for (const config of Object.values(reactionRoles)) {
+        if (config.messageId === messageId && (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)) {
+          roleConfig = config;
+          break;
+        }
+      }
+
       if (!roleConfig) return;
-
-      const targetEmoji = roleConfig.emoji;
-
-      const isMatch = targetEmoji === emojiString || targetEmoji === emojiName || targetEmoji === emojiId;
-
-      if (!isMatch) return;
 
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return;
 
       await member.roles.add(roleConfig.roleId, 'Reaction role assignment');
       logger.info(`Assigned role ${roleConfig.roleId} to user ${userId} via reaction`);
+
+      // EXCLUSIVITY LOGIC: Check for existing clan/unique roles
+      if (roleConfig.isClanRole || roleConfig.uniqueRoles) {
+        for (const [otherMsgId, otherConfig] of Object.entries(reactionRoles)) {
+          if (otherMsgId === messageId) continue; // Skip the current reaction
+
+          if (otherConfig.isClanRole || otherConfig.uniqueRoles) {
+            if (hasRole(member, otherConfig.roleId)) {
+              // 1. Remove the old role
+              try {
+                await member.roles.remove(otherConfig.roleId, 'Clan Exclusivity Auto-Removal');
+                logger.info(`Removed exclusive role ${otherConfig.roleId} from user ${userId}`);
+              } catch (e) {
+                logger.error(`Failed to remove exclusive role: ${e}`);
+              }
+
+              // 2. Remove the old reaction via REST
+              try {
+                const eStr = otherConfig.emoji;
+                const eRest = eStr.match(/<a?:(.+?):(\d+)>/)
+                  ? `${eStr.match(/<a?:(.+?):(\d+)>/)[1]}:${eStr.match(/<a?:(.+?):(\d+)>/)[2]}`
+                  : encodeURIComponent(eStr);
+
+                await client.rest.delete(
+                  `/channels/${otherConfig.channelId}/messages/${otherConfig.messageId}/reactions/${eRest}/${userId}`
+                );
+              } catch {
+                // Ignore API errors if the reaction is already gone
+              }
+            }
+          }
+        }
+
+        // 3. Sync Clan to Database for XP tracking
+        const ids = await DatabaseService.getGuildIds(guildId);
+        let clanId = 0;
+        if (roleConfig.roleId === ids.clanRole1Id) clanId = 1;
+        else if (roleConfig.roleId === ids.clanRole2Id) clanId = 2;
+        else if (roleConfig.roleId === ids.clanRole3Id) clanId = 3;
+        else if (roleConfig.roleId === ids.clanRole4Id) clanId = 4;
+
+        if (clanId > 0) await DatabaseService.setUserClan(guildId, userId, clanId);
+      }
     } catch (error) {
       logger.error(`Error in handleReactionAdd: ${error}`);
     }
@@ -65,14 +109,15 @@ class ReactionHandler {
       const reactionRoles = await ConfigService.getReactionRoles(guildId);
       if (!reactionRoles) return;
 
-      const roleConfig = reactionRoles[messageId];
+      let roleConfig = null;
+      for (const config of Object.values(reactionRoles)) {
+        if (config.messageId === messageId && (config.emoji === emojiString || config.emoji === emojiName || config.emoji === emojiId)) {
+          roleConfig = config;
+          break;
+        }
+      }
 
       if (!roleConfig) return;
-
-      const targetEmoji = roleConfig.emoji;
-      const isMatch = targetEmoji === emojiString || targetEmoji === emojiName || targetEmoji === emojiId;
-
-      if (!isMatch) return;
 
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) return;
@@ -80,6 +125,11 @@ class ReactionHandler {
       if (hasRole(member, roleConfig.roleId)) {
         await member.roles.remove(roleConfig.roleId, 'Reaction role removal');
         logger.info(`Removed role ${roleConfig.roleId} from user ${userId} via unreact`);
+
+        // Sync departure to Database
+        if (roleConfig.isClanRole) {
+          await DatabaseService.setUserClan(guildId, userId, 0);
+        }
       }
     } catch (error) {
       logger.error(`Error in handleReactionRemove: ${error}`);
