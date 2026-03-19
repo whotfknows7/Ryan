@@ -136,6 +136,11 @@ function invalidate(guildId) {
 }
 
 /**
+ * Alias for invalidate (used in some services/commands)
+ */
+const clearCache = invalidate;
+
+/**
  * Clear all cache
  */
 function clearAllCache() {
@@ -358,6 +363,7 @@ module.exports = {
   getIds,
   getFullConfig,
   invalidate,
+  clearCache,
   clearAllCache,
   GuildHelper,
   createGuildHelper,
