@@ -16,7 +16,7 @@ module.exports = {
   // Mandatory Decorative Emojis (Must be in a server the bot is in)
   EMOJIS: {
     RANK_1: '<a:One:1310686608109862962>', // The '1' Emoji
-    RANK_2: '<<a:pink_two:1310686637902004224>', // The '2' Emoji
+    RANK_2: '<a:pink_two:1310686637902004224>', // The '2' Emoji
     DASH_BLUE: '<:dash_blue:1310695526244552824>',
   },
 };

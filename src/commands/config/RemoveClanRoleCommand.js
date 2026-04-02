@@ -6,9 +6,7 @@ const RemoveClanRoleCommand = {
   data: new SlashCommandBuilder()
     .setName('remove_clan_role')
     .setDescription('Remove a clan role setup by Message ID and optionally Role')
-    .addStringOption((opt) =>
-      opt.setName('message_id').setDescription('The ID of the message').setRequired(true)
-    )
+    .addStringOption((opt) => opt.setName('message_id').setDescription('The ID of the message').setRequired(true))
     .addRoleOption((opt) =>
       opt.setName('role').setDescription('The specific role to remove (optional)').setRequired(false)
     ),
@@ -59,6 +57,17 @@ const RemoveClanRoleCommand = {
 
       for (const key of keysToRemove) {
         delete reactionRoles[key];
+      }
+
+      // If we removed the active clan message configuration entirely, reset the clanMessageId
+      const { DatabaseService } = require('../../services/DatabaseService');
+      const guildIds = await DatabaseService.getGuildIds(guildId);
+
+      if (guildIds.clanMessageId === messageId) {
+        const remainingForMessage = Object.values(reactionRoles).some((c) => c.messageId === messageId);
+        if (!remainingForMessage) {
+          await DatabaseService.updateGuildIds(guildId, { clanMessageId: null });
+        }
       }
 
       await ConfigService.saveReactionRoles(guildId, reactionRoles);

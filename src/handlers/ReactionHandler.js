@@ -13,7 +13,6 @@ class ReactionHandler {
     if (!guild) return;
 
     try {
-
       // 2. Standard Reaction Roles (if not clan message)
       const reactionRoles = await ConfigService.getReactionRoles(guildId);
       if (!reactionRoles) return;
@@ -72,12 +71,14 @@ class ReactionHandler {
         }
 
         // 3. Sync Clan to Database for XP tracking
-        const ids = await DatabaseService.getGuildIds(guildId);
+        const config = await DatabaseService.getFullGuildConfig(guildId);
+        const ids = config?.ids || {};
         let clanId = 0;
-        if (roleConfig.roleId === ids.clanRole1Id) clanId = 1;
-        else if (roleConfig.roleId === ids.clanRole2Id) clanId = 2;
-        else if (roleConfig.roleId === ids.clanRole3Id) clanId = 3;
-        else if (roleConfig.roleId === ids.clanRole4Id) clanId = 4;
+
+        if (ids.clanRole1Id === roleConfig.roleId) clanId = 1;
+        else if (ids.clanRole2Id === roleConfig.roleId) clanId = 2;
+        else if (ids.clanRole3Id === roleConfig.roleId) clanId = 3;
+        else if (ids.clanRole4Id === roleConfig.roleId) clanId = 4;
 
         if (clanId > 0) await DatabaseService.setUserClan(guildId, userId, clanId);
       }
@@ -93,7 +94,6 @@ class ReactionHandler {
     if (!guild) return;
 
     try {
-
       // 2. Standard Reaction Roles
       const reactionRoles = await ConfigService.getReactionRoles(guildId);
       if (!reactionRoles) return;
@@ -127,7 +127,6 @@ class ReactionHandler {
       logger.error(`Error in handleReactionRemove: ${error}`);
     }
   }
-
 }
 
 module.exports = { ReactionHandler };

@@ -178,6 +178,8 @@ class KeywordReactionHandler {
 // ============================================================================
 
 class RoleRewardHandler {
+  static recentAwards = new Set();
+
   /**
    * Checks and grants role rewards based on XP
    * Stateless: Fetches config from DB (or simple service cache) each time
@@ -206,17 +208,34 @@ class RoleRewardHandler {
       return;
     }
 
+    let highestMissingRoleAnnounced = false;
+    let foundHighestOwnedRole = false;
+
     for (const reward of rewards) {
       if (currentXp >= reward.xp) {
         const userHasRole = hasRole(member, reward.roleId);
 
+        if (userHasRole) {
+          foundHighestOwnedRole = true;
+        }
+
         if (!userHasRole) {
+          if (foundHighestOwnedRole) continue;
+
+          const cacheKey = `${guild.id}:${member.id}:${reward.roleId}`;
+          if (RoleRewardHandler.recentAwards.has(cacheKey)) continue;
+
+          RoleRewardHandler.recentAwards.add(cacheKey);
+          // Cooldown of 60 seconds to prevent race condition duplicates
+          setTimeout(() => RoleRewardHandler.recentAwards.delete(cacheKey), 60000);
+
           try {
             await member.roles.add(reward.roleId, 'XP Role Reward');
             logger.info(`Awarded Role ${reward.roleId} to ${member.user.tag} at ${currentXp} XP`);
 
-            if (reward.message) {
+            if (reward.message && !highestMissingRoleAnnounced) {
               await this.sendAnnouncement(guild, member, reward, currentXp);
+              highestMissingRoleAnnounced = true;
             }
           } catch (err) {
             logger.error(`Failed to grant reward ${reward.roleId} to ${member.user.tag}:`, err);

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags, EmbedBuilder } = require('discord.js');
 const emojiRegex = require('emoji-regex');
 
 const RepeatCommand = {
@@ -21,7 +21,8 @@ const RepeatCommand = {
         .setDescription('How many messages to search? (Default: 20, Max: 100)')
         .setMinValue(1)
         .setMaxValue(100)
-    ),
+    )
+    .addBooleanOption((opt) => opt.setName('embed').setDescription('Send message as an embed? (Default: False)')),
 
   execute: async (interaction) => {
     const messageContent = interaction.options.getString('message');
@@ -30,6 +31,7 @@ const RepeatCommand = {
     const reactionsStr = interaction.options.getString('reactions');
     const allowPing = interaction.options.getBoolean('allow_ping') || false;
     const searchLimit = interaction.options.getInteger('search_limit') || 20;
+    const isEmbed = interaction.options.getBoolean('embed') || false;
 
     if (!targetChannel?.isTextBased()) {
       return interaction.reply({ content: '❌ Invalid channel.', flags: MessageFlags.Ephemeral });
@@ -53,9 +55,16 @@ const RepeatCommand = {
       }
 
       const msgOptions = {
-        content: messageContent || undefined,
         allowedMentions: allowPing ? { parse: ['users', 'roles', 'everyone'] } : { parse: [] },
       };
+      
+      if (messageContent) {
+        if (isEmbed) {
+          msgOptions.embeds = [new EmbedBuilder().setDescription(messageContent).setColor('#2b2d31')];
+        } else {
+          msgOptions.content = messageContent;
+        }
+      }
 
       if (targetMessage) {
         if (messageContent) {

@@ -25,8 +25,15 @@ const ClanCommand = {
       const clanTotals = await DatabaseService.getClanTotalXp(interaction.guildId);
       const config = await DatabaseService.getGuildConfig(interaction.guildId);
       const ids = config.ids || {};
-      const clansConfig = config.clans || {};
+      const reactionRoles = config.reactionRoles || {};
       const totalXp = Object.values(clanTotals).reduce((sum, xp) => sum + xp, 0);
+      
+      const clanEmojisByRoleId = {};
+      for (const key in reactionRoles) {
+        if (reactionRoles[key].isClanRole && reactionRoles[key].roleId && reactionRoles[key].emoji) {
+          clanEmojisByRoleId[reactionRoles[key].roleId] = reactionRoles[key].emoji;
+        }
+      }
 
       // 2. Prepare Clan Data
       const clanRoles = {
@@ -51,8 +58,8 @@ const ClanCommand = {
       activeClans.sort((a, b) => b.xp - a.xp);
 
       // Dynamic Clan Icons
-      const getClanEmoji = (id) => {
-        return clansConfig[id]?.emoji || `**[Clan ${id}]**`;
+      const getClanEmojiStr = (roleId) => {
+        return clanEmojisByRoleId[roleId] ? `${clanEmojisByRoleId[roleId]} ` : '';
       };
 
       // 3. Build Embed Description
@@ -81,10 +88,10 @@ const ClanCommand = {
         const progressBar = '▰'.repeat(safeBars) + '▱'.repeat(10 - safeBars);
 
         description +=
-          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${roleMention}\n` +
+          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmojiStr(clan.roleId)}${roleMention}\n` +
           '```\n' +
           `${clan.xp.toLocaleString()} XP Pts\n` +
-          `${progressBar} ${percentage.toFixed(1)}% Destruction Inflicted` +
+          `${progressBar} ${percentage.toFixed(1)}% Destruction Inflicted\n` +
           '```\n';
       });
 
@@ -92,6 +99,7 @@ const ClanCommand = {
         .setTitle('⚔️ **CLAN WAR CONQUEST** ⚔️')
         .setDescription(description)
         .setColor(0x823ef0) // Custom Purple
+        .setThumbnail(interaction.guild?.iconURL({ dynamic: true }) || null)
         .setFooter({ text: 'Current standings • Updates live' })
         .setTimestamp();
 

@@ -72,12 +72,22 @@ class ResetService {
     this.logResetSummary(guildId, resetStats.daily, resetStats.weekly);
   }
 
-  static async forceSkipCycle(client, guildId) {
+  static async forceSkipCycle(client, guildId, customTargetDate = null) {
     const cycle = await this.getOrInitializeCycle(guildId);
     if (!cycle) throw new Error('Could not initialize reset cycle.');
     const now = new Date();
     const nextCycleCount = (cycle.cycleCount + 1) % this.DAYS_IN_CYCLE;
     logger.info(`[Force Skip] Guild ${guildId} skipping to cycle ${nextCycleCount}`);
+
+    let lastResetToStore = now;
+    let nextResetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    if (customTargetDate) {
+      nextResetDate = customTargetDate;
+      // Subtract 1 day because `checkResetCycle` calculates nextReset = addDays(lastReset, 1)
+      lastResetToStore = new Date(customTargetDate.getTime() - 24 * 60 * 60 * 1000);
+    }
+
     try {
       if (nextCycleCount === this.WEEKLY_RESET_DAY) {
         const resetStats = { daily: 0, weekly: 0, lastValidWeeklyData: null };
@@ -88,12 +98,12 @@ class ResetService {
         const resetStats = { daily: 0, weekly: 0 };
         await this.processDailyReset(client, guildId, nextCycleCount, resetStats);
       }
-      await DatabaseService.updateResetCycle(guildId, nextCycleCount, now);
+      await DatabaseService.updateResetCycle(guildId, nextCycleCount, lastResetToStore);
       return {
         success: true,
         newCycle: nextCycleCount,
         isWeekly: nextCycleCount === this.WEEKLY_RESET_DAY,
-        nextReset: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        nextReset: nextResetDate,
       };
     } catch (error) {
       logger.error(`[Force Skip] Failed for guild ${guildId}:`, error);
@@ -159,6 +169,10 @@ class ResetService {
       // 0. Force Sync XP Buffer
       await XpSyncService.processGuildBuffer(`xp_buffer:${guildId}`);
 
+      // 0.5. Just-in-Time Clan ID Sync
+      // Ensures users who acquired roles manually or pre-ReactionHandler have accurate clan tracking without full-guild scans.
+      await this.syncActiveClanIds(client, guildId);
+
       // 1. Capture weekly winner
       const topWeekly = await prisma.userXp.findMany({
         where: { guildId },
@@ -195,6 +209,70 @@ class ResetService {
     }
   }
 
+  static async syncActiveClanIds(client, guildId) {
+    try {
+      const activeUsers = await prisma.userXp.findMany({
+        where: { guildId, weeklyXp: { gt: 0 } },
+        select: { userId: true, clanId: true },
+      });
+      if (activeUsers.length === 0) return;
+
+      const guild = await client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) return;
+
+      const config = await DatabaseService.getFullGuildConfig(guildId);
+      const ids = config?.ids || {};
+
+      const roleToClan = {};
+      if (ids.clanRole1Id) roleToClan[ids.clanRole1Id] = 1;
+      if (ids.clanRole2Id) roleToClan[ids.clanRole2Id] = 2;
+      if (ids.clanRole3Id) roleToClan[ids.clanRole3Id] = 3;
+      if (ids.clanRole4Id) roleToClan[ids.clanRole4Id] = 4;
+
+      if (Object.keys(roleToClan).length === 0) return;
+
+      const userIds = activeUsers.map((u) => u.userId);
+      const members = await guild.members.fetch({ user: userIds }).catch(() => new Map());
+
+      const updates = [];
+      for (const user of activeUsers) {
+        const member = members.get(user.userId);
+        if (!member) continue;
+
+        let actualClanId = 0;
+        for (const roleId of member.roles.cache.keys()) {
+          if (roleToClan[roleId]) {
+            actualClanId = roleToClan[roleId];
+            break;
+          }
+        }
+
+        if (actualClanId !== user.clanId) {
+          updates.push({ userId: user.userId, clanId: actualClanId });
+        }
+      }
+
+      if (updates.length > 0) {
+        const clanGroups = {};
+        for (const u of updates) {
+          if (!clanGroups[u.clanId]) clanGroups[u.clanId] = [];
+          clanGroups[u.clanId].push(u.userId);
+        }
+
+        const txs = Object.entries(clanGroups).map(([cId, uIds]) =>
+          prisma.userXp.updateMany({
+            where: { guildId, userId: { in: uIds } },
+            data: { clanId: Number(cId) },
+          })
+        );
+        await prisma.$transaction(txs);
+        logger.info(`Synced clan IDs for ${updates.length} active users before weekly reset.`);
+      }
+    } catch (err) {
+      logger.error(`Error syncing active clan IDs for guild ${guildId}:`, err);
+    }
+  }
+
   static wipeAssetCache() {
     try {
       const emojiDir = path.join(process.cwd(), 'assets', 'emojis');
@@ -222,8 +300,15 @@ class ResetService {
       const clanTotals = dataSnapshot ?? (await DatabaseService.getClanTotalXp(guildId));
       const config = await DatabaseService.getGuildConfig(guildId);
       const ids = config.ids || {};
-      const clansConfig = config.clans || {};
+      const reactionRoles = config.reactionRoles || {};
       const totalXp = this.calculateTotalXp(clanTotals);
+      
+      const clanEmojisByRoleId = {};
+      for (const key in reactionRoles) {
+        if (reactionRoles[key].isClanRole && reactionRoles[key].roleId && reactionRoles[key].emoji) {
+          clanEmojisByRoleId[reactionRoles[key].roleId] = reactionRoles[key].emoji;
+        }
+      }
 
       const clanRoles = {
         1: ids.clanRole1Id,
@@ -241,13 +326,14 @@ class ResetService {
 
       activeClans.sort((a, b) => b.xp - a.xp);
 
-      const getClanEmoji = (id) => {
-        return clansConfig[id]?.emoji || `**[Clan ${id}]**`;
+      const getClanEmojiStr = (roleId) => {
+        return clanEmojisByRoleId[roleId] ? `${clanEmojisByRoleId[roleId]} ` : '';
       };
 
       const embed = new EmbedBuilder()
         .setTitle('⚔️ **CLAN WAR CONQUEST** ⚔️')
         .setColor(0xffd700)
+        .setThumbnail(channel.guild?.iconURL({ dynamic: true }) || null)
         .setFooter({ text: 'Help your clan earn more XP points!' })
         .setTimestamp();
 
@@ -260,9 +346,20 @@ class ResetService {
         const percentage = totalXp > 0 ? (clan.xp / totalXp) * 100 : 0;
         let rankEmoji =
           index === 0 ? CONSTANTS.EMOJIS.RANK_1 : index === 1 ? CONSTANTS.EMOJIS.RANK_2 : `**#${index + 1}**`;
+
+        const roleMention = clan.roleId ? `<@&${clan.roleId}>` : `**Clan ${clan.id}**`;
+
+        // Progress Bar
+        const bars = Math.floor(percentage / 10);
+        const safeBars = Math.max(0, Math.min(10, bars));
+        const progressBar = '▰'.repeat(safeBars) + '▱'.repeat(10 - safeBars);
+
         description +=
-          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmoji(clan.id)} ${clan.roleId ? `<@&${clan.roleId}>` : `Clan ${clan.id}`}\n` +
-          `\`\`\`\n${clan.xp.toLocaleString()} XP • ${percentage.toFixed(1)}%\n\`\`\`\n`;
+          `${rankEmoji} ${CONSTANTS.EMOJIS.DASH_BLUE} ${getClanEmojiStr(clan.roleId)}${roleMention}\n` +
+          '```\n' +
+          `${clan.xp.toLocaleString()} XP Pts\n` +
+          `${progressBar} ${percentage.toFixed(1)}% Territorial Control Established\n` +
+          '```\n';
       });
 
       embed.setDescription(description);
