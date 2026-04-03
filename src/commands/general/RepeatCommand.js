@@ -57,7 +57,7 @@ const RepeatCommand = {
       const msgOptions = {
         allowedMentions: allowPing ? { parse: ['users', 'roles', 'everyone'] } : { parse: [] },
       };
-      
+
       if (messageContent) {
         if (isEmbed) {
           msgOptions.embeds = [new EmbedBuilder().setDescription(messageContent).setColor('#2b2d31')];

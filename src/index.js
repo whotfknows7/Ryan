@@ -191,7 +191,7 @@ async function main() {
       try {
         await XpService.handleMessageXp(message);
         await XpService.handleKeywords(message);
-        await MessageIntentHandler.handleMessage(message);
+        await MessageIntentHandler.handleMessage(message, client);
       } catch (error) {
         logger.error('XP/Keyword Error:', error);
       }

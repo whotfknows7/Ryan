@@ -27,7 +27,7 @@ const ClanCommand = {
       const ids = config.ids || {};
       const reactionRoles = config.reactionRoles || {};
       const totalXp = Object.values(clanTotals).reduce((sum, xp) => sum + xp, 0);
-      
+
       const clanEmojisByRoleId = {};
       for (const key in reactionRoles) {
         if (reactionRoles[key].isClanRole && reactionRoles[key].roleId && reactionRoles[key].emoji) {

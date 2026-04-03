@@ -105,13 +105,23 @@ class DatabaseService {
     // Note: This only sets lifetime XP, preserves daily/weekly
     if (newXp <= 0) {
       await prisma.userXp.deleteMany({ where: { guildId, userId } });
+      // Flush stale Redis buffer so getLiveUserStats returns a clean 0 baseline
+      await defaultRedis.hdel(`xp_buffer:${guildId}`, userId).catch(() => {});
       return null;
     } else {
-      return await prisma.userXp.upsert({
+      const result = await prisma.userXp.upsert({
         where: { guildId_userId: { guildId, userId } },
         create: { guildId, userId, xp: newXp, dailyXp: 0, weeklyXp: 0 },
         update: { xp: newXp },
       });
+
+      // CRITICAL: Flush the user's pending Redis buffer so that the next call to
+      // getLiveUserStats returns exactly `newXp`, not `newXp + stale_redis_delta`.
+      // Without this, previousXp in XpService can overshoot the next threshold before
+      // the user even types, silently suppressing the level-up announcement.
+      await defaultRedis.hdel(`xp_buffer:${guildId}`, userId).catch(() => {});
+
+      return result;
     }
   }
 
@@ -128,24 +138,36 @@ class DatabaseService {
 
   /**
    * [NEW] Fetch Live User Stats (DB + Redis Delta)
+   * Uses an atomic Lua script to sum across Active and Processing Redis buffers,
+   * eliminating the "0 XP flicker" race condition during sync.
    */
   static async getLiveUserStats(guildId, userId) {
-    // 1. Fetch DB Baseline and all potential Redis buffers (active + processing)
-    const [dbStats, activeDelta, processingKeys] = await Promise.all([
+    const luaScript = `
+      local userId = ARGV[1]
+      local activeKey = KEYS[1]
+      local processingPattern = KEYS[2]
+      local total = 0
+
+      -- 1. Fetch from active buffer
+      local activeVal = redis.call('hget', activeKey, userId)
+      if activeVal then total = total + tonumber(activeVal) end
+
+      -- 2. Fetch from all processing buffers (covers the sync window)
+      local pKeys = redis.call('keys', processingPattern)
+      for i, k in ipairs(pKeys) do
+          local pVal = redis.call('hget', k, userId)
+          if pVal then total = total + tonumber(pVal) end
+      end
+
+      return total
+    `;
+
+    const [dbStats, redisDelta] = await Promise.all([
       this.getUserStats(guildId, userId),
-      defaultRedis.hget(`xp_buffer:${guildId}`, userId),
-      defaultRedis.keys(`xp_buffer_processing:${guildId}:*`),
+      defaultRedis.eval(luaScript, 2, `xp_buffer:${guildId}`, `xp_buffer_processing:${guildId}:*`, userId),
     ]);
 
-    let totalDelta = activeDelta ? parseInt(activeDelta, 10) : 0;
-
-    // 2. Sum any processing buffers (covers the sync window flicker)
-    if (processingKeys.length > 0) {
-      const processingValues = await Promise.all(processingKeys.map((key) => defaultRedis.hget(key, userId)));
-      for (const val of processingValues) {
-        if (val) totalDelta += parseInt(val, 10);
-      }
-    }
+    const totalDelta = parseInt(redisDelta || 0, 10);
 
     return {
       ...dbStats,

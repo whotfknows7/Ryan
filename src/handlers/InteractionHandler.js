@@ -19,6 +19,18 @@ const handleInteraction = async (interaction) => {
   logger.info(
     `[Interaction] Incoming: ${interaction.type} (isCommand: ${interaction.isChatInputCommand()}, isButton: ${interaction.isButton()}, isSelect: ${interaction.isAnySelectMenu()})`
   );
+  // 0. AUTOCOMPLETE
+  if (interaction.isAutocomplete()) {
+    const command = interaction.client.commands.get(interaction.commandName);
+    if (!command?.autocomplete) return;
+    try {
+      await command.autocomplete(interaction);
+    } catch (error) {
+      logger.error(`Error in autocomplete for ${interaction.commandName}:`, error);
+    }
+    return;
+  }
+
   // 1. SLASH COMMANDS
   if (interaction.isChatInputCommand()) {
     const command = interaction.client.commands.get(interaction.commandName);

@@ -2,20 +2,33 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags, Ro
 const { DatabaseService } = require('../../services/DatabaseService');
 const { getIds } = require('../../utils/GuildIdsHelper');
 const { prisma } = require('../../lib/prisma');
+const { XpHelper } = require('../../utils/XpHelper');
 
 const SetXpCommand = {
   data: new SlashCommandBuilder()
     .setName('set_xp')
-    .setDescription("Set or adjust a user's XP")
+    .setDescription("Set or adjust a user's XP or Level")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('user').setDescription('Target user').setRequired(true))
-    .addStringOption((opt) => opt.setName('xp').setDescription('XP amount (e.g. 1.5k, 2000, -500)').setRequired(true))
+    .addStringOption((opt) => opt.setName('xp').setDescription('XP amount (e.g. 1.5k, 2000, -500)').setRequired(false))
+    .addIntegerOption((opt) => opt.setName('level').setDescription('Calculate XP amount from level').setRequired(false))
     .addBooleanOption((opt) => opt.setName('override').setDescription('Override current XP instead of adding')),
 
   execute: async (interaction) => {
     const targetUser = interaction.options.getUser('user', true);
-    const xpInput = interaction.options.getString('xp', true);
-    const override = interaction.options.getBoolean('override') || false;
+    const xpInput = interaction.options.getString('xp');
+    const levelInput = interaction.options.getInteger('level');
+    const overrideInput = interaction.options.getBoolean('override');
+
+    if ((xpInput !== null && levelInput !== null) || (xpInput === null && levelInput === null)) {
+      return interaction.reply({
+        content: '❌ Please provide exactly **one**: either XP or Level.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // Default to adding for XP, but defaulting to overriding for Level
+    const override = overrideInput !== null ? overrideInput : levelInput !== null;
 
     const parseXpInput = (input) => {
       const cleaned = input.replace(/\s+/g, '').toLowerCase();
@@ -27,7 +40,12 @@ const SetXpCommand = {
     };
 
     try {
-      const amount = parseXpInput(xpInput);
+      let amount;
+      if (xpInput !== null) {
+        amount = parseXpInput(xpInput);
+      } else {
+        amount = XpHelper.getXpFromLevel(levelInput);
+      }
       const guildId = interaction.guildId;
 
       const currentData = await prisma.userXp.findUnique({

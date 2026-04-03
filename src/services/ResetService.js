@@ -6,7 +6,7 @@ const { AssetService } = require('./AssetService');
 const { GifService } = require('./GifService');
 const { getIds, clearCache } = require('../utils/GuildIdsHelper');
 const WebhookUtils = require('../utils/WebhookUtils');
-const { addDays, isAfter } = require('date-fns');
+const { isAfter } = require('date-fns');
 const logger = require('../lib/logger');
 const CONSTANTS = require('../lib/constants');
 const fs = require('fs');
@@ -17,18 +17,129 @@ const { WeeklyRoleService } = require('./WeeklyRoleService');
 
 class ResetService {
   static DAYS_IN_CYCLE = 7;
-  static WEEKLY_RESET_DAY = 0;
+  static WEEKLY_RESET_DAY = 0; // 0 = Sunday
   static TOP_USERS_LIMIT = 10;
 
+  // =================================================================
+  // TIMEZONE HELPER
+  // =================================================================
+
+  /**
+   * Resolves the timezone string configured for a guild.
+   * Falls back to 'UTC' if not set or invalid.
+   */
+  static async getGuildTimezone(guildId) {
+    try {
+      const config = await DatabaseService.getFullGuildConfig(guildId);
+      const tz = config?.config?.timezone;
+      if (tz) {
+        // Validate before returning
+        Intl.DateTimeFormat(undefined, { timeZone: tz });
+        return tz;
+      }
+    } catch {
+      // Fall through to default
+    }
+    return 'UTC';
+  }
+
+  /**
+   * Given a UTC Date object, returns the Date representing local midnight
+   * (00:00:00.000) in the specified timezone, expressed in UTC.
+   *
+   * e.g. If tz='America/New_York' and now is 2026-04-03T06:00:00Z (which is
+   * 2026-04-03T02:00:00 EST), the most recent local midnight was
+   * 2026-04-03T00:00:00 EST = 2026-04-03T05:00:00Z.
+   */
+  static getLocalMidnightUtc(date, timezone) {
+    // Get the date components in the target timezone
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = parseInt(parts.find((p) => p.type === 'year').value, 10);
+    const month = parseInt(parts.find((p) => p.type === 'month').value, 10);
+    const day = parseInt(parts.find((p) => p.type === 'day').value, 10);
+
+    // Build a local midnight string e.g. "2026-04-03T00:00:00" in that TZ,
+    // then convert it to a UTC Date via the Date constructor trick.
+    const localMidnightStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`;
+
+    // We need the UTC equivalent of this local midnight.
+    // Intl can tell us the UTC offset for that specific instant.
+    const tempDate = new Date(`${localMidnightStr}Z`); // treat as UTC first, adjust below
+    const utcOffset = this.getUtcOffsetMs(new Date(localMidnightStr + 'Z'), timezone);
+    return new Date(tempDate.getTime() - utcOffset);
+  }
+
+  /**
+   * Returns the UTC offset in milliseconds for a given naive local time string
+   * interpreted in the specified timezone.
+   */
+  static getUtcOffsetMs(naiveUtcDate, timezone) {
+    // Format the naive UTC date as if it were local time in the target timezone
+    // to find the difference
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(naiveUtcDate);
+    const get = (type) => parseInt(parts.find((p) => p.type === type).value, 10);
+    const localYear = get('year');
+    const localMonth = get('month');
+    const localDay = get('day');
+    const localHour = get('hour') % 24; // guard against '24' edge case
+    const localMinute = get('minute');
+    const localSecond = get('second');
+
+    const localAsUtc = Date.UTC(localYear, localMonth - 1, localDay, localHour, localMinute, localSecond);
+    return localAsUtc - naiveUtcDate.getTime();
+  }
+
+  /**
+   * Returns the local day-of-week (0=Sunday) for a given UTC Date in a timezone.
+   */
+  static getLocalDayOfWeek(date, timezone) {
+    const dayStr = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(date);
+    const MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return MAP[dayStr] ?? 0;
+  }
+
+  // =================================================================
+  // CYCLE CHECK (TIMEZONE-AWARE)
+  // =================================================================
+
+  /**
+   * Called every minute by the cron job.
+   * Fires daily/weekly resets based on whether a local midnight has passed
+   * since the last stored reset marker.
+   */
   static async checkResetCycle(client, guildId) {
     try {
       const cycle = await this.getOrInitializeCycle(guildId);
       if (!cycle) return;
-      const lastReset = new Date(cycle.lastResetUtc);
-      const nextReset = addDays(lastReset, 1);
+
+      const timezone = await this.getGuildTimezone(guildId);
       const now = new Date();
-      if (isAfter(now, nextReset)) {
-        await this.processMissedResets(client, guildId, cycle, lastReset, now);
+
+      // Find the most recent local midnight BEFORE now
+      const currentLocalMidnight = this.getLocalMidnightUtc(now, timezone);
+
+      // The stored lastResetUtc marks the last midnight we already processed.
+      const lastReset = new Date(cycle.lastResetUtc);
+
+      // Only act if the current local midnight is strictly after the stored marker.
+      if (isAfter(currentLocalMidnight, lastReset)) {
+        await this.processMissedResets(client, guildId, cycle, lastReset, now, timezone);
       }
     } catch (error) {
       logger.error(`Critical error in reset cycle for guild ${guildId}:`, error);
@@ -45,51 +156,84 @@ class ResetService {
     return cycle;
   }
 
-  static async processMissedResets(client, guildId, cycleData, lastReset, now) {
+  /**
+   * Iterates over every missed local midnight (24h slots) since lastReset,
+   * firing daily + (if Sunday) weekly resets for each one.
+   */
+  static async processMissedResets(client, guildId, cycleData, lastReset, now, timezone) {
     const resetStats = { daily: 0, weekly: 0, lastValidWeeklyData: null };
     let currentCycle = cycleData.cycleCount;
-    let tempLastReset = lastReset;
-    let nextReset = addDays(tempLastReset, 1);
-    while (isAfter(now, nextReset)) {
-      tempLastReset = nextReset;
-      nextReset = addDays(tempLastReset, 1);
+
+    // Build a list of all missed local midnights after `lastReset` and up to (≤) now
+    const missedMidnights = [];
+    let probe = new Date(lastReset.getTime() + 24 * 60 * 60 * 1000); // start 24h after last reset
+    // Round probe to check local midnights
+    let candidate = this.getLocalMidnightUtc(probe, timezone);
+    // In case the candidate is the same midnight (very first iteration edge)
+    if (!isAfter(candidate, lastReset)) {
+      candidate = new Date(candidate.getTime() + 24 * 60 * 60 * 1000);
+      candidate = this.getLocalMidnightUtc(candidate, timezone);
+    }
+
+    while (!isAfter(candidate, now)) {
+      missedMidnights.push(candidate);
+      const next = new Date(candidate.getTime() + 24 * 60 * 60 * 1000);
+      candidate = this.getLocalMidnightUtc(next, timezone);
+    }
+
+    for (const midnight of missedMidnights) {
       currentCycle = (currentCycle + 1) % this.DAYS_IN_CYCLE;
+      const dayOfWeek = this.getLocalDayOfWeek(midnight, timezone);
+      const isSunday = dayOfWeek === this.WEEKLY_RESET_DAY;
+
       try {
-        if (currentCycle === this.WEEKLY_RESET_DAY) {
-          // Process Daily Reset first to ensure daily XP is flushed before Weekly Reset
+        if (isSunday) {
+          // Flush daily XP first, then run the full weekly routine
           await this.processDailyReset(client, guildId, currentCycle, resetStats);
           await this.processWeeklyReset(client, guildId, resetStats);
         } else {
           await this.processDailyReset(client, guildId, currentCycle, resetStats);
         }
-        await DatabaseService.updateResetCycle(guildId, currentCycle, tempLastReset);
+        await DatabaseService.updateResetCycle(guildId, currentCycle, midnight);
       } catch (error) {
-        logger.error(`Failed to process reset for guild ${guildId}:`, error);
+        logger.error(`Failed to process reset for guild ${guildId} at ${midnight.toISOString()}:`, error);
         throw error;
       }
     }
+
     await this.sendResetAnnouncements(client, guildId, resetStats.weekly, resetStats.lastValidWeeklyData);
     this.logResetSummary(guildId, resetStats.daily, resetStats.weekly);
   }
 
-  static async forceSkipCycle(client, guildId, customTargetDate = null) {
+  /**
+   * Force-skips one cycle day immediately and resets the timer to NOW's
+   * local midnight equivalent, so the next natural midnight fires correctly.
+   */
+  static async forceSkipCycle(client, guildId) {
     const cycle = await this.getOrInitializeCycle(guildId);
     if (!cycle) throw new Error('Could not initialize reset cycle.');
+
+    const timezone = await this.getGuildTimezone(guildId);
     const now = new Date();
+
+    // The next cycle count
     const nextCycleCount = (cycle.cycleCount + 1) % this.DAYS_IN_CYCLE;
-    logger.info(`[Force Skip] Guild ${guildId} skipping to cycle ${nextCycleCount}`);
+    logger.info(`[Force Skip] Guild ${guildId} skipping to cycle ${nextCycleCount} (tz: ${timezone})`);
 
-    let lastResetToStore = now;
-    let nextResetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    // Store now's local midnight as the new baseline, so the NEXT natural midnight
+    // (tomorrow local time) triggers the next reset.
+    const lastResetToStore = this.getLocalMidnightUtc(now, timezone);
 
-    if (customTargetDate) {
-      nextResetDate = customTargetDate;
-      // Subtract 1 day because `checkResetCycle` calculates nextReset = addDays(lastReset, 1)
-      lastResetToStore = new Date(customTargetDate.getTime() - 24 * 60 * 60 * 1000);
-    }
+    // Calculate next local midnight for the reply
+    const nextMidnightProbe = new Date(lastResetToStore.getTime() + 24 * 60 * 60 * 1000);
+    const nextReset = this.getLocalMidnightUtc(nextMidnightProbe, timezone);
+
+    // Determine if the NEXT cycleCount maps to a Sunday (weekly reset)
+    const dayOfWeek = this.getLocalDayOfWeek(nextReset, timezone);
+    const isWeekly = dayOfWeek === this.WEEKLY_RESET_DAY;
 
     try {
-      if (nextCycleCount === this.WEEKLY_RESET_DAY) {
+      if (isWeekly) {
         const resetStats = { daily: 0, weekly: 0, lastValidWeeklyData: null };
         await this.processDailyReset(client, guildId, nextCycleCount, resetStats);
         await this.processWeeklyReset(client, guildId, resetStats);
@@ -102,8 +246,9 @@ class ResetService {
       return {
         success: true,
         newCycle: nextCycleCount,
-        isWeekly: nextCycleCount === this.WEEKLY_RESET_DAY,
-        nextReset: nextResetDate,
+        isWeekly,
+        nextReset,
+        timezone,
       };
     } catch (error) {
       logger.error(`[Force Skip] Failed for guild ${guildId}:`, error);
@@ -302,7 +447,7 @@ class ResetService {
       const ids = config.ids || {};
       const reactionRoles = config.reactionRoles || {};
       const totalXp = this.calculateTotalXp(clanTotals);
-      
+
       const clanEmojisByRoleId = {};
       for (const key in reactionRoles) {
         if (reactionRoles[key].isClanRole && reactionRoles[key].roleId && reactionRoles[key].emoji) {

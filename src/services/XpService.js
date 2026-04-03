@@ -184,7 +184,7 @@ class RoleRewardHandler {
    * Checks and grants role rewards based on XP
    * Stateless: Fetches config from DB (or simple service cache) each time
    */
-  static async checkRoleRewards(guild, member, currentXp) {
+  static async checkRoleRewards(guild, member, currentXp, previousXp = 0) {
     if (!member) {
       return;
     }
@@ -209,19 +209,19 @@ class RoleRewardHandler {
     }
 
     let highestMissingRoleAnnounced = false;
-    let foundHighestOwnedRole = false;
+    // foundHighestOwnedRole removed (obsolete with milestone gating)
 
     for (const reward of rewards) {
       if (currentXp >= reward.xp) {
+        // [GOLDEN FIX] Milestone Boundary Gate
+        // If the user was already at or above this threshold BEFORE this message,
+        // we skip checking their roles entirely for this reward.
+        // This makes the system immune to "Flat Payload" cache misses for veterans.
+        if (previousXp >= reward.xp) continue;
+
         const userHasRole = hasRole(member, reward.roleId);
 
-        if (userHasRole) {
-          foundHighestOwnedRole = true;
-        }
-
         if (!userHasRole) {
-          if (foundHighestOwnedRole) continue;
-
           const cacheKey = `${guild.id}:${member.id}:${reward.roleId}`;
           if (RoleRewardHandler.recentAwards.has(cacheKey)) continue;
 
@@ -233,6 +233,7 @@ class RoleRewardHandler {
             await member.roles.add(reward.roleId, 'XP Role Reward');
             logger.info(`Awarded Role ${reward.roleId} to ${member.user.tag} at ${currentXp} XP`);
 
+            // Announcement is now safe inside this boundary check
             if (reward.message && !highestMissingRoleAnnounced) {
               await this.sendAnnouncement(guild, member, reward, currentXp);
               highestMissingRoleAnnounced = true;
@@ -361,7 +362,7 @@ class XpService {
       const jailLog = await ConfigService.getJailLog(message.guild.id, message.author.id);
       if (jailLog && jailLog.status === 'jailed') return;
 
-      // 1. O(N) Phantom Calculation
+      // 1. Calculate XP to add
       let xpToAdd = 0;
       if (message.content) {
         xpToAdd += XpCalculator.calculateMessageXp(message.content);
@@ -375,24 +376,19 @@ class XpService {
 
       if (xpToAdd <= 0) return;
 
-      // 2. Synchronous State Capture
-      // We capture the current buffer value BEFORE the asynchronous database call.
-      // This ensures that even if the 1-second interval flushes the buffer during the await,
-      // we don't lose sight of the XP that was pending at the start of this message.
+      // 2. Fetch ground-truth stats
       const key = `${message.guild.id}:${message.author.id}`;
       const pendingXp = XpPipeline.buffer.get(key) || 0;
-
-      // 3. Check for role rewards using Live XP (DB + Redis Buffer)
       const liveStats = await DatabaseService.getLiveUserStats(message.guild.id, message.author.id);
 
-      // 4. Calculate true live XP
-      // Total = DB/Redis Stats + Local Pending Stats + Current Message XP
+      // 3. Boundary Math
       const trueLiveXp = liveStats.xp + pendingXp + xpToAdd;
+      const previousXp = liveStats.xp + pendingXp;
 
-      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, trueLiveXp);
+      // 4. Role check (Stateless Bridge)
+      await RoleRewardHandler.checkRoleRewards(message.guild, message.member, trueLiveXp, previousXp);
 
-      // 5. Push current XP to Micro-Batch (Zero Network Latency)
-      // We do this AFTER the reward check to maintain the "pendingXp" logic correctly.
+      // 5. Submit to Pipeline
       XpPipeline.push(message.guild.id, message.author.id, xpToAdd);
     } catch (error) {
       logger.error('Error in handleMessageXp:', error);

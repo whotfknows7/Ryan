@@ -40,7 +40,10 @@ module.exports = {
     .addRoleOption((opt) => opt.setName('clan_role_2').setDescription('The role for Clan 2'))
     .addRoleOption((opt) => opt.setName('clan_role_3').setDescription('The role for Clan 3 (Optional)'))
     .addRoleOption((opt) => opt.setName('clan_role_4').setDescription('The role for Clan 4 (Optional)'))
-    .addRoleOption((opt) => opt.setName('weekly_best_chatter_role').setDescription('Role for the top weekly chatter')),
+    .addRoleOption((opt) => opt.setName('weekly_best_chatter_role').setDescription('Role for the top weekly chatter'))
+    .addRoleOption((opt) =>
+      opt.setName('chat_revival_role').setDescription('Role pinged when users request chat revival')
+    ),
 
   execute: async (interaction) => {
     const { hasPermission } = require('../../utils/GuildIdsHelper');
@@ -70,6 +73,7 @@ module.exports = {
       const clan3 = interaction.options.getRole('clan_role_3');
       const clan4 = interaction.options.getRole('clan_role_4');
       const weeklyRole = interaction.options.getRole('weekly_best_chatter_role');
+      const chatRevivalRole = interaction.options.getRole('chat_revival_role');
 
       const idUpdates = {};
       let summary = ['✅ **Configuration Updated Successfully!**\n'];
@@ -127,6 +131,11 @@ module.exports = {
       if (weeklyRole) {
         idUpdates.weeklyBestChatterRoleId = weeklyRole.id;
         summary.push(`**Weekly Best Chatter Role:** ${weeklyRole}`);
+      }
+
+      if (chatRevivalRole) {
+        idUpdates.chatRevivalRoleId = chatRevivalRole.id;
+        summary.push(`**Chat Revival Role:** ${chatRevivalRole}`);
       }
 
       if (Object.keys(idUpdates).length > 0) {
